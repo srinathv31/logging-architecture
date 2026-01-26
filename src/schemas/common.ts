@@ -9,3 +9,9 @@ export const dateRangeQuerySchema = z.object({
   start_date: z.string().datetime({ offset: true }).optional(),
   end_date: z.string().datetime({ offset: true }).optional(),
 });
+
+/** Accepts Date objects (from Drizzle) or strings, outputs ISO string for JSON responses */
+export const dateField = z.preprocess(
+  (val) => (val instanceof Date ? val.toISOString() : val),
+  z.string(),
+);

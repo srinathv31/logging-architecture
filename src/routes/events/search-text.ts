@@ -1,6 +1,6 @@
 import type { FastifyInstance } from 'fastify';
 import type { ZodTypeProvider } from 'fastify-type-provider-zod';
-import { textSearchRequestSchema } from '../../schemas/events';
+import { textSearchRequestSchema, textSearchResponseSchema } from '../../schemas/events';
 import * as eventLogService from '../../services/event-log.service';
 
 export async function searchTextRoutes(app: FastifyInstance) {
@@ -8,7 +8,14 @@ export async function searchTextRoutes(app: FastifyInstance) {
 
   typedApp.post(
     '/search/text',
-    { schema: { body: textSearchRequestSchema } },
+    {
+      schema: {
+        tags: ['Events'],
+        description: 'Full-text search across event log summaries',
+        body: textSearchRequestSchema,
+        response: { 200: textSearchResponseSchema },
+      },
+    },
     async (request, reply) => {
       const { query, account_id, process_name, start_date, end_date, page, page_size } =
         request.body;

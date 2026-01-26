@@ -1,7 +1,7 @@
 import type { FastifyInstance } from 'fastify';
 import type { ZodTypeProvider } from 'fastify-type-provider-zod';
 import { z } from 'zod';
-import { getEventsByAccountQuerySchema } from '../../schemas/events';
+import { getEventsByAccountQuerySchema, getEventsByAccountResponseSchema } from '../../schemas/events';
 import * as eventLogService from '../../services/event-log.service';
 
 export async function byAccountRoutes(app: FastifyInstance) {
@@ -11,8 +11,11 @@ export async function byAccountRoutes(app: FastifyInstance) {
     '/account/:accountId',
     {
       schema: {
+        tags: ['Events'],
+        description: 'Query event logs for a specific account with filtering and pagination',
         params: z.object({ accountId: z.string().min(1) }),
         querystring: getEventsByAccountQuerySchema,
+        response: { 200: getEventsByAccountResponseSchema },
       },
     },
     async (request, reply) => {

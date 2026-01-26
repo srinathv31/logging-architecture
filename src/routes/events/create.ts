@@ -1,6 +1,11 @@
 import type { FastifyInstance } from 'fastify';
 import type { ZodTypeProvider } from 'fastify-type-provider-zod';
-import { createEventRequestSchema, batchCreateEventRequestSchema } from '../../schemas/events';
+import {
+  createEventRequestSchema,
+  batchCreateEventRequestSchema,
+  createEventResponseSchema,
+  batchCreateEventResponseSchema,
+} from '../../schemas/events';
 import * as eventLogService from '../../services/event-log.service';
 
 export async function createEventRoutes(app: FastifyInstance) {
@@ -9,7 +14,14 @@ export async function createEventRoutes(app: FastifyInstance) {
   // POST /events — single or array insert
   typedApp.post(
     '/',
-    { schema: { body: createEventRequestSchema } },
+    {
+      schema: {
+        tags: ['Events'],
+        description: 'Create one or more event log entries',
+        body: createEventRequestSchema,
+        response: { 201: createEventResponseSchema },
+      },
+    },
     async (request, reply) => {
       const { events } = request.body;
 
@@ -35,7 +47,14 @@ export async function createEventRoutes(app: FastifyInstance) {
   // POST /events/batch — batch insert with per-item errors
   typedApp.post(
     '/batch',
-    { schema: { body: batchCreateEventRequestSchema } },
+    {
+      schema: {
+        tags: ['Events'],
+        description: 'Batch create event log entries with per-item error reporting',
+        body: batchCreateEventRequestSchema,
+        response: { 201: batchCreateEventResponseSchema },
+      },
+    },
     async (request, reply) => {
       const { events } = request.body;
       const { executionIds, errors } = await eventLogService.createEvents(events);

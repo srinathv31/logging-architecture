@@ -1,6 +1,6 @@
 import type { FastifyInstance } from 'fastify';
 import type { ZodTypeProvider } from 'fastify-type-provider-zod';
-import { createProcessDefinitionSchema } from '../../schemas/processes';
+import { createProcessDefinitionSchema, createProcessResponseSchema } from '../../schemas/processes';
 import * as processDefinitionService from '../../services/process-definition.service';
 
 export async function createProcessRoute(app: FastifyInstance) {
@@ -8,7 +8,14 @@ export async function createProcessRoute(app: FastifyInstance) {
 
   typedApp.post(
     '/',
-    { schema: { body: createProcessDefinitionSchema } },
+    {
+      schema: {
+        tags: ['Processes'],
+        description: 'Register a new process definition',
+        body: createProcessDefinitionSchema,
+        response: { 201: createProcessResponseSchema },
+      },
+    },
     async (request, reply) => {
       const { process_name, display_name, description, owning_team, expected_steps, sla_ms } =
         request.body;

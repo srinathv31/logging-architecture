@@ -1,6 +1,7 @@
 import type { FastifyInstance } from 'fastify';
 import type { ZodTypeProvider } from 'fastify-type-provider-zod';
 import { z } from 'zod';
+import { getEventsByTraceResponseSchema } from '../../schemas/events';
 import * as eventLogService from '../../services/event-log.service';
 
 export async function byTraceRoutes(app: FastifyInstance) {
@@ -10,7 +11,10 @@ export async function byTraceRoutes(app: FastifyInstance) {
     '/trace/:traceId',
     {
       schema: {
+        tags: ['Events'],
+        description: 'Get all events associated with a distributed trace',
         params: z.object({ traceId: z.string().min(1) }),
+        response: { 200: getEventsByTraceResponseSchema },
       },
     },
     async (request, reply) => {

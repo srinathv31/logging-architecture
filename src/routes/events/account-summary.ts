@@ -1,6 +1,7 @@
 import type { FastifyInstance } from 'fastify';
 import type { ZodTypeProvider } from 'fastify-type-provider-zod';
 import { z } from 'zod';
+import { accountSummaryResponseSchema } from '../../schemas/events';
 import * as accountSummaryService from '../../services/account-summary.service';
 
 export async function accountSummaryRoutes(app: FastifyInstance) {
@@ -10,7 +11,10 @@ export async function accountSummaryRoutes(app: FastifyInstance) {
     '/account/:accountId/summary',
     {
       schema: {
+        tags: ['Events'],
+        description: 'Get aggregated account summary with recent events and errors',
         params: z.object({ accountId: z.string().min(1) }),
+        response: { 200: accountSummaryResponseSchema },
       },
     },
     async (request, reply) => {
