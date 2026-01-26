@@ -8,6 +8,8 @@ export const eventLogEntrySchema = z.object({
   trace_id: z.string().min(1).max(200),
   span_id: z.string().max(64).optional(),
   parent_span_id: z.string().max(64).optional(),
+  span_links: z.array(z.string().min(1).max(64)).optional(),
+  batch_id: z.string().max(200).optional(),
   application_id: z.string().min(1).max(200),
   target_system: z.string().min(1).max(200),
   originating_system: z.string().min(1).max(200),
@@ -69,6 +71,8 @@ export const eventLogResponseSchema = z.object({
   traceId: z.string(),
   spanId: z.string().nullable(),
   parentSpanId: z.string().nullable(),
+  spanLinks: z.unknown().nullable(),
+  batchId: z.string().nullable(),
   applicationId: z.string(),
   targetSystem: z.string(),
   originatingSystem: z.string(),
@@ -162,4 +166,54 @@ export const textSearchResponseSchema = z.object({
   total_count: z.number().int(),
   page: z.number().int(),
   page_size: z.number().int(),
+});
+
+// ---- Batch Operations Schemas ----
+
+export const batchUploadRequestSchema = z.object({
+  batch_id: z.string().min(1).max(200),
+  events: z.array(eventLogEntrySchema).min(1),
+});
+
+export const batchUploadResponseSchema = z.object({
+  success: z.boolean(),
+  batch_id: z.string(),
+  total_received: z.number().int(),
+  total_inserted: z.number().int(),
+  correlation_ids: z.array(z.string()),
+  errors: z
+    .array(
+      z.object({
+        index: z.number().int(),
+        error: z.string(),
+      }),
+    )
+    .optional(),
+});
+
+export const getEventsByBatchQuerySchema = paginationQuerySchema.extend({
+  event_status: z.enum(EVENT_STATUSES).optional(),
+});
+
+export const getEventsByBatchResponseSchema = z.object({
+  batch_id: z.string(),
+  events: z.array(eventLogResponseSchema),
+  total_count: z.number().int(),
+  unique_correlation_ids: z.number().int(),
+  success_count: z.number().int(),
+  failure_count: z.number().int(),
+  page: z.number().int(),
+  page_size: z.number().int(),
+  has_more: z.boolean(),
+});
+
+export const batchSummaryResponseSchema = z.object({
+  batch_id: z.string(),
+  total_processes: z.number().int(),
+  completed: z.number().int(),
+  in_progress: z.number().int(),
+  failed: z.number().int(),
+  correlation_ids: z.array(z.string()),
+  started_at: z.string().nullable(),
+  last_event_at: z.string().nullable(),
 });

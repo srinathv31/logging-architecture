@@ -5,6 +5,7 @@ import { accountSummaryRoutes } from './account-summary';
 import { byCorrelationRoutes } from './by-correlation';
 import { byTraceRoutes } from './by-trace';
 import { searchTextRoutes } from './search-text';
+import { batchRoutes } from './batch';
 
 export async function eventRoutes(app: FastifyInstance) {
   app.register(createEventRoutes);
@@ -13,4 +14,5 @@ export async function eventRoutes(app: FastifyInstance) {
   app.register(byCorrelationRoutes);
   app.register(byTraceRoutes);
   app.register(searchTextRoutes);
+  app.register(batchRoutes);
 }

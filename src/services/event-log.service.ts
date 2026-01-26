@@ -1,4 +1,4 @@
-import { eq, and, sql, gte, lte, or, desc } from 'drizzle-orm';
+import { eq, and, sql, gte, lte, or, desc, count, countDistinct, min, max } from 'drizzle-orm';
 import { db } from '../db/client';
 import { eventLogs, correlationLinks } from '../db/schema/index';
 import type { EventLogEntry } from '../types/api';
@@ -11,6 +11,8 @@ function entryToInsert(entry: EventLogEntry) {
     traceId: entry.trace_id,
     spanId: entry.span_id,
     parentSpanId: entry.parent_span_id,
+    spanLinks: entry.span_links ?? null,
+    batchId: entry.batch_id ?? null,
     applicationId: entry.application_id,
     targetSystem: entry.target_system,
     originatingSystem: entry.originating_system,
@@ -252,4 +254,150 @@ export async function searchText(filters: {
     .offset(offset);
 
   return { events, totalCount };
+}
+
+export async function createBatchUpload(batchId: string, entries: EventLogEntry[]) {
+  const correlationIds: string[] = [];
+  const errors: Array<{ index: number; error: string }> = [];
+  let totalInserted = 0;
+
+  await db.transaction(async (tx) => {
+    for (let i = 0; i < entries.length; i++) {
+      try {
+        const entry = entries[i];
+
+        // Stamp each event with the batch_id
+        const insertData = {
+          ...entryToInsert(entry),
+          batchId,
+        };
+
+        // Idempotency check
+        if (entry.idempotency_key) {
+          const existing = await tx
+            .select({ executionId: eventLogs.executionId })
+            .from(eventLogs)
+            .where(eq(eventLogs.idempotencyKey, entry.idempotency_key))
+            .limit(1);
+
+          if (existing.length > 0) {
+            correlationIds.push(entry.correlation_id);
+            totalInserted++;
+            continue;
+          }
+        }
+
+        await tx.insert(eventLogs).values(insertData);
+        correlationIds.push(entry.correlation_id);
+        totalInserted++;
+      } catch (err) {
+        errors.push({
+          index: i,
+          error: err instanceof Error ? err.message : 'Unknown error',
+        });
+      }
+    }
+  });
+
+  // Deduplicate correlation IDs
+  const uniqueCorrelationIds = [...new Set(correlationIds)];
+
+  return { correlationIds: uniqueCorrelationIds, totalInserted, errors };
+}
+
+export async function getByBatch(
+  batchId: string,
+  filters: {
+    eventStatus?: string;
+    page: number;
+    pageSize: number;
+  },
+) {
+  const conditions = [
+    eq(eventLogs.batchId, batchId),
+    eq(eventLogs.isDeleted, false),
+  ];
+
+  if (filters.eventStatus) {
+    conditions.push(eq(eventLogs.eventStatus, filters.eventStatus));
+  }
+
+  const where = and(...conditions);
+
+  // Get total count
+  const [countResult] = await db
+    .select({ count: sql<number>`cast(count(*) as integer)` })
+    .from(eventLogs)
+    .where(where);
+
+  const totalCount = countResult.count;
+  const { offset, hasMore } = calculatePagination(filters.page, filters.pageSize, totalCount);
+
+  // Get aggregate stats (unfiltered by event_status for overall batch stats)
+  const batchWhere = and(eq(eventLogs.batchId, batchId), eq(eventLogs.isDeleted, false));
+
+  const [stats] = await db
+    .select({
+      uniqueCorrelationIds: sql<number>`cast(count(distinct ${eventLogs.correlationId}) as integer)`,
+      successCount: sql<number>`cast(count(*) filter (where ${eventLogs.eventStatus} = 'SUCCESS') as integer)`,
+      failureCount: sql<number>`cast(count(*) filter (where ${eventLogs.eventStatus} = 'FAILURE') as integer)`,
+    })
+    .from(eventLogs)
+    .where(batchWhere);
+
+  // Get paginated events
+  const events = await db
+    .select()
+    .from(eventLogs)
+    .where(where)
+    .orderBy(desc(eventLogs.eventTimestamp))
+    .limit(filters.pageSize)
+    .offset(offset);
+
+  return {
+    events,
+    totalCount,
+    uniqueCorrelationIds: stats.uniqueCorrelationIds,
+    successCount: stats.successCount,
+    failureCount: stats.failureCount,
+    hasMore,
+  };
+}
+
+export async function getBatchSummary(batchId: string) {
+  const batchWhere = and(eq(eventLogs.batchId, batchId), eq(eventLogs.isDeleted, false));
+
+  const [stats] = await db
+    .select({
+      totalEvents: sql<number>`cast(count(*) as integer)`,
+      uniqueCorrelations: sql<number>`cast(count(distinct ${eventLogs.correlationId}) as integer)`,
+      completedCount: sql<number>`cast(count(*) filter (where ${eventLogs.eventType} = 'PROCESS_END' and ${eventLogs.eventStatus} = 'SUCCESS') as integer)`,
+      failedCount: sql<number>`cast(count(*) filter (where ${eventLogs.eventStatus} = 'FAILURE') as integer)`,
+      startedAt: min(eventLogs.eventTimestamp),
+      lastEventAt: max(eventLogs.eventTimestamp),
+    })
+    .from(eventLogs)
+    .where(batchWhere);
+
+  // Get distinct correlation IDs
+  const correlationRows = await db
+    .selectDistinct({ correlationId: eventLogs.correlationId })
+    .from(eventLogs)
+    .where(batchWhere);
+
+  const correlationIds = correlationRows.map((r) => r.correlationId);
+  const totalProcesses = stats.uniqueCorrelations;
+  const completed = stats.completedCount;
+  const failed = stats.failedCount;
+  const inProgress = Math.max(0, totalProcesses - completed - failed);
+
+  return {
+    totalProcesses,
+    completed,
+    inProgress,
+    failed,
+    correlationIds,
+    startedAt: stats.startedAt ? stats.startedAt.toISOString() : null,
+    lastEventAt: stats.lastEventAt ? stats.lastEventAt.toISOString() : null,
+  };
 }

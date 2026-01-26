@@ -122,6 +122,8 @@ export interface EventLogEntry {
   trace_id: string;
   span_id?: string;
   parent_span_id?: string;
+  span_links?: string[];
+  batch_id?: string;
   application_id: string;
   target_system: string;
   originating_system: string;
@@ -144,4 +146,44 @@ export interface EventLogEntry {
   request_payload?: string;
   response_payload?: string;
   idempotency_key?: string;
+}
+
+// POST /api/v1/events/batch/upload
+export interface BatchUploadRequest {
+  batch_id: string;
+  events: EventLogEntry[];
+}
+
+export interface BatchUploadResponse {
+  success: boolean;
+  batch_id: string;
+  total_received: number;
+  total_inserted: number;
+  correlation_ids: string[];
+  errors?: Array<{ index: number; error: string }>;
+}
+
+// GET /api/v1/events/batch/:batchId
+export interface GetEventsByBatchResponse {
+  batch_id: string;
+  events: EventLog[];
+  total_count: number;
+  unique_correlation_ids: number;
+  success_count: number;
+  failure_count: number;
+  page: number;
+  page_size: number;
+  has_more: boolean;
+}
+
+// GET /api/v1/events/batch/:batchId/summary
+export interface BatchSummaryResponse {
+  batch_id: string;
+  total_processes: number;
+  completed: number;
+  in_progress: number;
+  failed: number;
+  correlation_ids: string[];
+  started_at: string | null;
+  last_event_at: string | null;
 }

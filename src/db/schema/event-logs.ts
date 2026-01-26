@@ -26,6 +26,8 @@ export const eventLogs = pgTable(
     traceId: varchar('trace_id', { length: 200 }).notNull(),
     spanId: varchar('span_id', { length: 64 }),
     parentSpanId: varchar('parent_span_id', { length: 64 }),
+    spanLinks: jsonb('span_links'),
+    batchId: varchar('batch_id', { length: 200 }),
 
     // System context
     applicationId: varchar('application_id', { length: 200 }).notNull(),
@@ -97,5 +99,8 @@ export const eventLogs = pgTable(
     uniqueIndex('ix_event_logs_idempotency')
       .on(table.idempotencyKey)
       .where(sql`${table.idempotencyKey} IS NOT NULL`),
+    index('ix_event_logs_batch_id')
+      .on(table.batchId, table.correlationId)
+      .where(sql`${table.batchId} IS NOT NULL`),
   ],
 );
