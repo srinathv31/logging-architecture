@@ -7,6 +7,7 @@
     "dev": "tsx watch src/index.ts | pino-pretty",
     "build": "tsc",
     "start": "tsx src/index.ts",
+    "example": "npx tsx examples/employee-card-origination.ts",
     "db:generate": "drizzle-kit generate",
     "db:migrate": "drizzle-kit migrate",
     "db:push": "drizzle-kit push",

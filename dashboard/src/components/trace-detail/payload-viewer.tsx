@@ -2,6 +2,13 @@
 
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
+import {
+  Code,
+  Copy,
+  Check,
+  ChevronDown,
+  ChevronUp,
+} from "lucide-react";
 
 interface PayloadViewerProps {
   content: string | null;
@@ -16,9 +23,8 @@ export function PayloadViewer({ content, label }: PayloadViewerProps) {
 
   if (!content) {
     return (
-      <div className="space-y-1">
-        <p className="text-xs font-medium uppercase text-muted-foreground">{label}</p>
-        <p className="text-sm text-muted-foreground italic">No data</p>
+      <div className="rounded-lg border border-dashed p-4 flex items-center justify-center">
+        <p className="text-sm text-muted-foreground">No {label.toLowerCase()} data</p>
       </div>
     );
   }
@@ -43,26 +49,58 @@ export function PayloadViewer({ content, label }: PayloadViewerProps) {
   };
 
   return (
-    <div className="space-y-1">
-      <div className="flex items-center justify-between">
-        <p className="text-xs font-medium uppercase text-muted-foreground">{label}</p>
-        <Button variant="ghost" size="sm" className="h-6 text-xs" onClick={handleCopy}>
-          {copied ? "Copied" : "Copy"}
-        </Button>
+    <div className="rounded-lg border overflow-hidden">
+      {/* Header bar */}
+      <div className="flex items-center justify-between bg-muted px-3 py-2 border-b">
+        <div className="flex items-center gap-2">
+          <Code className="h-3.5 w-3.5 text-muted-foreground" />
+          <span className="text-xs font-medium text-muted-foreground">{label}</span>
+        </div>
+        <div className="flex items-center gap-1">
+          {isLong && (
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-6 text-xs gap-1"
+              onClick={() => setExpanded(!expanded)}
+            >
+              {expanded ? (
+                <>
+                  <ChevronUp className="h-3 w-3" />
+                  Collapse
+                </>
+              ) : (
+                <>
+                  <ChevronDown className="h-3 w-3" />
+                  Expand
+                </>
+              )}
+            </Button>
+          )}
+          <Button
+            variant="ghost"
+            size="sm"
+            className={`h-6 text-xs gap-1 ${copied ? "text-green-600 dark:text-green-400" : ""}`}
+            onClick={handleCopy}
+          >
+            {copied ? (
+              <>
+                <Check className="h-3 w-3" />
+                Copied
+              </>
+            ) : (
+              <>
+                <Copy className="h-3 w-3" />
+                Copy
+              </>
+            )}
+          </Button>
+        </div>
       </div>
-      <pre className="max-h-80 overflow-auto rounded bg-muted p-3 text-xs font-mono whitespace-pre-wrap break-all">
+      {/* Code block */}
+      <pre className="max-h-80 overflow-auto bg-muted/30 p-3 text-xs font-mono whitespace-pre-wrap break-all">
         {displayContent}
       </pre>
-      {isLong && (
-        <Button
-          variant="ghost"
-          size="sm"
-          className="h-6 text-xs"
-          onClick={() => setExpanded(!expanded)}
-        >
-          {expanded ? "Show less" : "Show more"}
-        </Button>
-      )}
     </div>
   );
 }

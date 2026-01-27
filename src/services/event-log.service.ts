@@ -1,8 +1,20 @@
-import { eq, and, sql, gte, lte, or, desc, count, countDistinct, min, max } from 'drizzle-orm';
-import { db } from '../db/client';
-import { eventLogs, correlationLinks } from '../db/schema/index';
-import type { EventLogEntry } from '../types/api';
-import { calculatePagination } from '../utils/pagination';
+import {
+  eq,
+  and,
+  sql,
+  gte,
+  lte,
+  or,
+  desc,
+  count,
+  countDistinct,
+  min,
+  max,
+} from "drizzle-orm";
+import { db } from "../db/client";
+import { eventLogs, correlationLinks } from "../db/schema/index";
+import type { EventLogEntry } from "../types/api";
+import { calculatePagination } from "../utils/pagination";
 
 function entryToInsert(entry: EventLogEntry) {
   return {
@@ -92,7 +104,7 @@ export async function createEvents(entries: EventLogEntry[]) {
       } catch (err) {
         errors.push({
           index: i,
-          error: err instanceof Error ? err.message : 'Unknown error',
+          error: err instanceof Error ? err.message : "Unknown error",
         });
       }
     }
@@ -154,7 +166,11 @@ export async function getByAccount(
     .where(where);
 
   const totalCount = countResult.count;
-  const { offset, hasMore } = calculatePagination(filters.page, filters.pageSize, totalCount);
+  const { offset, hasMore } = calculatePagination(
+    filters.page,
+    filters.pageSize,
+    totalCount,
+  );
 
   const events = await db
     .select()
@@ -171,7 +187,12 @@ export async function getByCorrelation(correlationId: string) {
   const events = await db
     .select()
     .from(eventLogs)
-    .where(and(eq(eventLogs.correlationId, correlationId), eq(eventLogs.isDeleted, false)))
+    .where(
+      and(
+        eq(eventLogs.correlationId, correlationId),
+        eq(eventLogs.isDeleted, false),
+      ),
+    )
     .orderBy(eventLogs.stepSequence, eventLogs.eventTimestamp);
 
   const link = await db
@@ -241,7 +262,11 @@ export async function searchText(filters: {
     .where(where);
 
   const totalCount = countResult.count;
-  const { offset } = calculatePagination(filters.page, filters.pageSize, totalCount);
+  const { offset } = calculatePagination(
+    filters.page,
+    filters.pageSize,
+    totalCount,
+  );
 
   const events = await db
     .select()
@@ -256,7 +281,10 @@ export async function searchText(filters: {
   return { events, totalCount };
 }
 
-export async function createBatchUpload(batchId: string, entries: EventLogEntry[]) {
+export async function createBatchUpload(
+  batchId: string,
+  entries: EventLogEntry[],
+) {
   const correlationIds: string[] = [];
   const errors: Array<{ index: number; error: string }> = [];
   let totalInserted = 0;
@@ -293,7 +321,7 @@ export async function createBatchUpload(batchId: string, entries: EventLogEntry[
       } catch (err) {
         errors.push({
           index: i,
-          error: err instanceof Error ? err.message : 'Unknown error',
+          error: err instanceof Error ? err.message : "Unknown error",
         });
       }
     }
@@ -331,10 +359,17 @@ export async function getByBatch(
     .where(where);
 
   const totalCount = countResult.count;
-  const { offset, hasMore } = calculatePagination(filters.page, filters.pageSize, totalCount);
+  const { offset, hasMore } = calculatePagination(
+    filters.page,
+    filters.pageSize,
+    totalCount,
+  );
 
   // Get aggregate stats (unfiltered by event_status for overall batch stats)
-  const batchWhere = and(eq(eventLogs.batchId, batchId), eq(eventLogs.isDeleted, false));
+  const batchWhere = and(
+    eq(eventLogs.batchId, batchId),
+    eq(eventLogs.isDeleted, false),
+  );
 
   const [stats] = await db
     .select({
@@ -365,7 +400,10 @@ export async function getByBatch(
 }
 
 export async function getBatchSummary(batchId: string) {
-  const batchWhere = and(eq(eventLogs.batchId, batchId), eq(eventLogs.isDeleted, false));
+  const batchWhere = and(
+    eq(eventLogs.batchId, batchId),
+    eq(eventLogs.isDeleted, false),
+  );
 
   const [stats] = await db
     .select({
@@ -400,4 +438,8 @@ export async function getBatchSummary(batchId: string) {
     startedAt: stats.startedAt ? stats.startedAt.toISOString() : null,
     lastEventAt: stats.lastEventAt ? stats.lastEventAt.toISOString() : null,
   };
+}
+
+export async function deleteAll() {
+  await db.delete(eventLogs);
 }

@@ -76,7 +76,7 @@ export async function getTraces(filters: TraceListFilters): Promise<TraceListRes
         latestStatus: sql<string>`(array_agg(${eventLogs.eventStatus} ORDER BY ${eventLogs.eventTimestamp} DESC))[1]`,
         firstEventAt: sql<string>`min(${eventLogs.eventTimestamp})::text`,
         lastEventAt: sql<string>`max(${eventLogs.eventTimestamp})::text`,
-        totalDurationMs: sql<number | null>`extract(epoch from (max(${eventLogs.eventTimestamp}) - min(${eventLogs.eventTimestamp})))::int * 1000`,
+        totalDurationMs: sql<number | null>`extract(epoch from (max(${eventLogs.eventTimestamp}) - min(${eventLogs.eventTimestamp}))) * 1000`,
       })
       .from(eventLogs)
       .where(whereClause)

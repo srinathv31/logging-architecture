@@ -46,7 +46,10 @@ export function buildApp() {
           name: "Correlation Links",
           description: "Manage correlation-to-account mappings",
         },
-        { name: "Batch Operations", description: "Batch upload, query, and summary endpoints (v1.4)" },
+        {
+          name: "Batch Operations",
+          description: "Batch upload, query, and summary endpoints (v1.4)",
+        },
         { name: "Health", description: "Health check endpoint" },
       ],
     },
@@ -78,7 +81,7 @@ export function buildApp() {
     async () => ({ status: "ok" as const }),
   );
 
-  app.register(registerRoutes, { prefix: "/api/v1" });
+  app.register(registerRoutes, { prefix: "/v1" });
 
   return app;
 }
