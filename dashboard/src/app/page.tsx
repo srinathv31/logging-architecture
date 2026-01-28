@@ -39,11 +39,11 @@ export default async function HomePage({
       <div className="container mx-auto max-w-7xl px-4 py-8 space-y-8">
         {/* Hero Section */}
         <div className="space-y-2">
-          <h1 className="text-3xl font-bold tracking-tight bg-gradient-to-r from-foreground to-foreground/70 bg-clip-text">
+          <h1 className="text-3xl font-bold tracking-tight text-gradient">
             Event Log Dashboard
           </h1>
           <p className="text-muted-foreground text-lg">
-            End-to-end visibility into customer journeys across all systems.
+            Track every interaction across enterprise systems — one API, complete visibility.
           </p>
         </div>
 

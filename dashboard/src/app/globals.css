@@ -229,6 +229,53 @@
   }
 }
 
+/* Fork/join connector styles for parallel timeline */
+.fork-connector {
+  background: linear-gradient(90deg, var(--primary) 0%, oklch(0.6 0.15 270 / 40%) 100%);
+}
+
+.dark .fork-connector {
+  background: linear-gradient(90deg, oklch(0.68 0.2 270 / 60%) 0%, oklch(0.5 0.15 270 / 30%) 100%);
+}
+
+.parallel-branch-line {
+  background: linear-gradient(180deg, var(--primary) 0%, oklch(0.6 0.15 270 / 30%) 100%);
+}
+
+/* Stagger delay utilities */
+.animate-stagger-1 { animation-delay: 50ms; }
+.animate-stagger-2 { animation-delay: 100ms; }
+.animate-stagger-3 { animation-delay: 150ms; }
+.animate-stagger-4 { animation-delay: 200ms; }
+.animate-stagger-5 { animation-delay: 250ms; }
+
+/* Card hover glow */
+.card-glow {
+  transition: box-shadow 0.3s ease, border-color 0.3s ease;
+}
+
+.card-glow:hover {
+  box-shadow: 0 0 0 1px oklch(0.48 0.22 270 / 15%), 0 4px 20px -4px oklch(0.48 0.22 270 / 12%);
+  border-color: oklch(0.48 0.22 270 / 30%);
+}
+
+.dark .card-glow:hover {
+  box-shadow: 0 0 0 1px oklch(0.68 0.2 270 / 15%), 0 4px 20px -4px oklch(0.68 0.2 270 / 10%);
+  border-color: oklch(0.68 0.2 270 / 25%);
+}
+
+/* Animated flow line for systems flow */
+@keyframes flowDash {
+  to {
+    stroke-dashoffset: -20;
+  }
+}
+
+.flow-line-animated {
+  stroke-dasharray: 6 4;
+  animation: flowDash 1s linear infinite;
+}
+
 /* Selection styling */
 ::selection {
   background: oklch(0.48 0.22 270 / 25%);
@@ -236,4 +283,17 @@
 
 .dark ::selection {
   background: oklch(0.68 0.2 270 / 30%);
+}
+
+/* Subtle dot grid background */
+@layer base {
+  body {
+    background-image: radial-gradient(oklch(0.7 0 0 / 8%) 1px, transparent 1px);
+    background-size: 24px 24px;
+  }
+
+  .dark body {
+    background-image: radial-gradient(oklch(0.4 0 0 / 10%) 1px, transparent 1px);
+    background-size: 24px 24px;
+  }
 }

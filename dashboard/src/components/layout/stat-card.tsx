@@ -5,6 +5,7 @@ interface StatCardProps {
   icon: LucideIcon;
   label: string;
   value: string | number;
+  subtitle?: string;
   trend?: string;
   trendUp?: boolean;
   status?: "success" | "warning" | "error" | "neutral";
@@ -29,6 +30,7 @@ export function StatCard({
   icon: Icon,
   label,
   value,
+  subtitle,
   trend,
   trendUp,
   status = "neutral",
@@ -64,6 +66,9 @@ export function StatCard({
               </span>
             )}
           </div>
+          {subtitle && (
+            <p className="text-[11px] text-muted-foreground mt-1 truncate">{subtitle}</p>
+          )}
         </div>
         <div className={cn("flex h-10 w-10 shrink-0 items-center justify-center rounded-lg", iconBgStyles[status])}>
           <Icon className="h-5 w-5" />

@@ -5,7 +5,7 @@ import { Separator } from "@/components/ui/separator";
 import { Button } from "@/components/ui/button";
 import { STATUS_ICONS } from "@/lib/constants";
 import type { TraceDetail } from "@/data/queries";
-import { Activity, Timer, Copy, Check, Server } from "lucide-react";
+import { Activity, Timer, Copy, Check, Server, Calendar } from "lucide-react";
 import { useState } from "react";
 
 function formatDuration(ms: number | null): string {
@@ -30,6 +30,42 @@ const STATUS_ICON_COLORS: Record<string, string> = {
   IN_PROGRESS: "text-yellow-600 dark:text-yellow-400",
   SKIPPED: "text-gray-500 dark:text-gray-400",
 };
+
+function formatProcessName(name: string): string {
+  return name
+    .split("_")
+    .map((word) => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
+    .join(" ");
+}
+
+function formatTimeRange(startTime: string, endTime: string): { start: string; end: string } {
+  const startDate = new Date(startTime);
+  const endDate = new Date(endTime);
+  const dateOpts: Intl.DateTimeFormatOptions = {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+    second: "2-digit",
+    hour12: true,
+  };
+  const timeOpts: Intl.DateTimeFormatOptions = {
+    hour: "numeric",
+    minute: "2-digit",
+    second: "2-digit",
+    hour12: true,
+  };
+
+  const startStr = startDate.toLocaleString("en-US", dateOpts);
+  // If same day, only show time for end
+  const sameDay = startDate.toDateString() === endDate.toDateString();
+  const endStr = sameDay
+    ? endDate.toLocaleString("en-US", timeOpts)
+    : endDate.toLocaleString("en-US", dateOpts);
+
+  return { start: startStr, end: endStr };
+}
 
 interface TraceHeaderProps {
   traceId: string;
@@ -82,13 +118,31 @@ export function TraceHeader({ traceId, detail }: TraceHeaderProps) {
                 <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary/10">
                   <Activity className="h-4 w-4 text-primary" />
                 </div>
-                <h1 className="text-2xl font-bold tracking-tight">Trace Journey</h1>
+                <div>
+                  <h1 className="text-2xl font-bold tracking-tight">
+                    {formatProcessName(detail.processName)}
+                  </h1>
+                  <Badge variant="secondary" className="text-[10px] mt-0.5">
+                    Trace Journey
+                  </Badge>
+                </div>
               </div>
-              <div className="flex items-center gap-1">
-                <code className="font-mono text-sm text-muted-foreground bg-muted/50 px-2 py-1 rounded">
-                  {traceId}
-                </code>
-                <CopyButton text={traceId} />
+              <div className="flex flex-wrap items-center gap-2">
+                <div className="flex items-center gap-1">
+                  <code className="font-mono text-sm text-muted-foreground bg-muted/50 px-2 py-1 rounded">
+                    {traceId}
+                  </code>
+                  <CopyButton text={traceId} />
+                </div>
+                {detail.accountId && (
+                  <div className="flex items-center gap-1">
+                    <span className="text-xs text-muted-foreground">Account:</span>
+                    <code className="font-mono text-sm text-muted-foreground bg-muted/50 px-2 py-1 rounded">
+                      {detail.accountId}
+                    </code>
+                    <CopyButton text={detail.accountId} />
+                  </div>
+                )}
               </div>
             </div>
             
@@ -156,6 +210,19 @@ export function TraceHeader({ traceId, detail }: TraceHeaderProps) {
               );
             })}
           </div>
+
+          {/* Time range */}
+          {detail.startTime && detail.endTime && (() => {
+            const { start, end } = formatTimeRange(detail.startTime, detail.endTime);
+            return (
+              <div className="flex items-center gap-2 text-xs text-muted-foreground mb-4">
+                <Calendar className="h-3.5 w-3.5" />
+                <span>Started: <span className="font-medium text-foreground">{start}</span></span>
+                <span className="opacity-40">—</span>
+                <span>Completed: <span className="font-medium text-foreground">{end}</span></span>
+              </div>
+            );
+          })()}
 
           {/* Systems badges */}
           <div className="space-y-2">

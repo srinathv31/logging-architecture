@@ -142,6 +142,10 @@ export interface TraceDetail {
   systemsInvolved: string[];
   totalDurationMs: number | null;
   statusCounts: Record<string, number>;
+  processName: string;
+  accountId: string | null;
+  startTime: string;
+  endTime: string;
 }
 
 export interface DashboardStats {
@@ -150,6 +154,7 @@ export interface DashboardStats {
   totalSystems: number;
   successRate: number;
   totalEvents: number;
+  systemNames: string[];
 }
 
 export async function getDashboardStats(): Promise<DashboardStats> {
@@ -181,6 +186,7 @@ export async function getDashboardStats(): Promise<DashboardStats> {
     totalSystems: allSystems.size,
     successRate,
     totalEvents: stats.totalEvents ?? 0,
+    systemNames: Array.from(allSystems),
   };
 }
 
@@ -245,5 +251,9 @@ export async function getTraceDetail(traceId: string): Promise<TraceDetail | nul
     systemsInvolved: Array.from(systems),
     totalDurationMs: totalDurationMs > 0 ? totalDurationMs : null,
     statusCounts,
+    processName: rows[0].processName,
+    accountId: rows[0].accountId,
+    startTime: new Date(minTs).toISOString(),
+    endTime: new Date(maxTs).toISOString(),
   };
 }
