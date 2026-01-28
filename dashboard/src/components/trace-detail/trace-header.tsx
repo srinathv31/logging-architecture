@@ -1,9 +1,12 @@
+"use client";
+
 import { Badge } from "@/components/ui/badge";
-import { Card, CardContent } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
+import { Button } from "@/components/ui/button";
 import { STATUS_ICONS } from "@/lib/constants";
 import type { TraceDetail } from "@/data/queries";
-import { Activity, Timer } from "lucide-react";
+import { Activity, Timer, Copy, Check, Server } from "lucide-react";
+import { useState } from "react";
 
 function formatDuration(ms: number | null): string {
   if (ms === null) return "-";
@@ -14,85 +17,166 @@ function formatDuration(ms: number | null): string {
 
 const STATUS_ORDER = ["SUCCESS", "FAILURE", "IN_PROGRESS", "SKIPPED"] as const;
 
+const STATUS_COLORS: Record<string, string> = {
+  SUCCESS: "from-green-500/20 to-green-500/5 border-green-500/30",
+  FAILURE: "from-red-500/20 to-red-500/5 border-red-500/30",
+  IN_PROGRESS: "from-yellow-500/20 to-yellow-500/5 border-yellow-500/30",
+  SKIPPED: "from-gray-500/20 to-gray-500/5 border-gray-500/30",
+};
+
+const STATUS_ICON_COLORS: Record<string, string> = {
+  SUCCESS: "text-green-600 dark:text-green-400",
+  FAILURE: "text-red-600 dark:text-red-400",
+  IN_PROGRESS: "text-yellow-600 dark:text-yellow-400",
+  SKIPPED: "text-gray-500 dark:text-gray-400",
+};
+
 interface TraceHeaderProps {
   traceId: string;
   detail: TraceDetail;
 }
 
-export function TraceHeader({ traceId, detail }: TraceHeaderProps) {
+function CopyButton({ text }: { text: string }) {
+  const [copied, setCopied] = useState(false);
+
+  const handleCopy = async () => {
+    await navigator.clipboard.writeText(text);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  };
+
   return (
-    <Card className="shadow-sm hover:shadow-lg transition-shadow border-t-4 border-t-primary">
-      <CardContent className="pt-6">
-        <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-          <div className="space-y-1">
-            <h1 className="text-xl font-bold tracking-tight">Trace Detail</h1>
-            <p className="font-mono text-sm text-muted-foreground break-all">
-              {traceId}
-            </p>
-          </div>
-          <div className="flex items-center gap-3 text-sm text-muted-foreground">
-            <span className="flex items-center gap-1.5">
-              <Activity className="h-4 w-4" />
-              {detail.events.length} events
-            </span>
-            <Separator orientation="vertical" className="h-4" />
-            <span className="flex items-center gap-1.5">
-              <Timer className="h-4 w-4" />
-              {formatDuration(detail.totalDurationMs)}
-            </span>
-          </div>
-        </div>
+    <Button
+      variant="ghost"
+      size="sm"
+      onClick={handleCopy}
+      className="h-7 px-2 text-muted-foreground hover:text-foreground"
+    >
+      {copied ? (
+        <Check className="h-3.5 w-3.5 text-green-500" />
+      ) : (
+        <Copy className="h-3.5 w-3.5" />
+      )}
+    </Button>
+  );
+}
 
-        <Separator className="my-4" />
+export function TraceHeader({ traceId, detail }: TraceHeaderProps) {
+  // Determine overall status for header styling
+  const hasFailures = (detail.statusCounts["FAILURE"] ?? 0) > 0;
+  const hasInProgress = (detail.statusCounts["IN_PROGRESS"] ?? 0) > 0;
+  const overallStatus = hasFailures ? "FAILURE" : hasInProgress ? "IN_PROGRESS" : "SUCCESS";
 
-        {/* Status summary grid */}
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-4">
-          {STATUS_ORDER.map((status) => {
-            const count = detail.statusCounts[status] ?? 0;
-            const Icon = STATUS_ICONS[status];
-            return (
-              <div
-                key={status}
-                className={`rounded-lg bg-muted/50 p-3 shadow-[inset_0_2px_6px_rgba(0,0,0,0.08)] hover:shadow-md transition-shadow ${count === 0 ? "opacity-50" : ""}`}
-              >
-                <div className="flex items-center gap-2 mb-1">
-                  {Icon && (
-                    <Icon
-                      className={`h-4 w-4 ${
-                        status === "SUCCESS"
-                          ? "text-green-600 dark:text-green-400"
-                          : status === "FAILURE"
-                            ? "text-red-600 dark:text-red-400"
-                            : status === "IN_PROGRESS"
-                              ? "text-yellow-600 dark:text-yellow-400"
-                              : "text-gray-500 dark:text-gray-400"
-                      }`}
-                    />
-                  )}
-                  <span className="text-xs font-medium uppercase text-muted-foreground">
-                    {status.replace("_", " ")}
-                  </span>
+  return (
+    <div className="space-y-4">
+      {/* Main Header Card */}
+      <div className="relative overflow-hidden rounded-xl border bg-card shadow-sm">
+        {/* Gradient overlay based on status */}
+        <div className={`absolute inset-0 bg-gradient-to-br ${STATUS_COLORS[overallStatus]} pointer-events-none`} />
+        
+        <div className="relative p-6">
+          {/* Top row - Title and metrics */}
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between mb-6">
+            <div className="space-y-2">
+              <div className="flex items-center gap-2">
+                <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary/10">
+                  <Activity className="h-4 w-4 text-primary" />
                 </div>
-                <p className="text-2xl font-light tabular-nums">{count}</p>
+                <h1 className="text-2xl font-bold tracking-tight">Trace Journey</h1>
               </div>
-            );
-          })}
-        </div>
+              <div className="flex items-center gap-1">
+                <code className="font-mono text-sm text-muted-foreground bg-muted/50 px-2 py-1 rounded">
+                  {traceId}
+                </code>
+                <CopyButton text={traceId} />
+              </div>
+            </div>
+            
+            {/* Key metrics */}
+            <div className="flex items-center gap-4">
+              <div className="text-center">
+                <p className="text-2xl font-bold tabular-nums">{detail.events.length}</p>
+                <p className="text-xs text-muted-foreground flex items-center gap-1">
+                  <Activity className="h-3 w-3" />
+                  Events
+                </p>
+              </div>
+              <Separator orientation="vertical" className="h-10" />
+              <div className="text-center">
+                <p className="text-2xl font-bold tabular-nums">{formatDuration(detail.totalDurationMs)}</p>
+                <p className="text-xs text-muted-foreground flex items-center gap-1">
+                  <Timer className="h-3 w-3" />
+                  Duration
+                </p>
+              </div>
+              <Separator orientation="vertical" className="h-10" />
+              <div className="text-center">
+                <p className="text-2xl font-bold tabular-nums">{detail.systemsInvolved.length}</p>
+                <p className="text-xs text-muted-foreground flex items-center gap-1">
+                  <Server className="h-3 w-3" />
+                  Systems
+                </p>
+              </div>
+            </div>
+          </div>
 
-        {/* Systems */}
-        <div className="space-y-1">
-          <p className="text-xs font-medium uppercase text-muted-foreground">
-            Systems
-          </p>
-          <div className="flex flex-wrap gap-1">
-            {detail.systemsInvolved.map((system) => (
-              <Badge key={system} variant="outline">
-                {system}
-              </Badge>
-            ))}
+          {/* Status summary grid */}
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-6">
+            {STATUS_ORDER.map((status) => {
+              const count = detail.statusCounts[status] ?? 0;
+              const Icon = STATUS_ICONS[status];
+              const isActive = count > 0;
+              
+              return (
+                <div
+                  key={status}
+                  className={`
+                    relative overflow-hidden rounded-lg border p-3 transition-all
+                    ${isActive 
+                      ? "bg-card shadow-sm hover:shadow-md" 
+                      : "bg-muted/30 opacity-60"
+                    }
+                  `}
+                >
+                  {isActive && (
+                    <div className={`absolute left-0 top-0 bottom-0 w-1 bg-gradient-to-b ${STATUS_COLORS[status].split(" ")[0].replace("from-", "from-").replace("/20", "")}`} />
+                  )}
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      {Icon && (
+                        <Icon className={`h-4 w-4 ${STATUS_ICON_COLORS[status]}`} />
+                      )}
+                      <span className="text-xs font-medium uppercase text-muted-foreground">
+                        {status.replace("_", " ")}
+                      </span>
+                    </div>
+                    <p className="text-xl font-semibold tabular-nums">{count}</p>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+
+          {/* Systems badges */}
+          <div className="space-y-2">
+            <p className="text-xs font-medium uppercase text-muted-foreground tracking-wider">
+              Systems Involved
+            </p>
+            <div className="flex flex-wrap gap-2">
+              {detail.systemsInvolved.map((system) => (
+                <Badge 
+                  key={system} 
+                  variant="secondary"
+                  className="px-3 py-1 bg-primary/5 hover:bg-primary/10 border-primary/20"
+                >
+                  <Server className="h-3 w-3 mr-1.5 opacity-60" />
+                  {system}
+                </Badge>
+              ))}
+            </div>
           </div>
         </div>
-      </CardContent>
-    </Card>
+      </div>
+    </div>
   );
 }

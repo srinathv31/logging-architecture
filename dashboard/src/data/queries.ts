@@ -144,6 +144,46 @@ export interface TraceDetail {
   statusCounts: Record<string, number>;
 }
 
+export interface DashboardStats {
+  totalTraces: number;
+  totalAccounts: number;
+  totalSystems: number;
+  successRate: number;
+  totalEvents: number;
+}
+
+export async function getDashboardStats(): Promise<DashboardStats> {
+  const [stats] = await db
+    .select({
+      totalTraces: sql<number>`count(distinct ${eventLogs.traceId})::int`,
+      totalAccounts: sql<number>`count(distinct ${eventLogs.accountId})::int`,
+      totalEvents: sql<number>`count(*)::int`,
+      successCount: sql<number>`count(*) filter (where ${eventLogs.eventStatus} = 'SUCCESS')::int`,
+    })
+    .from(eventLogs)
+    .where(eq(eventLogs.isDeleted, false));
+
+  const [systemsResult] = await db
+    .select({
+      systems: sql<string[]>`array_agg(distinct ${eventLogs.targetSystem}) || array_agg(distinct ${eventLogs.originatingSystem})`,
+    })
+    .from(eventLogs)
+    .where(eq(eventLogs.isDeleted, false));
+
+  const allSystems = new Set(systemsResult?.systems?.filter(Boolean) ?? []);
+  const successRate = stats.totalEvents > 0 
+    ? Math.round((stats.successCount / stats.totalEvents) * 1000) / 10 
+    : 0;
+
+  return {
+    totalTraces: stats.totalTraces ?? 0,
+    totalAccounts: stats.totalAccounts ?? 0,
+    totalSystems: allSystems.size,
+    successRate,
+    totalEvents: stats.totalEvents ?? 0,
+  };
+}
+
 export async function getTraceDetail(traceId: string): Promise<TraceDetail | null> {
   const rows = await db
     .select()
