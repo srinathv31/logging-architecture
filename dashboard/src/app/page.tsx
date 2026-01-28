@@ -41,11 +41,11 @@ export default async function HomePage({
         {/* Hero Section */}
         <div className="relative overflow-hidden rounded-2xl border bg-card p-8 shadow-sm animate-fade-in">
           {/* Subtle gradient background */}
-          <div className="absolute inset-0 bg-gradient-to-br from-primary/5 via-transparent to-primary/10 pointer-events-none" />
+          <div className="absolute inset-0 bg-gradient-to-br from-emerald-500/5 via-transparent to-emerald-500/10 pointer-events-none" />
 
           {/* Decorative SVG - interconnected systems visual */}
           <div className="absolute top-4 right-4 opacity-20 dark:opacity-10">
-            <svg width="120" height="120" viewBox="0 0 120 120" className="text-primary">
+            <svg width="120" height="120" viewBox="0 0 120 120" className="text-emerald-500">
               <circle cx="20" cy="60" r="8" fill="currentColor" className="animate-pulse" style={{ animationDelay: '0ms' }} />
               <circle cx="60" cy="20" r="8" fill="currentColor" className="animate-pulse" style={{ animationDelay: '200ms' }} />
               <circle cx="100" cy="60" r="8" fill="currentColor" className="animate-pulse" style={{ animationDelay: '400ms' }} />
@@ -61,7 +61,7 @@ export default async function HomePage({
           <div className="relative space-y-4">
             {/* Badge */}
             <div className="flex items-center gap-2 animate-fade-in animate-stagger-1">
-              <span className="inline-flex items-center gap-1.5 rounded-full bg-primary/10 px-3 py-1 text-xs font-medium text-primary">
+              <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-500/10 px-3 py-1 text-xs font-medium text-emerald-600">
                 <Activity className="h-3 w-3" />
                 Enterprise Integration Platform
               </span>
@@ -71,7 +71,7 @@ export default async function HomePage({
             <div className="space-y-2 animate-fade-in animate-stagger-2">
               <h1 className="text-3xl sm:text-4xl font-bold tracking-tight">
                 Complete Visibility Into
-                <span className="block text-primary">Every Customer Journey</span>
+                <span className="block text-emerald-600">Every Customer Journey</span>
               </h1>
               <p className="text-muted-foreground text-lg max-w-2xl">
                 One unified API that tracks interactions across <strong className="text-foreground">all your enterprise systems</strong>.
@@ -82,15 +82,15 @@ export default async function HomePage({
             {/* Value pills */}
             <div className="flex flex-wrap items-center gap-3 pt-2 animate-fade-in animate-stagger-3">
               <div className="flex items-center gap-2 rounded-lg bg-muted/50 px-3 py-1.5 text-sm">
-                <Server className="h-4 w-4 text-primary" />
+                <Server className="h-4 w-4 text-emerald-500" />
                 <span>Multi-System Tracing</span>
               </div>
               <div className="flex items-center gap-2 rounded-lg bg-muted/50 px-3 py-1.5 text-sm">
-                <Network className="h-4 w-4 text-primary" />
+                <Network className="h-4 w-4 text-emerald-500" />
                 <span>Journey Correlation</span>
               </div>
               <div className="flex items-center gap-2 rounded-lg bg-muted/50 px-3 py-1.5 text-sm">
-                <Eye className="h-4 w-4 text-primary" />
+                <Eye className="h-4 w-4 text-emerald-500" />
                 <span>Real-Time Insights</span>
               </div>
             </div>
