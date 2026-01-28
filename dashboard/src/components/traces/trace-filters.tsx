@@ -34,21 +34,24 @@ const STATUS_DISPLAY: Record<string, { icon: typeof CheckCircle2; color: string 
 export function TraceFilters() {
   const [processName, setProcessName] = useQueryState(
     "processName",
-    parseAsString.withDefault("")
+    parseAsString.withDefault("").withOptions({ shallow: false })
   );
   const [batchId, setBatchId] = useQueryState(
     "batchId",
-    parseAsString.withDefault("")
+    parseAsString.withDefault("").withOptions({ shallow: false })
   );
   const [accountId, setAccountId] = useQueryState(
     "accountId",
-    parseAsString.withDefault("")
+    parseAsString.withDefault("").withOptions({ shallow: false })
   );
   const [eventStatus, setEventStatus] = useQueryState(
     "eventStatus",
-    parseAsString.withDefault("")
+    parseAsString.withDefault("").withOptions({ shallow: false })
   );
-  const [, setPage] = useQueryState("page", parseAsInteger.withDefault(1));
+  const [, setPage] = useQueryState(
+    "page",
+    parseAsInteger.withDefault(1).withOptions({ shallow: false })
+  );
 
   // Local state for debounced inputs
   const [localProcessName, setLocalProcessName] = useState(processName);
