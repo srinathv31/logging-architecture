@@ -8,10 +8,14 @@
     "build": "tsc",
     "start": "tsx src/index.ts",
     "example": "npx tsx examples/employee-card-origination.ts",
-    "db:generate": "drizzle-kit generate",
-    "db:migrate": "drizzle-kit migrate",
-    "db:push": "drizzle-kit push",
-    "db:studio": "drizzle-kit studio"
+    "db:generate": "drizzle-kit generate --config=drizzle.postgres.config.ts",
+    "db:migrate": "drizzle-kit migrate --config=drizzle.postgres.config.ts",
+    "db:push": "drizzle-kit push --config=drizzle.postgres.config.ts",
+    "db:studio": "drizzle-kit studio --config=drizzle.postgres.config.ts",
+    "db:generate:mssql": "drizzle-kit generate --config=drizzle.mssql.config.ts",
+    "db:migrate:mssql": "drizzle-kit migrate --config=drizzle.mssql.config.ts",
+    "db:push:mssql": "drizzle-kit push --config=drizzle.mssql.config.ts",
+    "db:studio:mssql": "drizzle-kit studio --config=drizzle.mssql.config.ts"
   },
   "dependencies": {
     "@fastify/cors": "^10.0.0",
@@ -19,15 +23,17 @@
     "@fastify/swagger": "^9.6.1",
     "@fastify/swagger-ui": "^5.2.4",
     "dotenv": "^17.2.3",
-    "drizzle-orm": "^0.38.0",
+    "drizzle-orm": "1.0.0-beta.12-a5629fb",
     "fastify": "^5.0.0",
+    "mssql": "^12.2.0",
     "pg": "^8.13.0",
     "zod": "^3.24.0"
   },
   "devDependencies": {
+    "@types/mssql": "^9.1.9",
     "@types/node": "^22.0.0",
     "@types/pg": "^8.11.0",
-    "drizzle-kit": "^0.30.0",
+    "drizzle-kit": "1.0.0-beta.12-a5629fb",
     "fastify-type-provider-zod": "^4.0.0",
     "pino-pretty": "^13.0.0",
     "tsx": "^4.0.0",

@@ -1,12 +1,14 @@
 import { buildApp } from './app';
 import { env } from './config/env';
-import { pool } from './db/client';
+import { initializeDb, closeDb } from './db/client';
 import { runMigrations } from './db/migrate';
 
 const app = buildApp();
 
 async function start() {
   try {
+    await initializeDb();
+    app.log.info('Database connection established');
     await runMigrations();
     app.log.info('Database migrations applied');
     await app.listen({ port: env.PORT, host: env.HOST });
@@ -19,7 +21,7 @@ async function start() {
 async function shutdown() {
   app.log.info('Shutting down...');
   await app.close();
-  await pool.end();
+  await closeDb();
   process.exit(0);
 }
 

@@ -6,8 +6,7 @@ import {
   lte,
   or,
   desc,
-  count,
-  countDistinct,
+  asc,
   min,
   max,
 } from "drizzle-orm";
@@ -55,19 +54,20 @@ export async function createEvent(entry: EventLogEntry) {
   if (entry.idempotency_key) {
     const existing = await db
       .select()
+      .top(1)
       .from(eventLogs)
-      .where(eq(eventLogs.idempotencyKey, entry.idempotency_key))
-      .limit(1);
+      .where(eq(eventLogs.idempotencyKey, entry.idempotency_key));
 
     if (existing.length > 0) {
       return existing[0];
     }
   }
 
+  // Insert and get the full record using OUTPUT clause
   const [result] = await db
     .insert(eventLogs)
-    .values(entryToInsert(entry))
-    .returning();
+    .output()
+    .values(entryToInsert(entry));
 
   return result;
 }
@@ -85,9 +85,9 @@ export async function createEvents(entries: EventLogEntry[]) {
         if (entry.idempotency_key) {
           const existing = await tx
             .select({ executionId: eventLogs.executionId })
+            .top(1)
             .from(eventLogs)
-            .where(eq(eventLogs.idempotencyKey, entry.idempotency_key))
-            .limit(1);
+            .where(eq(eventLogs.idempotencyKey, entry.idempotency_key));
 
           if (existing.length > 0) {
             executionIds.push(existing[0].executionId);
@@ -95,10 +95,11 @@ export async function createEvents(entries: EventLogEntry[]) {
           }
         }
 
+        // Insert and get the execution_id using OUTPUT clause
         const [result] = await tx
           .insert(eventLogs)
-          .values(entryToInsert(entry))
-          .returning({ executionId: eventLogs.executionId });
+          .output({ executionId: eventLogs.executionId })
+          .values(entryToInsert(entry));
 
         executionIds.push(result.executionId);
       } catch (err) {
@@ -129,7 +130,6 @@ export async function getByAccount(
 
   if (filters.includeLinked) {
     // Include events where account_id matches OR events linked via correlation_links
-    // We'll handle this with a subquery approach
     const linkedCorrelationIds = db
       .select({ correlationId: correlationLinks.correlationId })
       .from(correlationLinks)
@@ -161,7 +161,7 @@ export async function getByAccount(
   const where = and(...conditions);
 
   const [countResult] = await db
-    .select({ count: sql<number>`cast(count(*) as integer)` })
+    .select({ count: sql<number>`cast(count(*) as int)` })
     .from(eventLogs)
     .where(where);
 
@@ -172,13 +172,14 @@ export async function getByAccount(
     totalCount,
   );
 
+  // MSSQL pagination requires ORDER BY before OFFSET/FETCH
   const events = await db
     .select()
     .from(eventLogs)
     .where(where)
     .orderBy(desc(eventLogs.eventTimestamp))
-    .limit(filters.pageSize)
-    .offset(offset);
+    .offset(offset)
+    .fetch(filters.pageSize);
 
   return { events, totalCount, hasMore };
 }
@@ -193,13 +194,13 @@ export async function getByCorrelation(correlationId: string) {
         eq(eventLogs.isDeleted, false),
       ),
     )
-    .orderBy(eventLogs.stepSequence, eventLogs.eventTimestamp);
+    .orderBy(asc(eventLogs.stepSequence), asc(eventLogs.eventTimestamp));
 
   const link = await db
     .select()
+    .top(1)
     .from(correlationLinks)
-    .where(eq(correlationLinks.correlationId, correlationId))
-    .limit(1);
+    .where(eq(correlationLinks.correlationId, correlationId));
 
   return {
     events,
@@ -213,7 +214,7 @@ export async function getByTrace(traceId: string) {
     .select()
     .from(eventLogs)
     .where(and(eq(eventLogs.traceId, traceId), eq(eventLogs.isDeleted, false)))
-    .orderBy(eventLogs.eventTimestamp);
+    .orderBy(asc(eventLogs.eventTimestamp));
 
   const systemsInvolved = [...new Set(events.map((e) => e.targetSystem))];
 
@@ -236,9 +237,10 @@ export async function searchText(filters: {
   page: number;
   pageSize: number;
 }) {
+  // MSSQL uses CONTAINS or LIKE for text search (no tsvector)
   const conditions = [
     eq(eventLogs.isDeleted, false),
-    sql`to_tsvector('english', ${eventLogs.summary}) @@ plainto_tsquery('english', ${filters.query})`,
+    sql`${eventLogs.summary} LIKE '%' + ${filters.query} + '%'`,
   ];
 
   if (filters.accountId) {
@@ -257,7 +259,7 @@ export async function searchText(filters: {
   const where = and(...conditions);
 
   const [countResult] = await db
-    .select({ count: sql<number>`cast(count(*) as integer)` })
+    .select({ count: sql<number>`cast(count(*) as int)` })
     .from(eventLogs)
     .where(where);
 
@@ -268,15 +270,14 @@ export async function searchText(filters: {
     totalCount,
   );
 
+  // MSSQL pagination with ORDER BY, OFFSET, FETCH
   const events = await db
     .select()
     .from(eventLogs)
     .where(where)
-    .orderBy(
-      sql`ts_rank(to_tsvector('english', ${eventLogs.summary}), plainto_tsquery('english', ${filters.query})) DESC`,
-    )
-    .limit(filters.pageSize)
-    .offset(offset);
+    .orderBy(desc(eventLogs.eventTimestamp))
+    .offset(offset)
+    .fetch(filters.pageSize);
 
   return { events, totalCount };
 }
@@ -304,9 +305,9 @@ export async function createBatchUpload(
         if (entry.idempotency_key) {
           const existing = await tx
             .select({ executionId: eventLogs.executionId })
+            .top(1)
             .from(eventLogs)
-            .where(eq(eventLogs.idempotencyKey, entry.idempotency_key))
-            .limit(1);
+            .where(eq(eventLogs.idempotencyKey, entry.idempotency_key));
 
           if (existing.length > 0) {
             correlationIds.push(entry.correlation_id);
@@ -354,7 +355,7 @@ export async function getByBatch(
 
   // Get total count
   const [countResult] = await db
-    .select({ count: sql<number>`cast(count(*) as integer)` })
+    .select({ count: sql<number>`cast(count(*) as int)` })
     .from(eventLogs)
     .where(where);
 
@@ -371,23 +372,24 @@ export async function getByBatch(
     eq(eventLogs.isDeleted, false),
   );
 
+  // MSSQL uses CASE WHEN instead of FILTER
   const [stats] = await db
     .select({
-      uniqueCorrelationIds: sql<number>`cast(count(distinct ${eventLogs.correlationId}) as integer)`,
-      successCount: sql<number>`cast(count(*) filter (where ${eventLogs.eventStatus} = 'SUCCESS') as integer)`,
-      failureCount: sql<number>`cast(count(*) filter (where ${eventLogs.eventStatus} = 'FAILURE') as integer)`,
+      uniqueCorrelationIds: sql<number>`cast(count(distinct ${eventLogs.correlationId}) as int)`,
+      successCount: sql<number>`cast(sum(case when ${eventLogs.eventStatus} = 'SUCCESS' then 1 else 0 end) as int)`,
+      failureCount: sql<number>`cast(sum(case when ${eventLogs.eventStatus} = 'FAILURE' then 1 else 0 end) as int)`,
     })
     .from(eventLogs)
     .where(batchWhere);
 
-  // Get paginated events
+  // Get paginated events using MSSQL syntax
   const events = await db
     .select()
     .from(eventLogs)
     .where(where)
     .orderBy(desc(eventLogs.eventTimestamp))
-    .limit(filters.pageSize)
-    .offset(offset);
+    .offset(offset)
+    .fetch(filters.pageSize);
 
   return {
     events,
@@ -405,12 +407,13 @@ export async function getBatchSummary(batchId: string) {
     eq(eventLogs.isDeleted, false),
   );
 
+  // MSSQL uses CASE WHEN instead of FILTER
   const [stats] = await db
     .select({
-      totalEvents: sql<number>`cast(count(*) as integer)`,
-      uniqueCorrelations: sql<number>`cast(count(distinct ${eventLogs.correlationId}) as integer)`,
-      completedCount: sql<number>`cast(count(*) filter (where ${eventLogs.eventType} = 'PROCESS_END' and ${eventLogs.eventStatus} = 'SUCCESS') as integer)`,
-      failedCount: sql<number>`cast(count(*) filter (where ${eventLogs.eventStatus} = 'FAILURE') as integer)`,
+      totalEvents: sql<number>`cast(count(*) as int)`,
+      uniqueCorrelations: sql<number>`cast(count(distinct ${eventLogs.correlationId}) as int)`,
+      completedCount: sql<number>`cast(sum(case when ${eventLogs.eventType} = 'PROCESS_END' and ${eventLogs.eventStatus} = 'SUCCESS' then 1 else 0 end) as int)`,
+      failedCount: sql<number>`cast(sum(case when ${eventLogs.eventStatus} = 'FAILURE' then 1 else 0 end) as int)`,
       startedAt: min(eventLogs.eventTimestamp),
       lastEventAt: max(eventLogs.eventTimestamp),
     })

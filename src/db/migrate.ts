@@ -1,6 +1,6 @@
-import { migrate } from 'drizzle-orm/node-postgres/migrator';
 import { db } from './client';
 
 export async function runMigrations() {
-  await migrate(db, { migrationsFolder: './drizzle' });
+  const { migrate } = await import('drizzle-orm/node-mssql/migrator');
+  await migrate(db, { migrationsFolder: './drizzle-mssql' });
 }
