@@ -20,10 +20,11 @@ export async function createProcess(data: {
   expectedSteps?: number;
   slaMs?: number;
 }) {
+  // MSSQL uses .output() instead of .returning()
   const [result] = await db
     .insert(processDefinitions)
-    .values(data)
-    .returning();
+    .output()
+    .values(data);
 
   return result;
 }

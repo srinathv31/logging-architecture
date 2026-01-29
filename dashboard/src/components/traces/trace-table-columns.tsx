@@ -8,6 +8,13 @@ import type { TraceSummary } from "@/data/queries";
 import { formatDistanceToNow } from "date-fns";
 import { Activity, ArrowRight, Timer, Clock } from "lucide-react";
 
+function formatProcessName(name: string): string {
+  return name
+    .split("_")
+    .map((word) => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
+    .join(" ");
+}
+
 function formatDuration(ms: number | null): string {
   if (ms === null || ms === 0) return "-";
   if (ms < 1000) return `${ms}ms`;
@@ -58,7 +65,7 @@ export const columns: ColumnDef<TraceSummary>[] = [
     header: "Process",
     cell: ({ row }) => (
       <div className="flex items-center gap-2">
-        <span className="font-medium text-sm">{row.original.processName}</span>
+        <span className="font-medium text-sm">{formatProcessName(row.original.processName)}</span>
       </div>
     ),
   },

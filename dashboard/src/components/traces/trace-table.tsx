@@ -50,12 +50,15 @@ export function TraceTable({ data }: TraceTableProps) {
         <TableBody>
           {table.getRowModel().rows.length ? (
             table.getRowModel().rows.map((row, index) => (
-              <TableRow 
+              <TableRow
                 key={row.id}
                 className={`
                   transition-colors
                   hover:bg-primary/5
-                  ${index % 2 === 0 ? "bg-transparent" : "bg-muted/20"}
+                  ${row.original.hasErrors
+                    ? "bg-red-50/50 dark:bg-red-950/20"
+                    : index % 2 === 0 ? "bg-transparent" : "bg-muted/20"
+                  }
                 `}
               >
                 {row.getVisibleCells().map((cell) => (

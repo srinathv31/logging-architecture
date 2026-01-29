@@ -35,9 +35,11 @@ interface StepCardProps {
   index: number;
   isLast: boolean;
   timeDiff?: string;
+  compact?: boolean;
+  hideTimelineIndicator?: boolean;
 }
 
-export function StepCard({ event, index, timeDiff }: StepCardProps) {
+export function StepCard({ event, index, timeDiff, compact, hideTimelineIndicator }: StepCardProps) {
   const StatusIcon = STATUS_ICONS[event.eventStatus];
   const EventIcon = EVENT_TYPE_ICONS[event.eventType];
   const isInProgress = event.eventStatus === "IN_PROGRESS";
@@ -46,24 +48,26 @@ export function StepCard({ event, index, timeDiff }: StepCardProps) {
   const ringColor = STATUS_RING_COLORS[event.eventStatus] ?? "ring-gray-400/20";
 
   return (
-    <div className="relative group">
+    <div className={`relative group ${compact ? "" : ""}`}>
       {/* Status indicator — absolute positioned */}
-      <div
-        className={`
-          absolute left-0 top-4 z-10 w-8 h-8 rounded-full bg-background 
-          border-2 border-background shadow-sm
-          flex items-center justify-center
-          ring-4 ${ringColor}
-          transition-transform group-hover:scale-110
-          ${isInProgress ? "animate-pulse" : ""}
-        `}
-      >
-        <div className={`absolute inset-1 rounded-full ${bgColor} opacity-10`} />
-        {StatusIcon && <StatusIcon className={`h-4 w-4 ${iconColor} relative z-10`} />}
-      </div>
+      {!hideTimelineIndicator && (
+        <div
+          className={`
+            absolute left-0 top-4 z-10 w-8 h-8 rounded-full bg-background
+            border-2 border-background shadow-sm
+            flex items-center justify-center
+            ring-4 ${ringColor}
+            transition-transform group-hover:scale-110
+            ${isInProgress ? "animate-pulse" : ""}
+          `}
+        >
+          <div className={`absolute inset-1 rounded-full ${bgColor} opacity-10`} />
+          {StatusIcon && <StatusIcon className={`h-4 w-4 ${iconColor} relative z-10`} />}
+        </div>
+      )}
 
       {/* Time diff badge */}
-      {timeDiff && (
+      {timeDiff && !hideTimelineIndicator && (
         <div className="absolute left-10 top-0 -translate-y-1">
           <span className="text-[10px] font-mono text-muted-foreground bg-muted px-1.5 py-0.5 rounded">
             {timeDiff}
@@ -72,7 +76,7 @@ export function StepCard({ event, index, timeDiff }: StepCardProps) {
       )}
 
       {/* Card content — offset right */}
-      <div className="ml-12">
+      <div className={hideTimelineIndicator ? "" : "ml-12"}>
         <div 
           className={`
             relative overflow-hidden rounded-xl border bg-card shadow-sm
@@ -83,7 +87,7 @@ export function StepCard({ event, index, timeDiff }: StepCardProps) {
           {/* Left status border */}
           <div className={`absolute left-0 top-0 bottom-0 w-1 ${bgColor}`} />
           
-          <div className="p-4 pl-5">
+          <div className={compact ? "p-3 pl-4" : "p-4 pl-5"}>
             {/* Top row - Step number and badges */}
             <div className="flex flex-wrap items-center gap-2 mb-2">
               <Badge variant="outline" className="font-mono text-xs bg-muted/50">
@@ -113,6 +117,13 @@ export function StepCard({ event, index, timeDiff }: StepCardProps) {
                 </Badge>
               )}
               
+              {/* Status badge for compact mode */}
+              {hideTimelineIndicator && StatusIcon && (
+                <Badge variant="outline" className={`text-xs gap-1 ${iconColor}`}>
+                  <StatusIcon className="h-3 w-3" />
+                  {event.eventStatus.replace("_", " ")}
+                </Badge>
+              )}
               {/* Target system badge */}
               <Badge variant="outline" className="text-xs gap-1 ml-auto">
                 <Server className="h-3 w-3 opacity-50" />

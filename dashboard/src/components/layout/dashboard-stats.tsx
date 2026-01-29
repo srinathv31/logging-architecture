@@ -25,6 +25,7 @@ export async function DashboardStats() {
         icon={Server}
         label="Systems Connected"
         value={stats.totalSystems}
+        subtitle={stats.systemNames.length > 0 ? stats.systemNames.slice(0, 4).join(", ") + (stats.systemNames.length > 4 ? "..." : "") : undefined}
       />
       <StatCard
         icon={CheckCircle2}
