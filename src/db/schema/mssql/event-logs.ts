@@ -6,8 +6,6 @@ import {
   int,
   bit,
   datetime2,
-  index,
-  uniqueIndex,
   check,
 } from 'drizzle-orm/mssql-core';
 import { sql } from 'drizzle-orm';
@@ -68,7 +66,7 @@ export const eventLogs = mssqlTable(
     isDeleted: bit('is_deleted').default(false).notNull(),
   },
   (table) => [
-    // Check constraints
+    // Check constraints (indexes managed in drizzle-mssql/manual/001_indexes.sql)
     check(
       'ck_event_logs_event_type',
       sql`${table.eventType} IN ('PROCESS_START', 'STEP', 'PROCESS_END', 'ERROR')`,
@@ -85,16 +83,5 @@ export const eventLogs = mssqlTable(
       'ck_event_logs_span_links_json',
       sql`${table.spanLinks} IS NULL OR ISJSON(${table.spanLinks}) = 1`,
     ),
-
-    // Indexes
-    index('ix_event_logs_correlation_id').on(table.correlationId, table.eventTimestamp),
-    index('ix_event_logs_account_id').on(table.accountId),
-    index('ix_event_logs_trace_id').on(table.traceId),
-    index('ix_event_logs_process').on(table.processName, table.eventTimestamp),
-    index('ix_event_logs_timestamp').on(table.eventTimestamp),
-    index('ix_event_logs_status').on(table.eventStatus, table.eventTimestamp),
-    index('ix_event_logs_target_system').on(table.targetSystem, table.eventTimestamp),
-    uniqueIndex('ix_event_logs_idempotency').on(table.idempotencyKey),
-    index('ix_event_logs_batch_id').on(table.batchId, table.correlationId),
   ],
 );

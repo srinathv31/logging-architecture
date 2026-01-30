@@ -9,11 +9,39 @@ import {
   asc,
   min,
   max,
+  inArray,
+  type SQL,
 } from "drizzle-orm";
 import { db } from "../db/client";
 import { eventLogs, correlationLinks } from "../db/schema/index";
 import type { EventLogEntry } from "../types/api";
 import { calculatePagination } from "../utils/pagination";
+import { env } from "../config/env";
+
+/**
+ * Formats a search query for MSSQL full-text CONTAINS.
+ * Escapes special characters and converts words to prefix search terms.
+ */
+function formatFullTextQuery(query: string): string {
+  const escaped = query.replace(/["\[\]{}()*?\\!]/g, "");
+  const words = escaped.trim().split(/\s+/).filter((w) => w.length > 0);
+  return words.length === 1
+    ? `"${words[0]}*"`
+    : words.map((w) => `"${w}*"`).join(" AND ");
+}
+
+/**
+ * Splits an array into chunks of specified size.
+ */
+function chunkArray<T>(arr: T[], size: number): T[][] {
+  const chunks: T[][] = [];
+  for (let i = 0; i < arr.length; i += size) {
+    chunks.push(arr.slice(i, i + size));
+  }
+  return chunks;
+}
+
+const BATCH_CHUNK_SIZE = 100;
 
 function entryToInsert(entry: EventLogEntry) {
   return {
@@ -73,45 +101,92 @@ export async function createEvent(entry: EventLogEntry) {
 }
 
 export async function createEvents(entries: EventLogEntry[]) {
-  const executionIds: string[] = [];
+  const executionIds: (string | null)[] = new Array(entries.length).fill(null);
   const errors: Array<{ index: number; error: string }> = [];
 
   await db.transaction(async (tx) => {
-    for (let i = 0; i < entries.length; i++) {
-      try {
-        const entry = entries[i];
+    // Collect all idempotency keys and their indices
+    const idempotencyMap = new Map<string, number[]>();
+    entries.forEach((entry, index) => {
+      if (entry.idempotency_key) {
+        const indices = idempotencyMap.get(entry.idempotency_key) || [];
+        indices.push(index);
+        idempotencyMap.set(entry.idempotency_key, indices);
+      }
+    });
 
-        // Idempotency check within batch
-        if (entry.idempotency_key) {
-          const existing = await tx
-            .select({ executionId: eventLogs.executionId })
-            .top(1)
-            .from(eventLogs)
-            .where(eq(eventLogs.idempotencyKey, entry.idempotency_key));
+    // Batch check existing idempotency keys
+    const existingMap = new Map<string, string>();
+    if (idempotencyMap.size > 0) {
+      const idempotencyKeys = Array.from(idempotencyMap.keys());
+      const keyChunks = chunkArray(idempotencyKeys, BATCH_CHUNK_SIZE);
 
-          if (existing.length > 0) {
-            executionIds.push(existing[0].executionId);
-            continue;
+      for (const keyChunk of keyChunks) {
+        const existing = await tx
+          .select({
+            idempotencyKey: eventLogs.idempotencyKey,
+            executionId: eventLogs.executionId,
+          })
+          .from(eventLogs)
+          .where(inArray(eventLogs.idempotencyKey, keyChunk));
+
+        for (const row of existing) {
+          if (row.idempotencyKey) {
+            existingMap.set(row.idempotencyKey, row.executionId);
           }
         }
+      }
+    }
 
-        // Insert and get the execution_id using OUTPUT clause
-        const [result] = await tx
+    // Partition entries into existing (skip) vs to-insert
+    const toInsert: Array<{ index: number; entry: EventLogEntry }> = [];
+    for (let i = 0; i < entries.length; i++) {
+      const entry = entries[i];
+      if (entry.idempotency_key && existingMap.has(entry.idempotency_key)) {
+        executionIds[i] = existingMap.get(entry.idempotency_key)!;
+      } else {
+        toInsert.push({ index: i, entry });
+      }
+    }
+
+    // Bulk insert in chunks with per-chunk error fallback
+    const chunks = chunkArray(toInsert, BATCH_CHUNK_SIZE);
+    for (const chunk of chunks) {
+      try {
+        const results = await tx
           .insert(eventLogs)
           .output({ executionId: eventLogs.executionId })
-          .values(entryToInsert(entry));
+          .values(chunk.map((c) => entryToInsert(c.entry)));
 
-        executionIds.push(result.executionId);
-      } catch (err) {
-        errors.push({
-          index: i,
-          error: err instanceof Error ? err.message : "Unknown error",
+        results.forEach((row, i) => {
+          executionIds[chunk[i].index] = row.executionId;
         });
+      } catch {
+        // Chunk failed - fall back to individual inserts to identify which rows failed
+        for (const item of chunk) {
+          try {
+            const [result] = await tx
+              .insert(eventLogs)
+              .output({ executionId: eventLogs.executionId })
+              .values(entryToInsert(item.entry));
+            executionIds[item.index] = result.executionId;
+          } catch (err) {
+            errors.push({
+              index: item.index,
+              error: err instanceof Error ? err.message : "Unknown error",
+            });
+          }
+        }
       }
     }
   });
 
-  return { executionIds, errors };
+  // Filter out nulls (failed inserts are in errors array)
+  const finalExecutionIds = executionIds.filter(
+    (id): id is string => id !== null,
+  );
+
+  return { executionIds: finalExecutionIds, errors };
 }
 
 export async function getByAccount(
@@ -237,11 +312,13 @@ export async function searchText(filters: {
   page: number;
   pageSize: number;
 }) {
-  // MSSQL uses CONTAINS or LIKE for text search (no tsvector)
-  const conditions = [
-    eq(eventLogs.isDeleted, false),
-    sql`${eventLogs.summary} LIKE '%' + ${filters.query} + '%'`,
-  ];
+  // Use CONTAINS for full-text search when enabled, otherwise fall back to LIKE
+  const searchCondition: SQL =
+    env.FULLTEXT_ENABLED === "true"
+      ? sql`CONTAINS(${eventLogs.summary}, ${formatFullTextQuery(filters.query)})`
+      : sql`${eventLogs.summary} LIKE '%' + ${filters.query} + '%'`;
+
+  const conditions = [eq(eventLogs.isDeleted, false), searchCondition];
 
   if (filters.accountId) {
     conditions.push(eq(eventLogs.accountId, filters.accountId));
@@ -286,50 +363,97 @@ export async function createBatchUpload(
   batchId: string,
   entries: EventLogEntry[],
 ) {
-  const correlationIds: string[] = [];
+  const correlationIds: (string | null)[] = new Array(entries.length).fill(
+    null,
+  );
   const errors: Array<{ index: number; error: string }> = [];
   let totalInserted = 0;
 
   await db.transaction(async (tx) => {
-    for (let i = 0; i < entries.length; i++) {
-      try {
-        const entry = entries[i];
+    // Collect all idempotency keys and their indices
+    const idempotencyMap = new Map<string, number[]>();
+    entries.forEach((entry, index) => {
+      if (entry.idempotency_key) {
+        const indices = idempotencyMap.get(entry.idempotency_key) || [];
+        indices.push(index);
+        idempotencyMap.set(entry.idempotency_key, indices);
+      }
+    });
 
-        // Stamp each event with the batch_id
-        const insertData = {
-          ...entryToInsert(entry),
-          batchId,
-        };
+    // Batch check existing idempotency keys
+    const existingKeys = new Set<string>();
+    if (idempotencyMap.size > 0) {
+      const idempotencyKeys = Array.from(idempotencyMap.keys());
+      const keyChunks = chunkArray(idempotencyKeys, BATCH_CHUNK_SIZE);
 
-        // Idempotency check
-        if (entry.idempotency_key) {
-          const existing = await tx
-            .select({ executionId: eventLogs.executionId })
-            .top(1)
-            .from(eventLogs)
-            .where(eq(eventLogs.idempotencyKey, entry.idempotency_key));
+      for (const keyChunk of keyChunks) {
+        const existing = await tx
+          .select({ idempotencyKey: eventLogs.idempotencyKey })
+          .from(eventLogs)
+          .where(inArray(eventLogs.idempotencyKey, keyChunk));
 
-          if (existing.length > 0) {
-            correlationIds.push(entry.correlation_id);
-            totalInserted++;
-            continue;
+        for (const row of existing) {
+          if (row.idempotencyKey) {
+            existingKeys.add(row.idempotencyKey);
           }
         }
+      }
+    }
 
-        await tx.insert(eventLogs).values(insertData);
-        correlationIds.push(entry.correlation_id);
+    // Partition entries into existing (skip) vs to-insert
+    const toInsert: Array<{ index: number; entry: EventLogEntry }> = [];
+    for (let i = 0; i < entries.length; i++) {
+      const entry = entries[i];
+      if (entry.idempotency_key && existingKeys.has(entry.idempotency_key)) {
+        // Already exists - count as inserted and record correlation_id
+        correlationIds[i] = entry.correlation_id;
         totalInserted++;
-      } catch (err) {
-        errors.push({
-          index: i,
-          error: err instanceof Error ? err.message : "Unknown error",
-        });
+      } else {
+        toInsert.push({ index: i, entry });
+      }
+    }
+
+    // Bulk insert in chunks with per-chunk error fallback
+    const chunks = chunkArray(toInsert, BATCH_CHUNK_SIZE);
+    for (const chunk of chunks) {
+      try {
+        await tx.insert(eventLogs).values(
+          chunk.map((c) => ({
+            ...entryToInsert(c.entry),
+            batchId,
+          })),
+        );
+
+        // Mark all as successful
+        for (const item of chunk) {
+          correlationIds[item.index] = item.entry.correlation_id;
+          totalInserted++;
+        }
+      } catch {
+        // Chunk failed - fall back to individual inserts to identify which rows failed
+        for (const item of chunk) {
+          try {
+            await tx.insert(eventLogs).values({
+              ...entryToInsert(item.entry),
+              batchId,
+            });
+            correlationIds[item.index] = item.entry.correlation_id;
+            totalInserted++;
+          } catch (err) {
+            errors.push({
+              index: item.index,
+              error: err instanceof Error ? err.message : "Unknown error",
+            });
+          }
+        }
       }
     }
   });
 
-  // Deduplicate correlation IDs
-  const uniqueCorrelationIds = [...new Set(correlationIds)];
+  // Filter out nulls and deduplicate correlation IDs
+  const uniqueCorrelationIds = [
+    ...new Set(correlationIds.filter((id): id is string => id !== null)),
+  ];
 
   return { correlationIds: uniqueCorrelationIds, totalInserted, errors };
 }
@@ -372,12 +496,12 @@ export async function getByBatch(
     eq(eventLogs.isDeleted, false),
   );
 
-  // MSSQL uses CASE WHEN instead of FILTER
+  // Count distinct correlations by status for accurate stats
   const [stats] = await db
     .select({
       uniqueCorrelationIds: sql<number>`cast(count(distinct ${eventLogs.correlationId}) as int)`,
-      successCount: sql<number>`cast(sum(case when ${eventLogs.eventStatus} = 'SUCCESS' then 1 else 0 end) as int)`,
-      failureCount: sql<number>`cast(sum(case when ${eventLogs.eventStatus} = 'FAILURE' then 1 else 0 end) as int)`,
+      successCount: sql<number>`cast(count(distinct case when ${eventLogs.eventStatus} = 'SUCCESS' then ${eventLogs.correlationId} end) as int)`,
+      failureCount: sql<number>`cast(count(distinct case when ${eventLogs.eventStatus} = 'FAILURE' then ${eventLogs.correlationId} end) as int)`,
     })
     .from(eventLogs)
     .where(batchWhere);
@@ -407,13 +531,13 @@ export async function getBatchSummary(batchId: string) {
     eq(eventLogs.isDeleted, false),
   );
 
-  // MSSQL uses CASE WHEN instead of FILTER
+  // Count distinct correlations by status for accurate stats
   const [stats] = await db
     .select({
       totalEvents: sql<number>`cast(count(*) as int)`,
       uniqueCorrelations: sql<number>`cast(count(distinct ${eventLogs.correlationId}) as int)`,
-      completedCount: sql<number>`cast(sum(case when ${eventLogs.eventType} = 'PROCESS_END' and ${eventLogs.eventStatus} = 'SUCCESS' then 1 else 0 end) as int)`,
-      failedCount: sql<number>`cast(sum(case when ${eventLogs.eventStatus} = 'FAILURE' then 1 else 0 end) as int)`,
+      completedCount: sql<number>`cast(count(distinct case when ${eventLogs.eventType} = 'PROCESS_END' and ${eventLogs.eventStatus} = 'SUCCESS' then ${eventLogs.correlationId} end) as int)`,
+      failedCount: sql<number>`cast(count(distinct case when ${eventLogs.eventStatus} = 'FAILURE' then ${eventLogs.correlationId} end) as int)`,
       startedAt: min(eventLogs.eventTimestamp),
       lastEventAt: max(eventLogs.eventTimestamp),
     })
