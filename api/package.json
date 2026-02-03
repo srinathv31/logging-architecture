@@ -16,7 +16,7 @@
     "db:migrate:mssql": "drizzle-kit migrate --config=drizzle.mssql.config.ts",
     "db:push:mssql": "drizzle-kit push --config=drizzle.mssql.config.ts",
     "db:studio:mssql": "drizzle-kit studio --config=drizzle.mssql.config.ts",
-    "test": "vitest run",
+    "test": "vitest run --coverage",
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage"
   },
@@ -37,11 +37,14 @@
     "@types/node": "^22.0.0",
     "@types/pg": "^8.11.0",
     "@vitest/coverage-v8": "^3.2.4",
+    "@vitest/ui": "^3.2.4",
     "drizzle-kit": "1.0.0-beta.12-a5629fb",
     "fastify-type-provider-zod": "^4.0.0",
+    "nyc": "^17.1.0",
     "pino-pretty": "^13.0.0",
     "tsx": "^4.0.0",
     "typescript": "^5.7.0",
-    "vitest": "^3.0.0"
+    "vitest": "^3.0.0",
+    "vitest-sonar-reporter": "^3.0.0"
   }
 }

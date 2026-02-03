@@ -15,3 +15,8 @@ dist/
 
 # Logs
 *.log
+
+# Test outputs (EDP)
+nyc_output/
+test-results.xml
+coverage/
