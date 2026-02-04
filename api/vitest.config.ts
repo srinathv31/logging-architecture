@@ -35,7 +35,26 @@ export default defineConfig({
     coverage: {
       provider: 'v8',
       include: ['src/**/*.ts'],
-      exclude: ['src/index.ts', 'src/db/migrate.ts', 'src/test/**'],
+      exclude: [
+        'src/index.ts',           // Entry point
+        'src/app.ts',             // Bootstrap/initialization
+        'src/db/migrate.ts',      // Migration script
+        'src/db/client.ts',       // DB connection (runtime)
+        'src/db/logger.ts',       // DB logger
+        'src/db/drivers/**',      // Driver-specific code
+        'src/db/schema/postgres/**', // Not using postgres
+        'src/config/env.ts',      // Runtime env config
+        'src/routes/**',          // Route handlers (mocked in tests)
+        'src/types/api.ts',       // Type definitions only
+        'src/types/index.ts',     // Re-exports
+        'src/test/**',            // Test files
+      ],
+      thresholds: {
+        statements: 80,
+        branches: 80,
+        functions: 80,
+        lines: 80,
+      },
       reporter: ['lcov', 'text'],
       reportsDirectory: './nyc_output',
     },

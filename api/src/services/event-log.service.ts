@@ -16,30 +16,9 @@ import { db } from "../db/client";
 import { eventLogs, correlationLinks } from "../db/schema/index";
 import type { EventLogEntry } from "../types/api";
 import { calculatePagination } from "../utils/pagination";
+import { chunkArray } from "../utils/array";
+import { formatFullTextQuery } from "../utils/search";
 import { env } from "../config/env";
-
-/**
- * Formats a search query for MSSQL full-text CONTAINS.
- * Escapes special characters and converts words to prefix search terms.
- */
-function formatFullTextQuery(query: string): string {
-  const escaped = query.replace(/["\[\]{}()*?\\!]/g, "");
-  const words = escaped.trim().split(/\s+/).filter((w) => w.length > 0);
-  return words.length === 1
-    ? `"${words[0]}*"`
-    : words.map((w) => `"${w}*"`).join(" AND ");
-}
-
-/**
- * Splits an array into chunks of specified size.
- */
-function chunkArray<T>(arr: T[], size: number): T[][] {
-  const chunks: T[][] = [];
-  for (let i = 0; i < arr.length; i += size) {
-    chunks.push(arr.slice(i, i + size));
-  }
-  return chunks;
-}
 
 const BATCH_CHUNK_SIZE = 100;
 

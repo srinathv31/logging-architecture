@@ -43,9 +43,12 @@ export function createEventBatchFixture(count: number, baseOverrides: Partial<Ev
 
 /**
  * Creates a mock database event log record (returned from DB)
+ * Includes eventLogId and updatedAt fields expected by the response schema
  */
 export function createEventLogDbRecord(overrides: Partial<Record<string, unknown>> = {}) {
+  const now = new Date();
   return {
+    eventLogId: 1,
     executionId: 'test-execution-id',
     correlationId: 'test-correlation-id',
     accountId: 'test-account-id',
@@ -66,7 +69,7 @@ export function createEventLogDbRecord(overrides: Partial<Record<string, unknown
     summary: 'Test event summary',
     result: 'Test result',
     metadata: { key: 'value' },
-    eventTimestamp: new Date(),
+    eventTimestamp: now,
     executionTimeMs: 100,
     endpoint: null,
     httpMethod: null,
@@ -77,8 +80,8 @@ export function createEventLogDbRecord(overrides: Partial<Record<string, unknown
     responsePayload: null,
     idempotencyKey: null,
     isDeleted: false,
-    createdAt: new Date(),
-    updatedAt: new Date(),
+    createdAt: now,
+    updatedAt: now,
     ...overrides,
   };
 }
