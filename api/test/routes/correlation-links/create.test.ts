@@ -8,7 +8,7 @@ import {
   type ZodTypeProvider,
 } from 'fastify-type-provider-zod';
 import { createCorrelationLinkFixture, createCorrelationLinkDbRecord } from '../../fixtures/correlation-links';
-import { createCorrelationLinkSchema, createCorrelationLinkResponseSchema } from '../../../schemas/correlation-links';
+import { createCorrelationLinkSchema, createCorrelationLinkResponseSchema } from '../../../src/schemas/correlation-links';
 
 // Mock function for createCorrelationLink
 let mockCreateCorrelationLink: (data: unknown) => Promise<ReturnType<typeof createCorrelationLinkDbRecord>>;

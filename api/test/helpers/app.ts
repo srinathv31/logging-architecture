@@ -6,7 +6,7 @@ import type { FastifyInstance } from 'fastify';
  */
 export async function createTestApp(): Promise<FastifyInstance> {
   // Dynamic import to avoid loading db during test setup
-  const { buildApp } = await import('../../app');
+  const { buildApp } = await import('../../src/app');
   const app = buildApp();
   await app.ready();
   return app;

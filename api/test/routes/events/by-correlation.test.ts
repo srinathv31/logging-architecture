@@ -9,7 +9,7 @@ import {
 } from 'fastify-type-provider-zod';
 import { z } from 'zod';
 import { createEventLogDbRecord } from '../../fixtures/events';
-import { getEventsByCorrelationResponseSchema } from '../../../schemas/events';
+import { getEventsByCorrelationResponseSchema } from '../../../src/schemas/events';
 
 // Mock function for getByCorrelation
 let mockGetByCorrelation: (correlationId: string) => Promise<{

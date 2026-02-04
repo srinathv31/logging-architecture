@@ -9,7 +9,7 @@ import {
 } from 'fastify-type-provider-zod';
 import { z } from 'zod';
 import { createEventLogDbRecord } from '../../fixtures/events';
-import { getEventsByAccountQuerySchema, getEventsByAccountResponseSchema } from '../../../schemas/events';
+import { getEventsByAccountQuerySchema, getEventsByAccountResponseSchema } from '../../../src/schemas/events';
 
 // Mock functions that will be configured per test
 let mockGetByAccount: (

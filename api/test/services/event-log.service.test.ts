@@ -7,8 +7,8 @@
 import { vi, describe, it, expect, beforeEach, type Mock } from 'vitest';
 import { createEventFixture, createEventLogDbRecord, createEventBatchFixture } from '../fixtures/events';
 import { createCorrelationLinkDbRecord } from '../fixtures/correlation-links';
-import { chunkArray } from '../../utils/array';
-import { formatFullTextQuery } from '../../utils/search';
+import { chunkArray } from '../../src/utils/array';
+import { formatFullTextQuery } from '../../src/utils/search';
 
 // Use vi.hoisted to create mock - the factory function must be inline
 const mockDb = vi.hoisted(() => {
@@ -154,14 +154,14 @@ const mockDb = vi.hoisted(() => {
 });
 
 // Mock MUST be after vi.hoisted
-vi.mock('../../db/client', () => ({
+vi.mock('../../src/db/client', () => ({
   db: mockDb,
   getDb: vi.fn().mockResolvedValue(mockDb),
   closeDb: vi.fn(),
 }));
 
 // Mock the env config for full-text search tests
-vi.mock('../../config/env', () => ({
+vi.mock('../../src/config/env', () => ({
   env: {
     FULLTEXT_ENABLED: 'false',
   },
@@ -179,7 +179,7 @@ import {
   getByBatch,
   getBatchSummary,
   deleteAll,
-} from '../../services/event-log.service';
+} from '../../src/services/event-log.service';
 
 describe('EventLogService', () => {
   beforeEach(() => {

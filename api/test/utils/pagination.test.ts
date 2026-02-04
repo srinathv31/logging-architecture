@@ -1,4 +1,4 @@
-import { calculatePagination } from '../../utils/pagination';
+import { calculatePagination } from '../../src/utils/pagination';
 
 describe('calculatePagination', () => {
   describe('offset calculation', () => {

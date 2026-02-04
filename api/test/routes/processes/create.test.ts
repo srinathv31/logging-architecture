@@ -8,7 +8,7 @@ import {
   type ZodTypeProvider,
 } from 'fastify-type-provider-zod';
 import { createProcessFixture, createProcessDbRecord } from '../../fixtures/processes';
-import { createProcessDefinitionSchema, createProcessResponseSchema } from '../../../schemas/processes';
+import { createProcessDefinitionSchema, createProcessResponseSchema } from '../../../src/schemas/processes';
 
 // Mock function for createProcess
 let mockCreateProcess: (data: {

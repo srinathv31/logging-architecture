@@ -8,7 +8,7 @@ import {
   createCorrelationLinkFixture,
   createCorrelationLinkDbRecord,
 } from '../fixtures/correlation-links';
-import { NotFoundError } from '../../utils/errors';
+import { NotFoundError } from '../../src/utils/errors';
 
 // Create mock instance using vi.hoisted - must define inline, cannot import
 const mockDb = vi.hoisted(() => {
@@ -133,7 +133,7 @@ const mockDb = vi.hoisted(() => {
 });
 
 // Mock MUST be after vi.hoisted
-vi.mock('../../db/client', () => ({
+vi.mock('../../src/db/client', () => ({
   db: mockDb,
   getDb: vi.fn().mockResolvedValue(mockDb),
   closeDb: vi.fn(),
@@ -143,7 +143,7 @@ vi.mock('../../db/client', () => ({
 import {
   createCorrelationLink,
   getCorrelationLink,
-} from '../../services/correlation-link.service';
+} from '../../src/services/correlation-link.service';
 
 describe('CorrelationLinkService', () => {
   beforeEach(() => {

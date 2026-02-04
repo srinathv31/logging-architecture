@@ -6,7 +6,7 @@
 import { vi, describe, it, expect, beforeEach, type Mock } from 'vitest';
 import { createAccountSummaryDbRecord } from '../fixtures/account-summary';
 import { createEventLogDbRecord } from '../fixtures/events';
-import { NotFoundError } from '../../utils/errors';
+import { NotFoundError } from '../../src/utils/errors';
 
 // Create mock instance using vi.hoisted - must define inline, cannot import
 const mockDb = vi.hoisted(() => {
@@ -164,14 +164,14 @@ const mockDb = vi.hoisted(() => {
 });
 
 // Mock MUST be after vi.hoisted
-vi.mock('../../db/client', () => ({
+vi.mock('../../src/db/client', () => ({
   db: mockDb,
   getDb: vi.fn().mockResolvedValue(mockDb),
   closeDb: vi.fn(),
 }));
 
 // Now import the service (uses mocked db)
-import { getAccountSummary } from '../../services/account-summary.service';
+import { getAccountSummary } from '../../src/services/account-summary.service';
 
 describe('AccountSummaryService', () => {
   beforeEach(() => {

@@ -1,4 +1,4 @@
-import { AppError, NotFoundError, ConflictError } from '../../utils/errors';
+import { AppError, NotFoundError, ConflictError } from '../../src/utils/errors';
 
 describe('AppError', () => {
   it('should create an error with message and status code', () => {

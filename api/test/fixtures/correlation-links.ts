@@ -1,4 +1,4 @@
-import type { CreateCorrelationLinkRequest } from '../../types/api';
+import type { CreateCorrelationLinkRequest } from '../../src/types/api';
 
 /**
  * Creates a valid CreateCorrelationLinkRequest for testing

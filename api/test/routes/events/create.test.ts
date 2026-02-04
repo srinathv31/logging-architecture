@@ -13,7 +13,7 @@ import {
   batchCreateEventRequestSchema,
   createEventResponseSchema,
   batchCreateEventResponseSchema,
-} from '../../../schemas/events';
+} from '../../../src/schemas/events';
 
 // Mock functions that will be configured per test
 let mockCreateEvent: (event: unknown) => Promise<{ executionId: string; correlationId: string }>;

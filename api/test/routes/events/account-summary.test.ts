@@ -10,9 +10,9 @@ import {
 import { z } from 'zod';
 import { createEventLogDbRecord } from '../../fixtures/events';
 import { createAccountSummaryDbRecord } from '../../fixtures/account-summary';
-import { accountSummaryResponseSchema } from '../../../schemas/events';
-import { NotFoundError } from '../../../utils/errors';
-import { registerErrorHandler } from '../../../plugins/error-handler';
+import { accountSummaryResponseSchema } from '../../../src/schemas/events';
+import { NotFoundError } from '../../../src/utils/errors';
+import { registerErrorHandler } from '../../../src/plugins/error-handler';
 
 // Mock function for getAccountSummary
 let mockGetAccountSummary: (accountId: string) => Promise<{

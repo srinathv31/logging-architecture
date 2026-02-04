@@ -1,8 +1,8 @@
 import type { FastifyInstance } from 'fastify';
 import Fastify from 'fastify';
 import { ZodError, z } from 'zod';
-import { registerErrorHandler } from '../../plugins/error-handler';
-import { AppError, NotFoundError, ConflictError } from '../../utils/errors';
+import { registerErrorHandler } from '../../src/plugins/error-handler';
+import { AppError, NotFoundError, ConflictError } from '../../src/utils/errors';
 
 function buildTestApp() {
   const app = Fastify({ logger: false });

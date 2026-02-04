@@ -8,8 +8,8 @@ export default defineConfig({
   test: {
     globals: true,
     environment: 'node',
-    setupFiles: ['./src/test/setup.ts'],
-    include: ['src/test/**/*.test.ts'],
+    setupFiles: ['./test/setup.ts'],
+    include: ['test/**/*.test.ts'],
     testTimeout: 10000,
 
     // EDP-compatible reporters
@@ -47,7 +47,7 @@ export default defineConfig({
         'src/routes/**',          // Route handlers (mocked in tests)
         'src/types/api.ts',       // Type definitions only
         'src/types/index.ts',     // Re-exports
-        'src/test/**',            // Test files
+        'test/**',                // Test files
       ],
       thresholds: {
         statements: 80,

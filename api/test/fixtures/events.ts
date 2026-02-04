@@ -1,4 +1,4 @@
-import type { EventLogEntry } from '../../types/api';
+import type { EventLogEntry } from '../../src/types/api';
 
 /**
  * Creates a valid EventLogEntry for testing

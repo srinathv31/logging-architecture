@@ -9,9 +9,9 @@ import {
 } from 'fastify-type-provider-zod';
 import { z } from 'zod';
 import { createCorrelationLinkDbRecord } from '../../fixtures/correlation-links';
-import { getCorrelationLinkResponseSchema } from '../../../schemas/correlation-links';
-import { NotFoundError } from '../../../utils/errors';
-import { registerErrorHandler } from '../../../plugins/error-handler';
+import { getCorrelationLinkResponseSchema } from '../../../src/schemas/correlation-links';
+import { NotFoundError } from '../../../src/utils/errors';
+import { registerErrorHandler } from '../../../src/plugins/error-handler';
 
 // Mock function for getCorrelationLink
 let mockGetCorrelationLink: (correlationId: string) => Promise<ReturnType<typeof createCorrelationLinkDbRecord>>;

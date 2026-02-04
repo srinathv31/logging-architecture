@@ -8,7 +8,7 @@ import {
   type ZodTypeProvider,
 } from 'fastify-type-provider-zod';
 import { createEventLogDbRecord } from '../../fixtures/events';
-import { textSearchRequestSchema, textSearchResponseSchema } from '../../../schemas/events';
+import { textSearchRequestSchema, textSearchResponseSchema } from '../../../src/schemas/events';
 
 // Mock function for searchText
 let mockSearchText: (filters: {

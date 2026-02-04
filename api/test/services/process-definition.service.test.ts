@@ -138,7 +138,7 @@ const mockDb = vi.hoisted(() => {
 });
 
 // Mock MUST be after vi.hoisted
-vi.mock('../../db/client', () => ({
+vi.mock('../../src/db/client', () => ({
   db: mockDb,
   getDb: vi.fn().mockResolvedValue(mockDb),
   closeDb: vi.fn(),
@@ -148,7 +148,7 @@ vi.mock('../../db/client', () => ({
 import {
   listProcesses,
   createProcess,
-} from '../../services/process-definition.service';
+} from '../../src/services/process-definition.service';
 
 describe('ProcessDefinitionService', () => {
   beforeEach(() => {

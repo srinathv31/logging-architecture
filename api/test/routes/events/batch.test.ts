@@ -15,7 +15,7 @@ import {
   getEventsByBatchQuerySchema,
   getEventsByBatchResponseSchema,
   batchSummaryResponseSchema,
-} from '../../../schemas/events';
+} from '../../../src/schemas/events';
 
 // Mock functions
 let mockCreateBatchUpload: (batchId: string, events: unknown[]) => Promise<{

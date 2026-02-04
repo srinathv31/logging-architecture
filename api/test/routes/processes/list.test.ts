@@ -8,7 +8,7 @@ import {
   type ZodTypeProvider,
 } from 'fastify-type-provider-zod';
 import { createProcessDbRecord } from '../../fixtures/processes';
-import { listProcessesQuerySchema, listProcessesResponseSchema } from '../../../schemas/processes';
+import { listProcessesQuerySchema, listProcessesResponseSchema } from '../../../src/schemas/processes';
 
 // Mock function for listProcesses
 let mockListProcesses: (isActive?: boolean) => Promise<ReturnType<typeof createProcessDbRecord>[]>;
