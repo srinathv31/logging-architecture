@@ -1,8 +1,9 @@
 import { eq } from 'drizzle-orm';
-import { db } from '../db/client';
+import { getDb } from '../db/client';
 import { processDefinitions } from '../db/schema/index';
 
 export async function listProcesses(isActive?: boolean) {
+  const db = await getDb();
   if (isActive !== undefined) {
     return db
       .select()
@@ -20,6 +21,7 @@ export async function createProcess(data: {
   expectedSteps?: number;
   slaMs?: number;
 }) {
+  const db = await getDb();
   // MSSQL uses .output() instead of .returning()
   const [result] = await db
     .insert(processDefinitions)

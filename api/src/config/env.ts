@@ -13,6 +13,11 @@ const envSchema = z.object({
     .default("info"),
   DRIZZLE_LOG: z.enum(["true", "false"]).default("false"),
   FULLTEXT_ENABLED: z.enum(["true", "false"]).default("true"),
+  // MSSQL Azure AD authentication
+  DB_SERVER: z.string().optional(),
+  DB_NAME: z.string().optional(),
+  MSI_ENDPOINT: z.string().optional(),
+  MSI_SECRET: z.string().optional(),
 });
 
 export type Env = z.infer<typeof envSchema>;

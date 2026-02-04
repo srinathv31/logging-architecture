@@ -12,7 +12,7 @@ import {
   inArray,
   type SQL,
 } from "drizzle-orm";
-import { db } from "../db/client";
+import { getDb } from "../db/client";
 import { eventLogs, correlationLinks } from "../db/schema/index";
 import type { EventLogEntry } from "../types/api";
 import { calculatePagination } from "../utils/pagination";
@@ -57,6 +57,8 @@ function entryToInsert(entry: EventLogEntry) {
 }
 
 export async function createEvent(entry: EventLogEntry) {
+  const db = await getDb();
+
   // If idempotency_key is provided, check for existing record
   if (entry.idempotency_key) {
     const existing = await db
@@ -80,6 +82,7 @@ export async function createEvent(entry: EventLogEntry) {
 }
 
 export async function createEvents(entries: EventLogEntry[]) {
+  const db = await getDb();
   const executionIds: (string | null)[] = new Array(entries.length).fill(null);
   const errors: Array<{ index: number; error: string }> = [];
 
@@ -180,6 +183,7 @@ export async function getByAccount(
     pageSize: number;
   },
 ) {
+  const db = await getDb();
   const conditions = [eq(eventLogs.isDeleted, false)];
 
   if (filters.includeLinked) {
@@ -239,6 +243,7 @@ export async function getByAccount(
 }
 
 export async function getByCorrelation(correlationId: string) {
+  const db = await getDb();
   const events = await db
     .select()
     .from(eventLogs)
@@ -264,6 +269,7 @@ export async function getByCorrelation(correlationId: string) {
 }
 
 export async function getByTrace(traceId: string) {
+  const db = await getDb();
   const events = await db
     .select()
     .from(eventLogs)
@@ -291,6 +297,7 @@ export async function searchText(filters: {
   page: number;
   pageSize: number;
 }) {
+  const db = await getDb();
   // Use CONTAINS for full-text search when enabled, otherwise fall back to LIKE
   const searchCondition: SQL =
     env.FULLTEXT_ENABLED === "true"
@@ -342,6 +349,7 @@ export async function createBatchUpload(
   batchId: string,
   entries: EventLogEntry[],
 ) {
+  const db = await getDb();
   const correlationIds: (string | null)[] = new Array(entries.length).fill(
     null,
   );
@@ -445,6 +453,7 @@ export async function getByBatch(
     pageSize: number;
   },
 ) {
+  const db = await getDb();
   const conditions = [
     eq(eventLogs.batchId, batchId),
     eq(eventLogs.isDeleted, false),
@@ -505,6 +514,7 @@ export async function getByBatch(
 }
 
 export async function getBatchSummary(batchId: string) {
+  const db = await getDb();
   const batchWhere = and(
     eq(eventLogs.batchId, batchId),
     eq(eventLogs.isDeleted, false),
@@ -547,5 +557,6 @@ export async function getBatchSummary(batchId: string) {
 }
 
 export async function deleteAll() {
+  const db = await getDb();
   await db.delete(eventLogs);
 }

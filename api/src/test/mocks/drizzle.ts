@@ -302,7 +302,7 @@ export function createDrizzleMock(): DrizzleMock {
 export function createMockDbModule(mockDb: DrizzleMock) {
   return {
     db: mockDb,
-    initializeDb: vi.fn(),
+    getDb: vi.fn().mockResolvedValue(mockDb),
     closeDb: vi.fn(),
   };
 }

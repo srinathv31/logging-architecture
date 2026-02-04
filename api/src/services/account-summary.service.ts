@@ -1,9 +1,10 @@
 import { eq, and, desc } from "drizzle-orm";
-import { db } from "../db/client";
+import { getDb } from "../db/client";
 import { accountTimelineSummary, eventLogs } from "../db/schema/index";
 import { NotFoundError } from "../utils/errors";
 
 export async function getAccountSummary(accountId: string) {
+  const db = await getDb();
   const [summary] = await db
     .select()
     .top(1)

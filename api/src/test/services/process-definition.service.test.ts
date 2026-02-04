@@ -140,7 +140,7 @@ const mockDb = vi.hoisted(() => {
 // Mock MUST be after vi.hoisted
 vi.mock('../../db/client', () => ({
   db: mockDb,
-  initializeDb: vi.fn(),
+  getDb: vi.fn().mockResolvedValue(mockDb),
   closeDb: vi.fn(),
 }));
 

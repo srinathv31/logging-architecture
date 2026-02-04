@@ -1,5 +1,5 @@
 import { eq, sql } from "drizzle-orm";
-import { db } from "../db/client";
+import { getDb } from "../db/client";
 import { correlationLinks } from "../db/schema/index";
 import type { CreateCorrelationLinkRequest } from "../types/api";
 import { NotFoundError } from "../utils/errors";
@@ -7,6 +7,7 @@ import { NotFoundError } from "../utils/errors";
 export async function createCorrelationLink(
   data: CreateCorrelationLinkRequest,
 ) {
+  const db = await getDb();
   // MSSQL doesn't have onConflictDoUpdate, use MERGE via raw SQL
   await db.execute(sql`
     MERGE ${correlationLinks} AS target
@@ -34,6 +35,7 @@ export async function createCorrelationLink(
 }
 
 export async function getCorrelationLink(correlationId: string) {
+  const db = await getDb();
   const [link] = await db
     .select()
     .top(1)

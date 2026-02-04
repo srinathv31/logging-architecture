@@ -1,15 +1,16 @@
 import type { NodePgDatabase } from 'drizzle-orm/node-postgres';
 import type { NodeMsSqlDatabase } from 'drizzle-orm/node-mssql';
 
-// MSSQL is primary (used by services)
-let db: NodeMsSqlDatabase;
-
 // Postgres is standalone (requires manual import to use)
 let dbPg: NodePgDatabase;
 
-export async function initializeDb(): Promise<void> {
-  const { createMssqlClient } = await import('./drivers/mssql');
-  db = await createMssqlClient();
+/**
+ * Gets the MSSQL Drizzle database instance.
+ * This function handles token refresh automatically and returns the current connection.
+ */
+export async function getDb(): Promise<NodeMsSqlDatabase> {
+  const { getDb: getMssqlDb } = await import('./drivers/mssql');
+  return getMssqlDb();
 }
 
 export async function initializeDbPg(): Promise<void> {
@@ -22,4 +23,4 @@ export async function closeDb(): Promise<void> {
   await closeMssqlConnection();
 }
 
-export { db, dbPg };
+export { dbPg };

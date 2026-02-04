@@ -1,13 +1,13 @@
 import { buildApp } from './app';
 import { env } from './config/env';
-import { initializeDb, closeDb } from './db/client';
+import { getDb, closeDb } from './db/client';
 import { runMigrations } from './db/migrate';
 
 const app = buildApp();
 
 async function start() {
   try {
-    await initializeDb();
+    await getDb();
     app.log.info('Database connection established');
     await runMigrations();
     app.log.info('Database migrations applied');
