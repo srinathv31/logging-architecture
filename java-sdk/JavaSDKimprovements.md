@@ -6,29 +6,54 @@ This document outlines improvements to make the Event Log Java SDK production-re
 
 ## Table of Contents
 
-1. [Spring Boot Integration](#1-spring-boot-integration)
-2. [Configuration](#2-configuration)
-3. [Developer Experience](#3-developer-experience)
-4. [Dependency Management](#4-dependency-management)
-5. [Observability](#5-observability)
-6. [Testing](#6-testing)
-7. [Documentation](#7-documentation)
+1. [Baseline Compatibility](#1-baseline-compatibility)
+2. [Spring Boot Integration](#2-spring-boot-integration)
+3. [Configuration](#3-configuration)
+4. [Developer Experience](#4-developer-experience)
+5. [Dependency Management](#5-dependency-management)
+6. [Observability](#6-observability)
+7. [Testing](#7-testing)
+8. [Documentation](#8-documentation)
 
 ---
 
-## 1. Spring Boot Integration
+## 1. Baseline Compatibility
+
+### Current State
+- Compatibility not explicitly defined
+- Some guidance implies Spring Boot 2.x support
+
+### Desired State
+- Java 21+ only
+- Spring Boot 3.2+ only
+- Use `jakarta.*` APIs where applicable
+
+### Action Items
+
+| Priority | Item | Acceptance Criteria |
+|----------|------|---------------------|
+| **P0** | Set baseline to Java 21 | Maven/Gradle compiler `release=21` and toolchains documented |
+| **P0** | Target Spring Boot 3.2+ | Dependencies and auto-config only for Boot 3.2+ |
+| **P0** | Remove Boot 2.x references | No `spring.factories` auto-config, no `javax.*` |
+| **P1** | Define supported Boot versions | Test matrix includes 3.2.x, 3.3.x, 3.4.x |
+
+---
+
+## 2. Spring Boot Integration
 
 ### Current State
 - SDK is a plain Java library with no Spring awareness
 - Consumers must manually instantiate `EventLogClient` and `AsyncEventLogger`
 - No auto-configuration or lifecycle management
 - Shutdown hooks registered manually via JVM runtime
+- Async client methods use `CompletableFuture.supplyAsync` with blocking calls and no executor control
 
 ### Desired State
 - Drop-in Spring Boot starter that auto-configures everything
 - Beans created and managed by Spring container
 - Proper lifecycle integration (graceful shutdown via `@PreDestroy`)
 - Support for Spring profiles (dev, staging, prod)
+- Spring Boot 3.2-native HTTP and tracing integration
 
 ### Action Items
 
@@ -36,9 +61,15 @@ This document outlines improvements to make the Event Log Java SDK production-re
 |----------|------|---------------------|
 | **P0** | Create `eventlog-spring-boot-starter` module | New Maven module with `spring-boot-starter` packaging |
 | **P0** | Implement `EventLogAutoConfiguration` class | Auto-creates `EventLogClient` and `AsyncEventLogger` beans when on classpath |
+| **P0** | Register Boot 3 auto-config | Add `META-INF/spring/org.springframework.boot.autoconfigure.AutoConfiguration.imports` |
 | **P0** | Add `@ConditionalOnProperty` toggles | SDK disabled by default in tests, enabled in prod via `eventlog.enabled=true` |
+| **P0** | Use Boot 3.2 HTTP client facilities | Prefer `RestClient.Builder` (or `WebClient.Builder`) when on classpath; fallback to JDK `HttpClient` |
 | **P1** | Implement `@PreDestroy` shutdown | `AsyncEventLogger.shutdown()` called by Spring, not JVM hook |
 | **P1** | Add `@ConfigurationProperties` class | Type-safe configuration with IDE auto-completion |
+| **P1** | Inject Boot-managed `ObjectMapper` | Use Boot `ObjectMapper` (modules, naming strategy, date config) instead of creating a new one |
+| **P1** | Integrate with Spring executors | Use `TaskExecutor`/`TaskScheduler` beans for async sending/retries; avoid common pool |
+| **P1** | Avoid blocking async paths | Replace `CompletableFuture.supplyAsync` with `HttpClient.sendAsync` or virtual-thread executor |
+| **P1** | Support virtual threads | If enabled, use `VirtualThreadTaskExecutor` (Spring) or `Executors.newVirtualThreadPerTaskExecutor()` |
 | **P2** | Support Spring Cloud Config | Reload configuration without restart |
 
 ### Example Usage (After)
@@ -65,19 +96,21 @@ public class MyService {
 
 ---
 
-## 2. Configuration
+## 3. Configuration
 
 ### Current State
 - All configuration via builder pattern in code
 - No support for external configuration files
 - Environment variables require manual reading
 - No sensible defaults for different environments
+- Client request timeout is hard-coded in code
 
 ### Desired State
 - Configuration via `application.properties` or `application.yml`
 - Environment-specific defaults (shorter timeouts in dev, longer in prod)
 - Support for Spring profiles
 - Validation of required properties at startup
+- Configurable HTTP timeouts and async executors
 
 ### Action Items
 
@@ -87,7 +120,9 @@ public class MyService {
 | **P0** | Add property validation | Startup fails fast with clear message if `base-url` missing |
 | **P1** | Implement environment-aware defaults | Different `queue-capacity`, `timeout` defaults per profile |
 | **P1** | Support nested OAuth properties | `eventlog.oauth.token-url`, `eventlog.oauth.client-id`, etc. |
-| **P2** | Add `@ConstructorBinding` for immutable config | Prevents runtime modification of config |
+| **P1** | Make HTTP timeouts configurable | Separate `connect-timeout` and `request-timeout` properties |
+| **P1** | Allow executor configuration | `eventlog.async.executor` / `eventlog.async.virtual-threads` toggles |
+| **P2** | Use constructor binding (implicit in Boot 3) | Prevents runtime modification of config without requiring `@ConstructorBinding` |
 
 ### Configuration Properties
 
@@ -108,7 +143,10 @@ eventlog:
 
   # Client settings
   application-id: my-service
-  timeout: 30s
+  # Optional: webclient | restclient | jdk (auto-select if omitted)
+  transport: webclient
+  connect-timeout: 10s
+  request-timeout: 30s
   max-retries: 3
   retry-delay: 500ms
 
@@ -121,11 +159,12 @@ eventlog:
     circuit-breaker-threshold: 5
     circuit-breaker-reset: 30s
     spillover-path: /var/log/eventlog-spillover
+    virtual-threads: true
 ```
 
 ---
 
-## 3. Developer Experience
+## 4. Developer Experience
 
 ### Current State
 - Verbose builder patterns for common operations
@@ -185,7 +224,7 @@ public class OrderService {
 
 ---
 
-## 4. Dependency Management
+## 5. Dependency Management
 
 ### Current State
 - JetBrains annotations at `compile` scope (should be `provided`)
@@ -207,7 +246,7 @@ public class OrderService {
 | **P0** | Mark Jackson as `provided` in starter | Spring Boot manages Jackson version |
 | **P1** | Create `eventlog-sdk-bom` module | Single place to manage all SDK module versions |
 | **P1** | Add dependency convergence checks | Build fails if transitive conflicts detected |
-| **P2** | Test with multiple Spring Boot versions | Matrix test: 2.7.x, 3.0.x, 3.1.x, 3.2.x |
+| **P2** | Test with multiple Spring Boot versions | Matrix test: 3.2.x, 3.3.x, 3.4.x |
 
 ### Updated pom.xml (Core SDK)
 
@@ -230,7 +269,7 @@ public class OrderService {
 
 ---
 
-## 5. Observability
+## 6. Observability
 
 ### Current State
 - `AsyncEventLogger.Metrics` class exists but not exposed to monitoring systems
@@ -301,7 +340,7 @@ public class EventLogHealthIndicator implements HealthIndicator {
 
 ---
 
-## 6. Testing
+## 7. Testing
 
 ### Current State
 - No unit tests in SDK
@@ -389,7 +428,7 @@ class OrderServiceTest {
 
 ---
 
-## 7. Documentation
+## 8. Documentation
 
 ### Current State
 - README covers basic usage

@@ -1,0 +1,20 @@
+{
+  "request": {
+    "method": "GET",
+    "urlPattern": "/v1/events/account/.*"
+  },
+  "response": {
+    "status": 200,
+    "headers": {
+      "Content-Type": "application/json"
+    },
+    "jsonBody": {
+      "account_id": "acct-test",
+      "events": [],
+      "total_count": 0,
+      "page": 1,
+      "page_size": 50,
+      "has_more": false
+    }
+  }
+}

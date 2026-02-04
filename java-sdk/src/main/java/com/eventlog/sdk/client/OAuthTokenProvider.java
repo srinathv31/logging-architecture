@@ -52,6 +52,7 @@ public class OAuthTokenProvider implements TokenProvider {
     private final HttpClient httpClient;
     private final ObjectMapper objectMapper;
     private final Duration refreshBuffer;
+    private final Duration requestTimeout;
 
     // Token cache
     private volatile CachedToken cachedToken;
@@ -63,10 +64,15 @@ public class OAuthTokenProvider implements TokenProvider {
         this.clientSecret = builder.clientSecret;
         this.scope = builder.scope;
         this.refreshBuffer = builder.refreshBuffer;
-        this.objectMapper = new ObjectMapper();
-        this.httpClient = HttpClient.newBuilder()
-                .connectTimeout(Duration.ofSeconds(10))
-                .build();
+        this.requestTimeout = builder.requestTimeout;
+        this.objectMapper = builder.objectMapper != null
+                ? builder.objectMapper
+                : new ObjectMapper();
+        this.httpClient = builder.httpClient != null
+                ? builder.httpClient
+                : HttpClient.newBuilder()
+                    .connectTimeout(builder.connectTimeout)
+                    .build();
     }
 
     public static Builder builder() {
@@ -149,7 +155,7 @@ public class OAuthTokenProvider implements TokenProvider {
                     .header("Content-Type", "application/x-www-form-urlencoded")
                     .header("Authorization", "Basic " + credentials)
                     .header("Accept", "application/json")
-                    .timeout(Duration.ofSeconds(30))
+                    .timeout(requestTimeout)
                     .POST(HttpRequest.BodyPublishers.ofString(body.toString()))
                     .build();
 
@@ -239,6 +245,10 @@ public class OAuthTokenProvider implements TokenProvider {
         private String clientSecret;
         private String scope;
         private Duration refreshBuffer = Duration.ofSeconds(60); // Refresh 60s before expiry
+        private Duration connectTimeout = Duration.ofSeconds(10);
+        private Duration requestTimeout = Duration.ofSeconds(30);
+        private ObjectMapper objectMapper;
+        private HttpClient httpClient;
 
         /**
          * OAuth token endpoint URL (required)
@@ -277,6 +287,38 @@ public class OAuthTokenProvider implements TokenProvider {
          */
         public Builder refreshBuffer(Duration refreshBuffer) {
             this.refreshBuffer = refreshBuffer;
+            return this;
+        }
+
+        /**
+         * Connection timeout for token requests (default: 10 seconds)
+         */
+        public Builder connectTimeout(Duration timeout) {
+            this.connectTimeout = timeout;
+            return this;
+        }
+
+        /**
+         * Per-request timeout for token requests (default: 30 seconds)
+         */
+        public Builder requestTimeout(Duration timeout) {
+            this.requestTimeout = timeout;
+            return this;
+        }
+
+        /**
+         * Provide a pre-configured ObjectMapper (recommended for Spring Boot integration)
+         */
+        public Builder objectMapper(ObjectMapper objectMapper) {
+            this.objectMapper = objectMapper;
+            return this;
+        }
+
+        /**
+         * Provide a pre-configured HttpClient (connectTimeout will be ignored if set)
+         */
+        public Builder httpClient(HttpClient httpClient) {
+            this.httpClient = httpClient;
             return this;
         }
 

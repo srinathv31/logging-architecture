@@ -4,7 +4,6 @@ import com.eventlog.sdk.model.EventLogEntry;
 import com.eventlog.sdk.model.EventStatus;
 import com.eventlog.sdk.model.EventType;
 
-import java.time.Instant;
 import java.util.UUID;
 import java.util.concurrent.ThreadLocalRandom;
 
@@ -99,8 +98,7 @@ public final class EventLogUtils {
                 .processName(processName)
                 .eventType(EventType.PROCESS_START)
                 .eventStatus(EventStatus.IN_PROGRESS)
-                .stepSequence(0)
-                .eventTimestamp(Instant.now());
+                .stepSequence(0);
     }
 
     /**
@@ -125,8 +123,7 @@ public final class EventLogUtils {
                 .processName(processName)
                 .eventType(EventType.STEP)
                 .stepSequence(stepSequence)
-                .stepName(stepName)
-                .eventTimestamp(Instant.now());
+                .stepName(stepName);
     }
 
     /**
@@ -154,8 +151,7 @@ public final class EventLogUtils {
                 .eventType(EventType.PROCESS_END)
                 .eventStatus(status)
                 .stepSequence(stepSequence)
-                .executionTimeMs(totalDurationMs)
-                .eventTimestamp(Instant.now());
+                .executionTimeMs(totalDurationMs);
     }
 
     /**
@@ -181,8 +177,7 @@ public final class EventLogUtils {
                 .eventType(EventType.ERROR)
                 .eventStatus(EventStatus.FAILURE)
                 .errorCode(errorCode)
-                .errorMessage(errorMessage)
-                .eventTimestamp(Instant.now());
+                .errorMessage(errorMessage);
     }
 
     // ========================================================================

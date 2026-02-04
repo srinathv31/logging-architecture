@@ -1,0 +1,4 @@
+com/eventlog/sdk/autoconfigure/logging/LogEventAspectTest.class
+com/eventlog/sdk/autoconfigure/logging/LogEventAspectTest$TestConfig.class
+com/eventlog/sdk/autoconfigure/EventLogAutoConfigurationTest.class
+com/eventlog/sdk/autoconfigure/logging/LogEventAspectTest$TestService.class

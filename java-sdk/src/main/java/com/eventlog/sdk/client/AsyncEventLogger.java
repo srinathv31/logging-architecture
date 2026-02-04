@@ -83,6 +83,10 @@ public class AsyncEventLogger implements AutoCloseable {
     private Thread shutdownHook;
 
     private AsyncEventLogger(Builder builder) {
+        this(builder, true);
+    }
+
+    protected AsyncEventLogger(Builder builder, boolean startBackground) {
         this.client = builder.client;
         this.queue = new LinkedBlockingQueue<>(builder.queueCapacity);
         this.maxRetries = builder.maxRetries;
@@ -94,28 +98,40 @@ public class AsyncEventLogger implements AutoCloseable {
         this.spilloverEnabled = builder.spilloverPath != null;
         
         // Start sender thread
-        this.senderExecutor = Executors.newSingleThreadExecutor(r -> {
-            Thread t = new Thread(r, "eventlog-sender");
-            t.setDaemon(true);
-            return t;
-        });
-        senderExecutor.submit(this::senderLoop);
+        this.senderExecutor = builder.senderExecutor != null
+                ? builder.senderExecutor
+                : Executors.newSingleThreadExecutor(builder.virtualThreads
+                    ? Thread.ofVirtual().name("eventlog-sender").factory()
+                    : r -> {
+                        Thread t = new Thread(r, "eventlog-sender");
+                        t.setDaemon(true);
+                        return t;
+                    });
+        if (startBackground) {
+            senderExecutor.submit(this::senderLoop);
+        }
         
         // Start retry scheduler
-        this.retryExecutor = Executors.newSingleThreadScheduledExecutor(r -> {
-            Thread t = new Thread(r, "eventlog-retry");
-            t.setDaemon(true);
-            return t;
-        });
+        this.retryExecutor = builder.retryExecutor != null
+                ? builder.retryExecutor
+                : Executors.newSingleThreadScheduledExecutor(builder.virtualThreads
+                    ? Thread.ofVirtual().name("eventlog-retry").factory()
+                    : r -> {
+                        Thread t = new Thread(r, "eventlog-retry");
+                        t.setDaemon(true);
+                        return t;
+                    });
         
         // Register shutdown hook
-        if (builder.registerShutdownHook) {
+        if (startBackground && builder.registerShutdownHook) {
             this.shutdownHook = new Thread(this::shutdownGracefully, "eventlog-shutdown");
             Runtime.getRuntime().addShutdownHook(shutdownHook);
         }
         
-        log.info("AsyncEventLogger started - queue capacity: {}, spillover: {}", 
-                builder.queueCapacity, spilloverEnabled ? spilloverPath : "disabled");
+        if (startBackground) {
+            log.info("AsyncEventLogger started - queue capacity: {}, spillover: {}", 
+                    builder.queueCapacity, spilloverEnabled ? spilloverPath : "disabled");
+        }
     }
 
     /**
@@ -506,6 +522,9 @@ public class AsyncEventLogger implements AutoCloseable {
         private long circuitBreakerResetMs = 30_000;
         private Path spilloverPath = null;
         private boolean registerShutdownHook = true;
+        private boolean virtualThreads = false;
+        private ExecutorService senderExecutor;
+        private ScheduledExecutorService retryExecutor;
 
         /**
          * Set the EventLogClient (required)
@@ -578,6 +597,30 @@ public class AsyncEventLogger implements AutoCloseable {
          */
         public Builder registerShutdownHook(boolean register) {
             this.registerShutdownHook = register;
+            return this;
+        }
+
+        /**
+         * Enable virtual threads for async logging (Java 21+)
+         */
+        public Builder virtualThreads(boolean enabled) {
+            this.virtualThreads = enabled;
+            return this;
+        }
+
+        /**
+         * Provide a custom sender executor (overrides virtualThreads)
+         */
+        public Builder senderExecutor(ExecutorService senderExecutor) {
+            this.senderExecutor = senderExecutor;
+            return this;
+        }
+
+        /**
+         * Provide a custom retry scheduler (overrides virtualThreads)
+         */
+        public Builder retryExecutor(ScheduledExecutorService retryExecutor) {
+            this.retryExecutor = retryExecutor;
             return this;
         }
 

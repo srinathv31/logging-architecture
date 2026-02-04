@@ -269,7 +269,7 @@ public class EventLogEntry {
         private String summary;
         private String result;
         private Map<String, Object> metadata = new HashMap<>();
-        private Instant eventTimestamp = Instant.now();
+        private Instant eventTimestamp;
         private Integer executionTimeMs;
         private String endpoint;
         private HttpMethod httpMethod;
@@ -441,6 +441,9 @@ public class EventLogEntry {
          * @throws IllegalStateException if required fields are missing
          */
         public EventLogEntry build() {
+            if (eventTimestamp == null) {
+                eventTimestamp = Instant.now();
+            }
             validate();
             return new EventLogEntry(this);
         }

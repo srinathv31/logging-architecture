@@ -1,0 +1,8 @@
+com.eventlog.sdk.annotation
+com.eventlog.sdk.client
+com.eventlog.sdk.client.transport
+com.eventlog.sdk.examples
+com.eventlog.sdk.exception
+com.eventlog.sdk.model
+com.eventlog.sdk.template
+com.eventlog.sdk.util

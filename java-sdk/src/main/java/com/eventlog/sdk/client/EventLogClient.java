@@ -1,6 +1,10 @@
 package com.eventlog.sdk.client;
 
 import com.eventlog.sdk.exception.EventLogException;
+import com.eventlog.sdk.client.transport.EventLogRequest;
+import com.eventlog.sdk.client.transport.EventLogResponse;
+import com.eventlog.sdk.client.transport.EventLogTransport;
+import com.eventlog.sdk.client.transport.JdkHttpTransport;
 import com.eventlog.sdk.model.ApiResponses.*;
 import com.eventlog.sdk.model.EventLogEntry;
 import com.fasterxml.jackson.databind.DeserializationFeature;
@@ -13,11 +17,12 @@ import org.slf4j.LoggerFactory;
 import java.io.IOException;
 import java.net.URI;
 import java.net.http.HttpClient;
-import java.net.http.HttpRequest;
-import java.net.http.HttpResponse;
 import java.time.Duration;
 import java.util.*;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CompletionException;
+import java.util.concurrent.Executor;
+import java.util.concurrent.TimeUnit;
 
 /**
  * Event Log API Client - Main entry point for the SDK
@@ -55,26 +60,39 @@ public class EventLogClient implements AutoCloseable {
     private static final Logger log = LoggerFactory.getLogger(EventLogClient.class);
 
     private final String baseUrl;
-    private final HttpClient httpClient;
+    private final EventLogTransport transport;
     private final ObjectMapper objectMapper;
+    private final Executor asyncExecutor;
     private final Map<String, String> defaultHeaders;
     private final TokenProvider tokenProvider;
     private final int maxRetries;
     private final Duration retryDelay;
+    private final Duration requestTimeout;
 
     private EventLogClient(Builder builder) {
         this.baseUrl = builder.baseUrl.endsWith("/") 
             ? builder.baseUrl.substring(0, builder.baseUrl.length() - 1) 
             : builder.baseUrl;
         
-        this.httpClient = HttpClient.newBuilder()
-                .connectTimeout(builder.connectTimeout)
-                .build();
+        if (builder.transport != null) {
+            this.transport = builder.transport;
+        } else {
+            HttpClient httpClient = builder.httpClient != null
+                    ? builder.httpClient
+                    : HttpClient.newBuilder()
+                        .connectTimeout(builder.connectTimeout)
+                        .build();
+            this.transport = new JdkHttpTransport(httpClient);
+        }
         
-        this.objectMapper = new ObjectMapper()
-                .registerModule(new JavaTimeModule())
-                .disable(SerializationFeature.WRITE_DATES_AS_TIMESTAMPS)
-                .configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false);
+        this.objectMapper = builder.objectMapper != null
+                ? builder.objectMapper
+                : new ObjectMapper()
+                    .registerModule(new JavaTimeModule())
+                    .disable(SerializationFeature.WRITE_DATES_AS_TIMESTAMPS)
+                    .configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false);
+
+        this.asyncExecutor = builder.asyncExecutor;
         
         this.defaultHeaders = new HashMap<>();
         this.defaultHeaders.put("Content-Type", "application/json");
@@ -89,6 +107,7 @@ public class EventLogClient implements AutoCloseable {
         
         this.maxRetries = builder.maxRetries;
         this.retryDelay = builder.retryDelay;
+        this.requestTimeout = builder.requestTimeout;
     }
 
     /**
@@ -229,7 +248,7 @@ public class EventLogClient implements AutoCloseable {
     private <T> T get(String path, Map<String, String> params, Class<T> responseClass) {
         try {
             String url = buildUrl(path, params);
-            HttpRequest request = buildRequest(url, "GET", null);
+            EventLogRequest request = buildRequest(url, "GET", null);
             return executeWithRetry(request, responseClass);
         } catch (EventLogException e) {
             throw e;
@@ -242,7 +261,7 @@ public class EventLogClient implements AutoCloseable {
         try {
             String url = buildUrl(path, null);
             String json = objectMapper.writeValueAsString(body);
-            HttpRequest request = buildRequest(url, "POST", json);
+            EventLogRequest request = buildRequest(url, "POST", json);
             return executeWithRetry(request, responseClass);
         } catch (EventLogException e) {
             throw e;
@@ -252,47 +271,41 @@ public class EventLogClient implements AutoCloseable {
     }
 
     private <T> CompletableFuture<T> postAsync(String path, Object body, Class<T> responseClass) {
-        return CompletableFuture.supplyAsync(() -> post(path, body, responseClass));
+        try {
+            String url = buildUrl(path, null);
+            String json = objectMapper.writeValueAsString(body);
+            EventLogRequest request = buildRequest(url, "POST", json);
+            return executeWithRetryAsync(request, responseClass, 0);
+        } catch (Exception e) {
+            return CompletableFuture.failedFuture(
+                    new EventLogException("Failed to execute POST request: " + path, e));
+        }
     }
 
-    private HttpRequest buildRequest(String url, String method, String body) {
-        HttpRequest.Builder builder = HttpRequest.newBuilder()
-                .uri(URI.create(url))
-                .timeout(Duration.ofSeconds(30));
-        
-        defaultHeaders.forEach(builder::header);
-        
+    private EventLogRequest buildRequest(String url, String method, String body) {
+        Map<String, String> headers = new HashMap<>(defaultHeaders);
+
         // Add auth header from token provider
         if (tokenProvider != null) {
-            builder.header("Authorization", "Bearer " + tokenProvider.getToken());
+            headers.put("Authorization", "Bearer " + tokenProvider.getToken());
         }
-        
-        if ("POST".equals(method) && body != null) {
-            builder.POST(HttpRequest.BodyPublishers.ofString(body));
-        } else if ("PUT".equals(method) && body != null) {
-            builder.PUT(HttpRequest.BodyPublishers.ofString(body));
-        } else {
-            builder.GET();
-        }
-        
-        return builder.build();
+
+        return new EventLogRequest(URI.create(url), method, body, headers, requestTimeout);
     }
 
-    private <T> T executeWithRetry(HttpRequest request, Class<T> responseClass) {
+    private <T> T executeWithRetry(EventLogRequest request, Class<T> responseClass) {
         Exception lastException = null;
         
         for (int attempt = 0; attempt <= maxRetries; attempt++) {
             try {
                 if (attempt > 0) {
-                    log.debug("Retry attempt {} for {}", attempt, request.uri());
+                    log.debug("Retry attempt {} for {}", attempt, request.getUri());
                     Thread.sleep(retryDelay.toMillis() * attempt);
                 }
                 
-                HttpResponse<String> response = httpClient.send(request, 
-                        HttpResponse.BodyHandlers.ofString());
-                
-                int status = response.statusCode();
-                String responseBody = response.body();
+                EventLogResponse response = transport.send(request);
+                int status = response.getStatusCode();
+                String responseBody = response.getBody();
                 
                 if (status >= 200 && status < 300) {
                     return objectMapper.readValue(responseBody, responseClass);
@@ -313,7 +326,9 @@ public class EventLogClient implements AutoCloseable {
                             status, 
                             extractErrorCode(responseBody));
                 }
-            } catch (IOException | InterruptedException e) {
+            } catch (EventLogException e) {
+                throw e;
+            } catch (Exception e) {
                 lastException = e;
                 if (attempt >= maxRetries) {
                     throw new EventLogException("Request failed after " + maxRetries + " retries", e);
@@ -322,6 +337,85 @@ public class EventLogClient implements AutoCloseable {
         }
         
         throw new EventLogException("Request failed after " + maxRetries + " retries", lastException);
+    }
+
+    private <T> CompletableFuture<T> executeWithRetryAsync(EventLogRequest request, Class<T> responseClass, int attempt) {
+        return transport.sendAsync(request)
+                .thenCompose(response -> handleResponseAsync(request, responseClass, attempt, response))
+                .exceptionallyCompose(ex -> handleAsyncException(request, responseClass, attempt, ex));
+    }
+
+    private <T> CompletableFuture<T> handleResponseAsync(
+            EventLogRequest request,
+            Class<T> responseClass,
+            int attempt,
+            EventLogResponse response) {
+        int status = response.getStatusCode();
+        String responseBody = response.getBody();
+
+        if (status >= 200 && status < 300) {
+            try {
+                return CompletableFuture.completedFuture(objectMapper.readValue(responseBody, responseClass));
+            } catch (IOException e) {
+                return CompletableFuture.failedFuture(e);
+            }
+        }
+
+        if (isRetryableStatus(status) && attempt < maxRetries) {
+            return scheduleRetryAsync(request, responseClass, attempt + 1, "status " + status);
+        }
+
+        return CompletableFuture.failedFuture(new EventLogException(
+                "API error: " + status + " - " + responseBody,
+                status,
+                extractErrorCode(responseBody)));
+    }
+
+    private <T> CompletableFuture<T> handleAsyncException(
+            EventLogRequest request,
+            Class<T> responseClass,
+            int attempt,
+            Throwable ex) {
+        Throwable cause = unwrapCompletionException(ex);
+        if (cause instanceof EventLogException eventEx) {
+            int status = eventEx.getStatusCode();
+            if (isRetryableStatus(status) && attempt < maxRetries) {
+                return scheduleRetryAsync(request, responseClass, attempt + 1, "status " + status);
+            }
+            return CompletableFuture.failedFuture(eventEx);
+        }
+
+        if (attempt < maxRetries) {
+            return scheduleRetryAsync(request, responseClass, attempt + 1, cause.getClass().getSimpleName());
+        }
+
+        return CompletableFuture.failedFuture(
+                new EventLogException("Request failed after " + maxRetries + " retries", cause));
+    }
+
+    private <T> CompletableFuture<T> scheduleRetryAsync(
+            EventLogRequest request,
+            Class<T> responseClass,
+            int attempt,
+            String reason) {
+        long delayMs = retryDelay.toMillis() * attempt;
+        log.debug("Retry attempt {} for {} ({})", attempt, request.getUri(), reason);
+        Executor delayedExecutor = asyncExecutor != null
+                ? CompletableFuture.delayedExecutor(delayMs, TimeUnit.MILLISECONDS, asyncExecutor)
+                : CompletableFuture.delayedExecutor(delayMs, TimeUnit.MILLISECONDS);
+        return CompletableFuture.supplyAsync(() -> null, delayedExecutor)
+                .thenCompose(ignored -> executeWithRetryAsync(request, responseClass, attempt));
+    }
+
+    private boolean isRetryableStatus(int status) {
+        return status >= 500 || status == 429;
+    }
+
+    private Throwable unwrapCompletionException(Throwable ex) {
+        if (ex instanceof CompletionException && ex.getCause() != null) {
+            return ex.getCause();
+        }
+        return ex;
     }
 
     private String buildUrl(String path, Map<String, String> params) {
@@ -356,7 +450,7 @@ public class EventLogClient implements AutoCloseable {
 
     @Override
     public void close() {
-        // HttpClient doesn't require explicit closing in Java 11+
+        // HttpClient doesn't require explicit closing in Java 21+
         log.debug("EventLogClient closed");
     }
 
@@ -372,8 +466,13 @@ public class EventLogClient implements AutoCloseable {
         private TokenProvider tokenProvider;
         private String applicationId;
         private Duration connectTimeout = Duration.ofSeconds(10);
+        private Duration requestTimeout = Duration.ofSeconds(30);
         private int maxRetries = 3;
         private Duration retryDelay = Duration.ofMillis(500);
+        private ObjectMapper objectMapper;
+        private HttpClient httpClient;
+        private Executor asyncExecutor;
+        private EventLogTransport transport;
 
         /**
          * Set the base URL for the Event Log API (required)
@@ -435,6 +534,46 @@ public class EventLogClient implements AutoCloseable {
          */
         public Builder timeout(Duration timeout) {
             return connectTimeout(timeout);
+        }
+
+        /**
+         * Set the per-request timeout (default: 30 seconds)
+         */
+        public Builder requestTimeout(Duration timeout) {
+            this.requestTimeout = timeout;
+            return this;
+        }
+
+        /**
+         * Provide a pre-configured ObjectMapper (recommended for Spring Boot integration)
+         */
+        public Builder objectMapper(ObjectMapper objectMapper) {
+            this.objectMapper = objectMapper;
+            return this;
+        }
+
+        /**
+         * Provide a pre-configured HttpClient (connectTimeout will be ignored if set)
+         */
+        public Builder httpClient(HttpClient httpClient) {
+            this.httpClient = httpClient;
+            return this;
+        }
+
+        /**
+         * Executor for async retries and delayed scheduling
+         */
+        public Builder asyncExecutor(Executor asyncExecutor) {
+            this.asyncExecutor = asyncExecutor;
+            return this;
+        }
+
+        /**
+         * Provide a custom transport (overrides any HttpClient settings)
+         */
+        public Builder transport(EventLogTransport transport) {
+            this.transport = transport;
+            return this;
         }
 
         /**

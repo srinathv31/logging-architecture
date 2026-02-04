@@ -1,0 +1,19 @@
+{
+  "request": {
+    "method": "POST",
+    "urlPath": "/v1/events/batch"
+  },
+  "response": {
+    "status": 200,
+    "headers": {
+      "Content-Type": "application/json"
+    },
+    "jsonBody": {
+      "success": true,
+      "total_received": 1,
+      "total_inserted": 1,
+      "execution_ids": ["exec-1"],
+      "errors": []
+    }
+  }
+}

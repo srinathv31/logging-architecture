@@ -4,8 +4,196 @@ Java SDK for the Event Log API v1.4 - Centralized event logging for Credit Card 
 
 ## Requirements
 
-- Java 11 or higher
-- No external HTTP client dependencies (uses Java 11+ HttpClient)
+- Java 21 or higher
+- Spring Boot 3.2+ (tested on 3.2.x, 3.3.x, 3.4.x)
+- No external HTTP client dependencies (uses JDK HttpClient)
+
+Profile-aware defaults:
+- If the active profile includes `dev`, `local`, or `test`, the SDK uses shorter timeouts unless explicitly configured.
+
+## Compatibility Matrix
+
+Supported Spring Boot versions:
+- 3.2.x
+- 3.3.x
+- 3.4.x
+
+Run matrix tests from the starter module:
+- mvn -f eventlog-spring-boot-starter/pom.xml -Pboot-3.2 test
+- mvn -f eventlog-spring-boot-starter/pom.xml -Pboot-3.3 test
+- mvn -f eventlog-spring-boot-starter/pom.xml -Pboot-3.4 test
+
+## Spring Boot Auto-Configuration
+
+Add the Spring Boot starter to enable auto-wiring:
+
+```xml
+<dependency>
+    <groupId>com.yourcompany.eventlog</groupId>
+    <artifactId>eventlog-spring-boot-starter</artifactId>
+    <version>1.4.0</version>
+</dependency>
+```
+
+### Example `application.yml`
+
+```yaml
+eventlog:
+  enabled: true
+  base-url: https://eventlog-api.example.com
+  application-id: my-service
+  # transport: webclient | restclient | jdk (auto-select if omitted)
+  transport: webclient
+  connect-timeout: 10s
+  request-timeout: 30s
+  max-retries: 3
+  retry-delay: 500ms
+
+  oauth:
+    token-url: https://auth.example.com/oauth/token
+    client-id: my-client
+    client-secret: ${EVENTLOG_CLIENT_SECRET}
+    scope: eventlog:write eventlog:read
+
+  async:
+    enabled: true
+    queue-capacity: 10000
+    virtual-threads: true
+    # executor: virtual | spring | <bean-name>
+```
+
+### Transport Selection
+
+By default the starter auto-selects the best available transport:
+
+- `WebClient` (if `spring-webflux` is on the classpath)
+- `RestClient` (if `spring-web` is on the classpath)
+- JDK `HttpClient` (fallback)
+
+Override with `eventlog.transport`:
+
+- `webclient` for non-blocking async
+- `restclient` for synchronous HTTP with virtual threads
+- `jdk` for pure JDK transport
+
+## Configuration Reference (Spring Boot)
+
+Profile-aware defaults:
+- If the active profile includes `dev`, `local`, or `test`, the SDK uses shorter timeouts and retry delays unless explicitly configured.
+
+| Property | Type | Default | Description |
+| --- | --- | --- | --- |
+| `eventlog.enabled` | boolean | `false` | Enable Spring Boot auto-configuration |
+| `eventlog.base-url` | string | — | Base URL for the Event Log API (required when enabled) |
+| `eventlog.application-id` | string | — | App identifier for headers and annotation logging |
+| `eventlog.connect-timeout` | duration | `10s` | HTTP connect timeout (`3s` in dev/local/test) |
+| `eventlog.request-timeout` | duration | `30s` | HTTP request timeout (`10s` in dev/local/test) |
+| `eventlog.max-retries` | int | `3` | Retry attempts for 5xx/429 responses |
+| `eventlog.retry-delay` | duration | `500ms` | Base retry delay (`200ms` in dev/local/test) |
+| `eventlog.api-key` | string | — | Static API key (dev/testing only) |
+| `eventlog.transport` | string | auto | `webclient` \| `restclient` \| `jdk` |
+| `eventlog.oauth.token-url` | string | — | OAuth token endpoint |
+| `eventlog.oauth.client-id` | string | — | OAuth client ID |
+| `eventlog.oauth.client-secret` | string | — | OAuth client secret |
+| `eventlog.oauth.scope` | string | — | OAuth scope string |
+| `eventlog.oauth.refresh-buffer` | duration | `60s` | Refresh token buffer |
+| `eventlog.oauth.connect-timeout` | duration | `10s` | OAuth connect timeout (`3s` in dev/local/test) |
+| `eventlog.oauth.request-timeout` | duration | `30s` | OAuth request timeout (`10s` in dev/local/test) |
+| `eventlog.async.enabled` | boolean | `true` | Enable async logger |
+| `eventlog.async.queue-capacity` | int | `10000` | Queue capacity |
+| `eventlog.async.max-retries` | int | `3` | Max retries per event |
+| `eventlog.async.base-retry-delay-ms` | long | `1000` | Base retry delay (`500` in dev/local/test) |
+| `eventlog.async.max-retry-delay-ms` | long | `30000` | Max retry delay (`5000` in dev/local/test) |
+| `eventlog.async.circuit-breaker-threshold` | int | `5` | Failures before circuit opens |
+| `eventlog.async.circuit-breaker-reset-ms` | long | `30000` | Circuit reset time |
+| `eventlog.async.spillover-path` | path | — | Spillover directory for disk persistence |
+| `eventlog.async.virtual-threads` | boolean | `false` | Use virtual threads for async logging |
+| `eventlog.async.executor` | string | — | `virtual` \| `spring` \| bean name |
+| `eventlog.annotation.enabled` | boolean | `true` | Enable `@LogEvent` AOP |
+| `eventlog.target-system` | string | applicationId | Override annotation target system |
+| `eventlog.originating-system` | string | applicationId | Override annotation originating system |
+| `eventlog.refresh.enabled` | boolean | `true` | Enable refresh-scoped beans when Spring Cloud Config is present |
+
+`eventlog.application-id` defaults to `spring.application.name` for annotation-based logging when unset.
+
+### Bean Injection Example
+
+```java
+import com.eventlog.sdk.client.AsyncEventLogger;
+import com.eventlog.sdk.model.EventStatus;
+import com.eventlog.sdk.template.EventLogTemplate;
+import org.springframework.stereotype.Service;
+
+import static com.eventlog.sdk.util.EventLogUtils.step;
+
+@Service
+public class OrderService {
+    private final AsyncEventLogger eventLog;
+
+    public OrderService(AsyncEventLogger eventLog) {
+        this.eventLog = eventLog;
+    }
+
+    public void processOrder(String correlationId, String traceId) {
+        eventLog.log(step(correlationId, traceId, "ORDER_PROCESSING", 1, "Validate Order")
+            .eventStatus(EventStatus.SUCCESS)
+            .summary("Order validated")
+            .build());
+    }
+}
+```
+
+## EventLogTemplate Convenience
+
+Use `EventLogTemplate` to reduce boilerplate and reuse defaults:
+
+```java
+EventLogTemplate template = EventLogTemplate.builder(eventLog)
+    .applicationId("order-service")
+    .originatingSystem("ORDER_SERVICE")
+    .targetSystem("ORDER_SERVICE")
+    .build();
+
+template.forProcess("ORDER_PROCESSING")
+    .withCorrelationId(order.getOrderId())
+    .withTraceId(traceId)
+    .logStep(1, "Validate Order", EventStatus.SUCCESS, "Order validated", "VALIDATED");
+```
+
+If SLF4J MDC contains `correlationId`, `traceId`, `spanId`, `parentSpanId`, or `batchId`, those values are used when not explicitly set.
+
+## Annotation-Based Logging (Spring Boot)
+
+Add `@LogEvent` to automatically log method execution time and status:
+
+```java
+import com.eventlog.sdk.annotation.LogEvent;
+import com.eventlog.sdk.model.EventStatus;
+
+@Service
+public class OrderService {
+
+    @LogEvent(process = "ORDER_PROCESSING", step = 1, name = "Validate Order")
+    public void validateOrder(Order order) {
+        // method execution logged as a STEP event
+    }
+
+    @LogEvent(process = "ORDER_PROCESSING", step = 2, name = "Charge Card",
+            successStatus = EventStatus.SUCCESS, failureStatus = EventStatus.FAILURE)
+    public void chargeCard(Order order) {
+        // status based on success/failure
+    }
+}
+```
+
+Notes:
+- Requires the Spring Boot starter (AOP enabled automatically).
+- Defaults `applicationId` to `eventlog.application-id` or `spring.application.name`.
+- `targetSystem` and `originatingSystem` default to the same value as `applicationId`.
+- Override `targetSystem`/`originatingSystem` via `eventlog.target-system` and `eventlog.originating-system`.
+- Uses MDC values for correlation/trace IDs when present.
+- Disable with `eventlog.annotation.enabled=false`.
+- If Spring Cloud Config is on the classpath, Event Log beans are refresh-scoped and reloaded on config refresh (disable with `eventlog.refresh.enabled=false`).
 
 ## Installation
 
@@ -355,13 +543,38 @@ EventLogClient client = EventLogClient.builder()
     .baseUrl("https://eventlog-api.yourcompany.com")  // Required
     .apiKey("your-api-key")                           // Optional
     .applicationId("my-service")                      // Sets X-Application-Id header
-    .timeout(Duration.ofSeconds(30))                  // Connection timeout
+    .connectTimeout(Duration.ofSeconds(10))           // Connection timeout
+    .requestTimeout(Duration.ofSeconds(30))           // Request timeout
     .maxRetries(3)                                    // Retry attempts on 5xx/429
-    .retryDelay(Duration.ofMillis(500))              // Base delay (exponential backoff)
+    .retryDelay(Duration.ofMillis(500))               // Base delay (exponential backoff)
     .build();
 ```
 
+## Testing
+
+Use `eventlog-test` to capture events in-memory during tests:
+
+```xml
+<dependency>
+    <groupId>com.yourcompany.eventlog</groupId>
+    <artifactId>eventlog-test</artifactId>
+    <version>1.4.0</version>
+    <scope>test</scope>
+</dependency>
+```
+
+With the `test` profile active, `MockAsyncEventLogger` is auto-registered. You can also instantiate it directly.
+Activate it via `@ActiveProfiles("test")` or `spring.profiles.active=test`.
+
+## Additional Docs
+
+- Migration guide: `MIGRATION.md`
+- Troubleshooting: `TROUBLESHOOTING.md`
+- Architecture diagram: `docs/architecture.md`
+
 ## Building from Source
+
+If you use Maven toolchains, point your toolchain to Java 21 (required).
 
 ```bash
 mvn clean package
@@ -417,8 +630,8 @@ See [Sonatype OSSRH Guide](https://central.sonatype.org/publish/publish-guide/) 
 
 | SDK Version | API Version | Java Version |
 |-------------|-------------|--------------|
-| 1.4.x       | v1.4        | 11+          |
-| 1.3.x       | v1.3        | 11+          |
+| 1.4.x       | v1.4        | 21+          |
+| 1.3.x and below | v1.3 and below | EOL (not supported) |
 
 ## License
 
