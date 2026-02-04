@@ -8,6 +8,7 @@ import com.eventlog.sdk.client.transport.EventLogTransport;
 import com.eventlog.sdk.autoconfigure.logging.LogEventAspect;
 import com.eventlog.sdk.autoconfigure.transport.RestClientTransport;
 import com.eventlog.sdk.autoconfigure.transport.WebClientTransport;
+import com.eventlog.sdk.template.EventLogTemplate;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.aspectj.lang.annotation.Aspect;
 import org.slf4j.Logger;
@@ -16,6 +17,7 @@ import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.boot.autoconfigure.AutoConfiguration;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnClass;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnBean;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnExpression;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
 import org.springframework.context.annotation.Conditional;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
@@ -268,6 +270,23 @@ public class EventLogAutoConfiguration {
         return LogEventAspect.from(environment, properties, asyncEventLogger);
     }
 
+    @Bean
+    @ConditionalOnBean(AsyncEventLogger.class)
+    @ConditionalOnMissingBean
+    @ConditionalOnExpression(
+            "T(org.springframework.util.StringUtils).hasText('${eventlog.application-id:}') || " +
+            "T(org.springframework.util.StringUtils).hasText('${spring.application.name:}') || " +
+            "T(org.springframework.util.StringUtils).hasText('${eventlog.target-system:}') || " +
+            "T(org.springframework.util.StringUtils).hasText('${eventlog.originating-system:}')")
+    public EventLogTemplate eventLogTemplate(EventLogProperties properties, AsyncEventLogger asyncEventLogger) {
+        ResolvedDefaults resolved = resolveDefaults(properties);
+        return EventLogTemplate.builder(asyncEventLogger)
+                .applicationId(resolved.applicationId)
+                .targetSystem(resolved.targetSystem)
+                .originatingSystem(resolved.originatingSystem)
+                .build();
+    }
+
     private ResolvedExecutors resolveAsyncExecutors(
             EventLogProperties.Async async,
             ObjectProvider<ThreadPoolTaskExecutor> taskExecutorProvider,
@@ -360,6 +379,37 @@ public class EventLogAutoConfiguration {
         return false;
     }
 
+    private ResolvedDefaults resolveDefaults(EventLogProperties properties) {
+        String applicationId = firstNonBlank(
+                properties.getApplicationId(),
+                environment.getProperty("spring.application.name"),
+                environment.getProperty("eventlog.target-system"),
+                environment.getProperty("eventlog.originating-system"));
+        String targetSystem = firstNonBlank(environment.getProperty("eventlog.target-system"), applicationId);
+        String originatingSystem = firstNonBlank(environment.getProperty("eventlog.originating-system"), applicationId);
+        return new ResolvedDefaults(applicationId, targetSystem, originatingSystem);
+    }
+
+    private static String firstNonBlank(String primary, String fallback) {
+        if (hasText(primary)) {
+            return primary;
+        }
+        return hasText(fallback) ? fallback : null;
+    }
+
+    private static String firstNonBlank(String first, String second, String third, String fourth) {
+        if (hasText(first)) {
+            return first;
+        }
+        if (hasText(second)) {
+            return second;
+        }
+        if (hasText(third)) {
+            return third;
+        }
+        return hasText(fourth) ? fourth : null;
+    }
+
     private static boolean hasText(String value) {
         return value != null && !value.isBlank();
     }
@@ -368,5 +418,11 @@ public class EventLogAutoConfiguration {
             ExecutorService senderExecutor,
             ScheduledExecutorService retryExecutor,
             boolean virtualThreads) {
+    }
+
+    private record ResolvedDefaults(
+            String applicationId,
+            String targetSystem,
+            String originatingSystem) {
     }
 }

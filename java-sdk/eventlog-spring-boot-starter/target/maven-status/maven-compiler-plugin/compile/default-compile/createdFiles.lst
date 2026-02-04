@@ -1,11 +1,11 @@
 com/eventlog/sdk/autoconfigure/transport/RestClientTransport.class
-META-INF/spring-configuration-metadata.json
 com/eventlog/sdk/autoconfigure/EventLogBaseAutoConfigurationCondition.class
 com/eventlog/sdk/autoconfigure/EventLogProperties$OAuth.class
 com/eventlog/sdk/autoconfigure/EventLogAutoConfiguration$ResolvedExecutors.class
 com/eventlog/sdk/autoconfigure/logging/LogEventAspect.class
 com/eventlog/sdk/autoconfigure/EventLogRefreshAutoConfiguration.class
 com/eventlog/sdk/autoconfigure/EventLogAutoConfiguration.class
+com/eventlog/sdk/autoconfigure/EventLogAutoConfiguration$ResolvedDefaults.class
 com/eventlog/sdk/autoconfigure/transport/WebClientTransport.class
 com/eventlog/sdk/autoconfigure/EventLogProperties.class
 com/eventlog/sdk/autoconfigure/EventLogProperties$Async.class

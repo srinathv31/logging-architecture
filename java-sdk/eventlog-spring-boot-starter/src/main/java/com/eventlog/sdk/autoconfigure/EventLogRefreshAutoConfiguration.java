@@ -6,6 +6,7 @@ import com.eventlog.sdk.client.EventLogClient;
 import com.eventlog.sdk.client.OAuthTokenProvider;
 import com.eventlog.sdk.client.TokenProvider;
 import com.eventlog.sdk.client.transport.EventLogTransport;
+import com.eventlog.sdk.template.EventLogTemplate;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.aspectj.lang.annotation.Aspect;
 import org.springframework.beans.factory.ObjectProvider;
@@ -126,5 +127,19 @@ public class EventLogRefreshAutoConfiguration extends EventLogAutoConfiguration 
     @Override
     public LogEventAspect logEventAspect(AsyncEventLogger asyncEventLogger, EventLogProperties properties) {
         return super.logEventAspect(asyncEventLogger, properties);
+    }
+
+    @Bean
+    @Scope("refresh")
+    @ConditionalOnBean(AsyncEventLogger.class)
+    @ConditionalOnMissingBean
+    @ConditionalOnExpression(
+            "T(org.springframework.util.StringUtils).hasText('${eventlog.application-id:}') || " +
+            "T(org.springframework.util.StringUtils).hasText('${spring.application.name:}') || " +
+            "T(org.springframework.util.StringUtils).hasText('${eventlog.target-system:}') || " +
+            "T(org.springframework.util.StringUtils).hasText('${eventlog.originating-system:}')")
+    @Override
+    public EventLogTemplate eventLogTemplate(EventLogProperties properties, AsyncEventLogger asyncEventLogger) {
+        return super.eventLogTemplate(properties, asyncEventLogger);
     }
 }

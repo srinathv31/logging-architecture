@@ -85,9 +85,17 @@ public class LogEventAspect {
             boolean success,
             Throwable error,
             int durationMs) {
-        if (!hasText(annotation.process())) {
-            log.warn("@LogEvent missing process name for {}", joinPoint.getSignature());
-            return;
+        String processName = annotation.process();
+        if (!hasText(processName)) {
+            String resolved = resolveProcessName(joinPoint);
+            if (!hasText(resolved)) {
+                resolved = resolveMethodName(joinPoint);
+            }
+            processName = resolved;
+            log.warn("@LogEvent missing process name for {} - defaulting to {}", joinPoint.getSignature(), processName);
+            if (!hasText(processName)) {
+                return;
+            }
         }
         if (!hasText(applicationId) || !hasText(targetSystem) || !hasText(originatingSystem)) {
             if (missingDefaultsLogged.compareAndSet(false, true)) {
@@ -99,7 +107,7 @@ public class LogEventAspect {
 
         String correlationId = firstNonBlank(
                 mdcValue("correlationId", "correlation_id", "correlation-id"),
-                EventLogUtils.createCorrelationId(sanitizePrefix(annotation.process())));
+                EventLogUtils.createCorrelationId(sanitizePrefix(processName)));
         String traceId = firstNonBlank(
                 mdcValue("traceId", "trace_id", "trace-id"),
                 EventLogUtils.createTraceId());
@@ -118,7 +126,7 @@ public class LogEventAspect {
                 .applicationId(applicationId)
                 .targetSystem(targetSystem)
                 .originatingSystem(originatingSystem)
-                .processName(annotation.process())
+                .processName(processName)
                 .eventType(eventType)
                 .eventStatus(status)
                 .summary(summary)
@@ -164,6 +172,17 @@ public class LogEventAspect {
         builder.metadata(metadata);
 
         eventLog.log(builder.build());
+    }
+
+    private static String resolveProcessName(ProceedingJoinPoint joinPoint) {
+        if (joinPoint.getSignature() != null) {
+            Class<?> declaringType = joinPoint.getSignature().getDeclaringType();
+            if (declaringType != null) {
+                return declaringType.getSimpleName();
+            }
+            return joinPoint.getSignature().getDeclaringTypeName();
+        }
+        return null;
     }
 
     private static String resolveMethodName(ProceedingJoinPoint joinPoint) {

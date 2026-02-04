@@ -18,7 +18,8 @@ import java.lang.annotation.Target;
 public @interface LogEvent {
 
     /**
-     * Business process name (required).
+     * Business process name.
+     * If blank, defaults to the declaring class name when using Spring AOP.
      */
     String process();
 

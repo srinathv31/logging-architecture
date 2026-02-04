@@ -15,3 +15,4 @@ dist/
 
 # Logs
 *.log
+java-sdk/target/

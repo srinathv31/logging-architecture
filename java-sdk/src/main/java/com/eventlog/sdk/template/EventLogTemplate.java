@@ -368,6 +368,14 @@ public final class EventLogTemplate {
             return eventLog.log(builder.build());
         }
 
+        public boolean logStep(
+                int stepSequence,
+                String stepName,
+                EventStatus status,
+                String summary) {
+            return logStep(stepSequence, stepName, status, summary, status.name());
+        }
+
         public boolean processEnd(
                 int stepSequence,
                 EventStatus status,
@@ -386,6 +394,13 @@ public final class EventLogTemplate {
             return eventLog.log(builder.build());
         }
 
+        public boolean processEnd(
+                int stepSequence,
+                EventStatus status,
+                String summary) {
+            return processEnd(stepSequence, status, summary, status.name(), null);
+        }
+
         public boolean error(String errorCode, String errorMessage, String summary, String result) {
             EventLogEntry.Builder builder = baseBuilder(EventType.ERROR)
                     .eventStatus(EventStatus.FAILURE)
@@ -395,6 +410,10 @@ public final class EventLogTemplate {
                     .result(result);
             applyProcessContext(builder);
             return eventLog.log(builder.build());
+        }
+
+        public boolean error(String errorCode, String errorMessage) {
+            return error(errorCode, errorMessage, errorMessage, "FAILED");
         }
 
         public boolean error(String errorCode, String errorMessage, String summary) {

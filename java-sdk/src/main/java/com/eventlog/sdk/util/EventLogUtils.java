@@ -87,6 +87,9 @@ public final class EventLogUtils {
      * @param traceId Request-level trace ID
      * @param processName Business process name
      * @return Builder with PROCESS_START defaults (step_sequence=0, status=IN_PROGRESS)
+     *         Note: This overload does not set applicationId, targetSystem, originatingSystem,
+     *         summary, or result. Set those fields before build(), or use the overload that
+     *         accepts them.
      */
     public static EventLogEntry.Builder processStart(
             String correlationId, 
@@ -102,6 +105,42 @@ public final class EventLogUtils {
     }
 
     /**
+     * Create a PROCESS_START event builder with required fields pre-set
+     *
+     * @param correlationId Process-level anchor ID
+     * @param traceId Request-level trace ID
+     * @param processName Business process name
+     * @param applicationId Application identifier
+     * @param targetSystem Target system
+     * @param originatingSystem Originating system
+     * @param summary Summary text
+     * @param result Result text
+     * @return Builder with PROCESS_START defaults (step_sequence=0, status=IN_PROGRESS)
+     */
+    public static EventLogEntry.Builder processStart(
+            String correlationId,
+            String traceId,
+            String processName,
+            String applicationId,
+            String targetSystem,
+            String originatingSystem,
+            String summary,
+            String result) {
+        return EventLogEntry.builder()
+                .correlationId(correlationId)
+                .traceId(traceId)
+                .applicationId(applicationId)
+                .targetSystem(targetSystem)
+                .originatingSystem(originatingSystem)
+                .processName(processName)
+                .eventType(EventType.PROCESS_START)
+                .eventStatus(EventStatus.IN_PROGRESS)
+                .stepSequence(0)
+                .summary(summary)
+                .result(result);
+    }
+
+    /**
      * Create a STEP event builder with required fields pre-set
      * 
      * @param correlationId Process-level anchor ID
@@ -110,6 +149,9 @@ public final class EventLogUtils {
      * @param stepSequence Step number in the process
      * @param stepName Human-readable step name
      * @return Builder with STEP defaults
+     *         Note: This overload does not set applicationId, targetSystem, originatingSystem,
+     *         eventStatus, summary, or result. Set those fields before build(), or use the
+     *         overload that accepts them.
      */
     public static EventLogEntry.Builder step(
             String correlationId,
@@ -127,6 +169,49 @@ public final class EventLogUtils {
     }
 
     /**
+     * Create a STEP event builder with required fields pre-set
+     *
+     * @param correlationId Process-level anchor ID
+     * @param traceId Request-level trace ID
+     * @param processName Business process name
+     * @param stepSequence Step number in the process
+     * @param stepName Human-readable step name
+     * @param status Event status
+     * @param applicationId Application identifier
+     * @param targetSystem Target system
+     * @param originatingSystem Originating system
+     * @param summary Summary text
+     * @param result Result text
+     * @return Builder with STEP defaults
+     */
+    public static EventLogEntry.Builder step(
+            String correlationId,
+            String traceId,
+            String processName,
+            int stepSequence,
+            String stepName,
+            EventStatus status,
+            String applicationId,
+            String targetSystem,
+            String originatingSystem,
+            String summary,
+            String result) {
+        return EventLogEntry.builder()
+                .correlationId(correlationId)
+                .traceId(traceId)
+                .applicationId(applicationId)
+                .targetSystem(targetSystem)
+                .originatingSystem(originatingSystem)
+                .processName(processName)
+                .eventType(EventType.STEP)
+                .eventStatus(status)
+                .stepSequence(stepSequence)
+                .stepName(stepName)
+                .summary(summary)
+                .result(result);
+    }
+
+    /**
      * Create a PROCESS_END event builder with required fields pre-set
      * 
      * @param correlationId Process-level anchor ID
@@ -136,6 +221,9 @@ public final class EventLogUtils {
      * @param status SUCCESS or FAILURE
      * @param totalDurationMs Total process execution time
      * @return Builder with PROCESS_END defaults
+     *         Note: This overload does not set applicationId, targetSystem, originatingSystem,
+     *         summary, or result. Set those fields before build(), or use the overload that
+     *         accepts them.
      */
     public static EventLogEntry.Builder processEnd(
             String correlationId,
@@ -155,6 +243,49 @@ public final class EventLogUtils {
     }
 
     /**
+     * Create a PROCESS_END event builder with required fields pre-set
+     *
+     * @param correlationId Process-level anchor ID
+     * @param traceId Request-level trace ID
+     * @param processName Business process name
+     * @param stepSequence Final step number
+     * @param status SUCCESS or FAILURE
+     * @param totalDurationMs Total process execution time
+     * @param applicationId Application identifier
+     * @param targetSystem Target system
+     * @param originatingSystem Originating system
+     * @param summary Summary text
+     * @param result Result text
+     * @return Builder with PROCESS_END defaults
+     */
+    public static EventLogEntry.Builder processEnd(
+            String correlationId,
+            String traceId,
+            String processName,
+            int stepSequence,
+            EventStatus status,
+            int totalDurationMs,
+            String applicationId,
+            String targetSystem,
+            String originatingSystem,
+            String summary,
+            String result) {
+        return EventLogEntry.builder()
+                .correlationId(correlationId)
+                .traceId(traceId)
+                .applicationId(applicationId)
+                .targetSystem(targetSystem)
+                .originatingSystem(originatingSystem)
+                .processName(processName)
+                .eventType(EventType.PROCESS_END)
+                .eventStatus(status)
+                .stepSequence(stepSequence)
+                .executionTimeMs(totalDurationMs)
+                .summary(summary)
+                .result(result);
+    }
+
+    /**
      * Create an ERROR event builder with required fields pre-set
      * 
      * @param correlationId Process-level anchor ID
@@ -163,6 +294,9 @@ public final class EventLogUtils {
      * @param errorCode Standardized error code
      * @param errorMessage Error details
      * @return Builder with ERROR defaults (status=FAILURE)
+     *         Note: This overload does not set applicationId, targetSystem, originatingSystem,
+     *         summary, or result. Set those fields before build(), or use the overload that
+     *         accepts them.
      */
     public static EventLogEntry.Builder error(
             String correlationId,
@@ -178,6 +312,47 @@ public final class EventLogUtils {
                 .eventStatus(EventStatus.FAILURE)
                 .errorCode(errorCode)
                 .errorMessage(errorMessage);
+    }
+
+    /**
+     * Create an ERROR event builder with required fields pre-set
+     *
+     * @param correlationId Process-level anchor ID
+     * @param traceId Request-level trace ID
+     * @param processName Business process name
+     * @param errorCode Standardized error code
+     * @param errorMessage Error details
+     * @param applicationId Application identifier
+     * @param targetSystem Target system
+     * @param originatingSystem Originating system
+     * @param summary Summary text
+     * @param result Result text
+     * @return Builder with ERROR defaults (status=FAILURE)
+     */
+    public static EventLogEntry.Builder error(
+            String correlationId,
+            String traceId,
+            String processName,
+            String errorCode,
+            String errorMessage,
+            String applicationId,
+            String targetSystem,
+            String originatingSystem,
+            String summary,
+            String result) {
+        return EventLogEntry.builder()
+                .correlationId(correlationId)
+                .traceId(traceId)
+                .applicationId(applicationId)
+                .targetSystem(targetSystem)
+                .originatingSystem(originatingSystem)
+                .processName(processName)
+                .eventType(EventType.ERROR)
+                .eventStatus(EventStatus.FAILURE)
+                .errorCode(errorCode)
+                .errorMessage(errorMessage)
+                .summary(summary)
+                .result(result);
     }
 
     // ========================================================================

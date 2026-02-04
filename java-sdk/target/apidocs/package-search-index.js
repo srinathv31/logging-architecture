@@ -1,1 +1,0 @@
-packageSearchIndex = [{"l":"All Packages","u":"allpackages-index.html"},{"l":"com.eventlog.sdk.annotation"},{"l":"com.eventlog.sdk.client"},{"l":"com.eventlog.sdk.client.transport"},{"l":"com.eventlog.sdk.examples"},{"l":"com.eventlog.sdk.exception"},{"l":"com.eventlog.sdk.model"},{"l":"com.eventlog.sdk.template"},{"l":"com.eventlog.sdk.util"}];updateSearchResults();

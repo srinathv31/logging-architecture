@@ -116,51 +116,84 @@ Profile-aware defaults:
 
 `eventlog.application-id` defaults to `spring.application.name` for annotation-based logging when unset.
 
+### Validation Notes
+
+The starter uses Bean Validation to fail fast on missing `eventlog.base-url` and incomplete OAuth settings.
+Validation runs when `spring-boot-starter-validation` is on the classpath (included by default).
+If you exclude it, these checks will not run.
+
 ### Bean Injection Example
 
 ```java
-import com.eventlog.sdk.client.AsyncEventLogger;
 import com.eventlog.sdk.model.EventStatus;
 import com.eventlog.sdk.template.EventLogTemplate;
+import com.eventlog.sdk.template.EventLogTemplate.ProcessLogger;
 import org.springframework.stereotype.Service;
-
-import static com.eventlog.sdk.util.EventLogUtils.step;
 
 @Service
 public class OrderService {
-    private final AsyncEventLogger eventLog;
+    private final EventLogTemplate template;
 
-    public OrderService(AsyncEventLogger eventLog) {
-        this.eventLog = eventLog;
+    public OrderService(EventLogTemplate template) {
+        this.template = template;
     }
 
-    public void processOrder(String correlationId, String traceId) {
-        eventLog.log(step(correlationId, traceId, "ORDER_PROCESSING", 1, "Validate Order")
-            .eventStatus(EventStatus.SUCCESS)
-            .summary("Order validated")
-            .build());
+    public void processOrder(Order order) {
+        // correlationId/traceId read from MDC automatically
+        ProcessLogger process = template.forProcess("ORDER_PROCESSING")
+            .addIdentifier("orderId", order.getId());
+
+        process.logStep(1, "Validate Order", EventStatus.SUCCESS, "Order validated");
     }
 }
 ```
 
 ## EventLogTemplate Convenience
 
-Use `EventLogTemplate` to reduce boilerplate and reuse defaults:
+Use `EventLogTemplate` to reduce boilerplate and reuse defaults.
+When the Spring Boot starter is enabled, an `EventLogTemplate` bean is auto-configured if
+`eventlog.application-id`, `eventlog.target-system`, `eventlog.originating-system`, or
+`spring.application.name` is set.
+In non-Spring apps, build it manually via `EventLogTemplate.builder(eventLog)`.
+
+### Recommended: Set IDs via MDC
+
+Set correlation IDs once at request entry (filter/interceptor), then let `EventLogTemplate` read them automatically:
 
 ```java
-EventLogTemplate template = EventLogTemplate.builder(eventLog)
-    .applicationId("order-service")
-    .originatingSystem("ORDER_SERVICE")
-    .targetSystem("ORDER_SERVICE")
-    .build();
-
-template.forProcess("ORDER_PROCESSING")
-    .withCorrelationId(order.getOrderId())
-    .withTraceId(traceId)
-    .logStep(1, "Validate Order", EventStatus.SUCCESS, "Order validated", "VALIDATED");
+// In your filter/interceptor - use your team's prefix
+MDC.put("correlationId", EventLogUtils.createCorrelationId("orders"));  // "orders-abc123-xyz"
+MDC.put("traceId", EventLogUtils.createTraceId());
 ```
 
-If SLF4J MDC contains `correlationId`, `traceId`, `spanId`, `parentSpanId`, or `batchId`, those values are used when not explicitly set.
+```java
+@Service
+public class OrderService {
+    private final EventLogTemplate template;
+
+    public OrderService(EventLogTemplate template) {
+        this.template = template;
+    }
+
+    public void processOrder(Order order) {
+        // IDs read from MDC automatically
+        ProcessLogger process = template.forProcess("ORDER_PROCESSING")
+            .addIdentifier("orderId", order.getId());
+
+        process.logStep(1, "Validate Order", EventStatus.SUCCESS, "Order validated");
+
+        // Add data as you learn it - stacks forward to subsequent events
+        String reservationId = reserveInventory(order);
+        process.addIdentifier("reservationId", reservationId);
+
+        process.logStep(2, "Reserve Inventory", EventStatus.SUCCESS, "Reserved");
+    }
+}
+```
+
+Supported MDC keys: `correlationId`, `traceId`, `spanId`, `parentSpanId`, `batchId` (also supports snake_case and kebab-case variants).
+
+**Note:** `ProcessLogger` is mutable and request-scoped. Don't share across threads.
 
 ## Annotation-Based Logging (Spring Boot)
 
@@ -192,6 +225,7 @@ Notes:
 - `targetSystem` and `originatingSystem` default to the same value as `applicationId`.
 - Override `targetSystem`/`originatingSystem` via `eventlog.target-system` and `eventlog.originating-system`.
 - Uses MDC values for correlation/trace IDs when present.
+- If `process` is blank, defaults to the declaring class name.
 - Disable with `eventlog.annotation.enabled=false`.
 - If Spring Cloud Config is on the classpath, Event Log beans are refresh-scoped and reloaded on config refresh (disable with `eventlog.refresh.enabled=false`).
 
@@ -571,6 +605,7 @@ Activate it via `@ActiveProfiles("test")` or `spring.profiles.active=test`.
 - Migration guide: `MIGRATION.md`
 - Troubleshooting: `TROUBLESHOOTING.md`
 - Architecture diagram: `docs/architecture.md`
+- Feature coverage examples: `docs/examples.md`
 
 ## Building from Source
 
