@@ -1,13 +1,13 @@
 {
   "version": "2",
   "dialect": "mssql",
-  "id": "db30057e-e03c-4348-b000-39f412b2c29d",
+  "id": "e507095a-2d7a-48d9-a373-6601904fb803",
   "prevIds": [
     "00000000-0000-0000-0000-000000000000"
   ],
   "ddl": [
     {
-      "name": "event_logs",
+      "name": "event_log",
       "entityType": "tables",
       "schema": "dbo"
     },
@@ -37,7 +37,7 @@
       "name": "event_log_id",
       "schema": "dbo",
       "entityType": "columns",
-      "table": "event_logs"
+      "table": "event_log"
     },
     {
       "type": "varchar(36)",
@@ -47,7 +47,7 @@
       "name": "execution_id",
       "schema": "dbo",
       "entityType": "columns",
-      "table": "event_logs"
+      "table": "event_log"
     },
     {
       "type": "varchar(200)",
@@ -57,7 +57,7 @@
       "name": "correlation_id",
       "schema": "dbo",
       "entityType": "columns",
-      "table": "event_logs"
+      "table": "event_log"
     },
     {
       "type": "varchar(64)",
@@ -67,7 +67,7 @@
       "name": "account_id",
       "schema": "dbo",
       "entityType": "columns",
-      "table": "event_logs"
+      "table": "event_log"
     },
     {
       "type": "varchar(200)",
@@ -77,7 +77,7 @@
       "name": "trace_id",
       "schema": "dbo",
       "entityType": "columns",
-      "table": "event_logs"
+      "table": "event_log"
     },
     {
       "type": "varchar(64)",
@@ -87,7 +87,7 @@
       "name": "span_id",
       "schema": "dbo",
       "entityType": "columns",
-      "table": "event_logs"
+      "table": "event_log"
     },
     {
       "type": "varchar(64)",
@@ -97,7 +97,7 @@
       "name": "parent_span_id",
       "schema": "dbo",
       "entityType": "columns",
-      "table": "event_logs"
+      "table": "event_log"
     },
     {
       "type": "nvarchar(max)",
@@ -107,7 +107,7 @@
       "name": "span_links",
       "schema": "dbo",
       "entityType": "columns",
-      "table": "event_logs"
+      "table": "event_log"
     },
     {
       "type": "varchar(200)",
@@ -117,7 +117,7 @@
       "name": "batch_id",
       "schema": "dbo",
       "entityType": "columns",
-      "table": "event_logs"
+      "table": "event_log"
     },
     {
       "type": "varchar(200)",
@@ -127,7 +127,7 @@
       "name": "application_id",
       "schema": "dbo",
       "entityType": "columns",
-      "table": "event_logs"
+      "table": "event_log"
     },
     {
       "type": "varchar(200)",
@@ -137,7 +137,7 @@
       "name": "target_system",
       "schema": "dbo",
       "entityType": "columns",
-      "table": "event_logs"
+      "table": "event_log"
     },
     {
       "type": "varchar(200)",
@@ -147,7 +147,7 @@
       "name": "originating_system",
       "schema": "dbo",
       "entityType": "columns",
-      "table": "event_logs"
+      "table": "event_log"
     },
     {
       "type": "varchar(510)",
@@ -157,7 +157,7 @@
       "name": "process_name",
       "schema": "dbo",
       "entityType": "columns",
-      "table": "event_logs"
+      "table": "event_log"
     },
     {
       "type": "int",
@@ -167,7 +167,7 @@
       "name": "step_sequence",
       "schema": "dbo",
       "entityType": "columns",
-      "table": "event_logs"
+      "table": "event_log"
     },
     {
       "type": "varchar(510)",
@@ -177,7 +177,7 @@
       "name": "step_name",
       "schema": "dbo",
       "entityType": "columns",
-      "table": "event_logs"
+      "table": "event_log"
     },
     {
       "type": "varchar(50)",
@@ -187,7 +187,7 @@
       "name": "event_type",
       "schema": "dbo",
       "entityType": "columns",
-      "table": "event_logs"
+      "table": "event_log"
     },
     {
       "type": "varchar(50)",
@@ -197,7 +197,7 @@
       "name": "event_status",
       "schema": "dbo",
       "entityType": "columns",
-      "table": "event_logs"
+      "table": "event_log"
     },
     {
       "type": "nvarchar(max)",
@@ -207,7 +207,7 @@
       "name": "identifiers",
       "schema": "dbo",
       "entityType": "columns",
-      "table": "event_logs"
+      "table": "event_log"
     },
     {
       "type": "nvarchar(max)",
@@ -217,7 +217,7 @@
       "name": "summary",
       "schema": "dbo",
       "entityType": "columns",
-      "table": "event_logs"
+      "table": "event_log"
     },
     {
       "type": "varchar(2048)",
@@ -227,7 +227,7 @@
       "name": "result",
       "schema": "dbo",
       "entityType": "columns",
-      "table": "event_logs"
+      "table": "event_log"
     },
     {
       "type": "nvarchar(max)",
@@ -237,7 +237,7 @@
       "name": "metadata",
       "schema": "dbo",
       "entityType": "columns",
-      "table": "event_logs"
+      "table": "event_log"
     },
     {
       "type": "datetime2(3)",
@@ -247,7 +247,7 @@
       "name": "event_timestamp",
       "schema": "dbo",
       "entityType": "columns",
-      "table": "event_logs"
+      "table": "event_log"
     },
     {
       "type": "datetime2(3)",
@@ -257,7 +257,7 @@
       "name": "created_at",
       "schema": "dbo",
       "entityType": "columns",
-      "table": "event_logs"
+      "table": "event_log"
     },
     {
       "type": "int",
@@ -267,7 +267,7 @@
       "name": "execution_time_ms",
       "schema": "dbo",
       "entityType": "columns",
-      "table": "event_logs"
+      "table": "event_log"
     },
     {
       "type": "varchar(510)",
@@ -277,7 +277,7 @@
       "name": "endpoint",
       "schema": "dbo",
       "entityType": "columns",
-      "table": "event_logs"
+      "table": "event_log"
     },
     {
       "type": "int",
@@ -287,7 +287,7 @@
       "name": "http_status_code",
       "schema": "dbo",
       "entityType": "columns",
-      "table": "event_logs"
+      "table": "event_log"
     },
     {
       "type": "varchar(20)",
@@ -297,7 +297,7 @@
       "name": "http_method",
       "schema": "dbo",
       "entityType": "columns",
-      "table": "event_logs"
+      "table": "event_log"
     },
     {
       "type": "varchar(100)",
@@ -307,7 +307,7 @@
       "name": "error_code",
       "schema": "dbo",
       "entityType": "columns",
-      "table": "event_logs"
+      "table": "event_log"
     },
     {
       "type": "varchar(2048)",
@@ -317,7 +317,7 @@
       "name": "error_message",
       "schema": "dbo",
       "entityType": "columns",
-      "table": "event_logs"
+      "table": "event_log"
     },
     {
       "type": "nvarchar(max)",
@@ -327,7 +327,7 @@
       "name": "request_payload",
       "schema": "dbo",
       "entityType": "columns",
-      "table": "event_logs"
+      "table": "event_log"
     },
     {
       "type": "nvarchar(max)",
@@ -337,7 +337,7 @@
       "name": "response_payload",
       "schema": "dbo",
       "entityType": "columns",
-      "table": "event_logs"
+      "table": "event_log"
     },
     {
       "type": "varchar(128)",
@@ -347,7 +347,7 @@
       "name": "idempotency_key",
       "schema": "dbo",
       "entityType": "columns",
-      "table": "event_logs"
+      "table": "event_log"
     },
     {
       "type": "bit",
@@ -357,7 +357,7 @@
       "name": "is_deleted",
       "schema": "dbo",
       "entityType": "columns",
-      "table": "event_logs"
+      "table": "event_log"
     },
     {
       "type": "varchar(200)",
@@ -623,228 +623,12 @@
       "table": "account_timeline_summary"
     },
     {
-      "columns": [
-        {
-          "value": "correlation_id",
-          "isExpression": false
-        },
-        {
-          "value": "event_timestamp",
-          "isExpression": false
-        }
-      ],
-      "isUnique": false,
-      "where": null,
-      "name": "ix_event_logs_correlation_id",
-      "entityType": "indexes",
-      "table": "event_logs",
-      "schema": "dbo"
-    },
-    {
-      "columns": [
-        {
-          "value": "account_id",
-          "isExpression": false
-        }
-      ],
-      "isUnique": false,
-      "where": null,
-      "name": "ix_event_logs_account_id",
-      "entityType": "indexes",
-      "table": "event_logs",
-      "schema": "dbo"
-    },
-    {
-      "columns": [
-        {
-          "value": "trace_id",
-          "isExpression": false
-        }
-      ],
-      "isUnique": false,
-      "where": null,
-      "name": "ix_event_logs_trace_id",
-      "entityType": "indexes",
-      "table": "event_logs",
-      "schema": "dbo"
-    },
-    {
-      "columns": [
-        {
-          "value": "process_name",
-          "isExpression": false
-        },
-        {
-          "value": "event_timestamp",
-          "isExpression": false
-        }
-      ],
-      "isUnique": false,
-      "where": null,
-      "name": "ix_event_logs_process",
-      "entityType": "indexes",
-      "table": "event_logs",
-      "schema": "dbo"
-    },
-    {
-      "columns": [
-        {
-          "value": "event_timestamp",
-          "isExpression": false
-        }
-      ],
-      "isUnique": false,
-      "where": null,
-      "name": "ix_event_logs_timestamp",
-      "entityType": "indexes",
-      "table": "event_logs",
-      "schema": "dbo"
-    },
-    {
-      "columns": [
-        {
-          "value": "event_status",
-          "isExpression": false
-        },
-        {
-          "value": "event_timestamp",
-          "isExpression": false
-        }
-      ],
-      "isUnique": false,
-      "where": null,
-      "name": "ix_event_logs_status",
-      "entityType": "indexes",
-      "table": "event_logs",
-      "schema": "dbo"
-    },
-    {
-      "columns": [
-        {
-          "value": "target_system",
-          "isExpression": false
-        },
-        {
-          "value": "event_timestamp",
-          "isExpression": false
-        }
-      ],
-      "isUnique": false,
-      "where": null,
-      "name": "ix_event_logs_target_system",
-      "entityType": "indexes",
-      "table": "event_logs",
-      "schema": "dbo"
-    },
-    {
-      "columns": [
-        {
-          "value": "idempotency_key",
-          "isExpression": false
-        }
-      ],
-      "isUnique": true,
-      "where": null,
-      "name": "ix_event_logs_idempotency",
-      "entityType": "indexes",
-      "table": "event_logs",
-      "schema": "dbo"
-    },
-    {
-      "columns": [
-        {
-          "value": "batch_id",
-          "isExpression": false
-        },
-        {
-          "value": "correlation_id",
-          "isExpression": false
-        }
-      ],
-      "isUnique": false,
-      "where": null,
-      "name": "ix_event_logs_batch_id",
-      "entityType": "indexes",
-      "table": "event_logs",
-      "schema": "dbo"
-    },
-    {
-      "columns": [
-        {
-          "value": "account_id",
-          "isExpression": false
-        }
-      ],
-      "isUnique": false,
-      "where": null,
-      "name": "ix_correlation_links_account_id",
-      "entityType": "indexes",
-      "table": "correlation_links",
-      "schema": "dbo"
-    },
-    {
-      "columns": [
-        {
-          "value": "application_id",
-          "isExpression": false
-        }
-      ],
-      "isUnique": false,
-      "where": null,
-      "name": "ix_correlation_links_application_id",
-      "entityType": "indexes",
-      "table": "correlation_links",
-      "schema": "dbo"
-    },
-    {
-      "columns": [
-        {
-          "value": "process_name",
-          "isExpression": false
-        }
-      ],
-      "isUnique": true,
-      "where": null,
-      "name": "ix_process_definitions_name",
-      "entityType": "indexes",
-      "table": "process_definitions",
-      "schema": "dbo"
-    },
-    {
-      "columns": [
-        {
-          "value": "owning_team",
-          "isExpression": false
-        }
-      ],
-      "isUnique": false,
-      "where": null,
-      "name": "ix_process_definitions_owning_team",
-      "entityType": "indexes",
-      "table": "process_definitions",
-      "schema": "dbo"
-    },
-    {
-      "columns": [
-        {
-          "value": "last_event_at",
-          "isExpression": false
-        }
-      ],
-      "isUnique": false,
-      "where": null,
-      "name": "ix_account_timeline_summary_last_event",
-      "entityType": "indexes",
-      "table": "account_timeline_summary",
-      "schema": "dbo"
-    },
-    {
       "nameExplicit": false,
       "columns": [
         "event_log_id"
       ],
-      "name": "event_logs_pkey",
-      "table": "event_logs",
+      "name": "event_log_pkey",
+      "table": "event_log",
       "schema": "dbo",
       "entityType": "pks"
     },
@@ -882,28 +666,28 @@
       "column": "execution_id",
       "nameExplicit": false,
       "default": "(LOWER(CONVERT(VARCHAR(36), NEWID())))",
-      "name": "event_logs_execution_id_default",
+      "name": "event_log_execution_id_default",
       "entityType": "defaults",
       "schema": "dbo",
-      "table": "event_logs"
+      "table": "event_log"
     },
     {
       "column": "created_at",
       "nameExplicit": false,
       "default": "(GETUTCDATE())",
-      "name": "event_logs_created_at_default",
+      "name": "event_log_created_at_default",
       "entityType": "defaults",
       "schema": "dbo",
-      "table": "event_logs"
+      "table": "event_log"
     },
     {
       "column": "is_deleted",
       "nameExplicit": false,
       "default": "((0))",
-      "name": "event_logs_is_deleted_default",
+      "name": "event_log_is_deleted_default",
       "entityType": "defaults",
       "schema": "dbo",
-      "table": "event_logs"
+      "table": "event_log"
     },
     {
       "column": "linked_at",
@@ -960,31 +744,31 @@
       "table": "account_timeline_summary"
     },
     {
-      "value": "[event_logs].[event_type] IN ('PROCESS_START', 'STEP', 'PROCESS_END', 'ERROR')",
-      "name": "ck_event_logs_event_type",
+      "value": "[event_log].[event_type] IN ('PROCESS_START', 'STEP', 'PROCESS_END', 'ERROR')",
+      "name": "ck_event_log_event_type",
       "entityType": "checks",
-      "table": "event_logs",
+      "table": "event_log",
       "schema": "dbo"
     },
     {
-      "value": "[event_logs].[event_status] IN ('SUCCESS', 'FAILURE', 'IN_PROGRESS', 'SKIPPED')",
-      "name": "ck_event_logs_event_status",
+      "value": "[event_log].[event_status] IN ('SUCCESS', 'FAILURE', 'IN_PROGRESS', 'SKIPPED')",
+      "name": "ck_event_log_event_status",
       "entityType": "checks",
-      "table": "event_logs",
+      "table": "event_log",
       "schema": "dbo"
     },
     {
-      "value": "[event_logs].[http_method] IS NULL OR [event_logs].[http_method] IN ('GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'HEAD', 'OPTIONS')",
-      "name": "ck_event_logs_http_method",
+      "value": "[event_log].[http_method] IS NULL OR [event_log].[http_method] IN ('GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'HEAD', 'OPTIONS')",
+      "name": "ck_event_log_http_method",
       "entityType": "checks",
-      "table": "event_logs",
+      "table": "event_log",
       "schema": "dbo"
     },
     {
-      "value": "[event_logs].[span_links] IS NULL OR ISJSON([event_logs].[span_links]) = 1",
-      "name": "ck_event_logs_span_links_json",
+      "value": "[event_log].[span_links] IS NULL OR ISJSON([event_log].[span_links]) = 1",
+      "name": "ck_event_log_span_links_json",
       "entityType": "checks",
-      "table": "event_logs",
+      "table": "event_log",
       "schema": "dbo"
     }
   ],

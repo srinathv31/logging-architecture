@@ -1,6 +1,6 @@
-CREATE TABLE [event_logs] (
+CREATE TABLE [event_log] (
 	[event_log_id] bigint IDENTITY(1, 1),
-	[execution_id] varchar(36) NOT NULL CONSTRAINT [event_logs_execution_id_default] DEFAULT (LOWER(CONVERT(VARCHAR(36), NEWID()))),
+	[execution_id] varchar(36) NOT NULL CONSTRAINT [event_log_execution_id_default] DEFAULT (LOWER(CONVERT(VARCHAR(36), NEWID()))),
 	[correlation_id] varchar(200) NOT NULL,
 	[account_id] varchar(64),
 	[trace_id] varchar(200) NOT NULL,
@@ -21,7 +21,7 @@ CREATE TABLE [event_logs] (
 	[result] varchar(2048) NOT NULL,
 	[metadata] nvarchar(max),
 	[event_timestamp] datetime2(3) NOT NULL,
-	[created_at] datetime2(3) NOT NULL CONSTRAINT [event_logs_created_at_default] DEFAULT (GETUTCDATE()),
+	[created_at] datetime2(3) NOT NULL CONSTRAINT [event_log_created_at_default] DEFAULT (GETUTCDATE()),
 	[execution_time_ms] int,
 	[endpoint] varchar(510),
 	[http_status_code] int,
@@ -31,12 +31,12 @@ CREATE TABLE [event_logs] (
 	[request_payload] nvarchar(max),
 	[response_payload] nvarchar(max),
 	[idempotency_key] varchar(128),
-	[is_deleted] bit NOT NULL CONSTRAINT [event_logs_is_deleted_default] DEFAULT ((0)),
-	CONSTRAINT [event_logs_pkey] PRIMARY KEY([event_log_id]),
-	CONSTRAINT [ck_event_logs_event_type] CHECK ([event_logs].[event_type] IN ('PROCESS_START', 'STEP', 'PROCESS_END', 'ERROR')),
-	CONSTRAINT [ck_event_logs_event_status] CHECK ([event_logs].[event_status] IN ('SUCCESS', 'FAILURE', 'IN_PROGRESS', 'SKIPPED')),
-	CONSTRAINT [ck_event_logs_http_method] CHECK ([event_logs].[http_method] IS NULL OR [event_logs].[http_method] IN ('GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'HEAD', 'OPTIONS')),
-	CONSTRAINT [ck_event_logs_span_links_json] CHECK ([event_logs].[span_links] IS NULL OR ISJSON([event_logs].[span_links]) = 1)
+	[is_deleted] bit NOT NULL CONSTRAINT [event_log_is_deleted_default] DEFAULT ((0)),
+	CONSTRAINT [event_log_pkey] PRIMARY KEY([event_log_id]),
+	CONSTRAINT [ck_event_log_event_type] CHECK ([event_log].[event_type] IN ('PROCESS_START', 'STEP', 'PROCESS_END', 'ERROR')),
+	CONSTRAINT [ck_event_log_event_status] CHECK ([event_log].[event_status] IN ('SUCCESS', 'FAILURE', 'IN_PROGRESS', 'SKIPPED')),
+	CONSTRAINT [ck_event_log_http_method] CHECK ([event_log].[http_method] IS NULL OR [event_log].[http_method] IN ('GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'HEAD', 'OPTIONS')),
+	CONSTRAINT [ck_event_log_span_links_json] CHECK ([event_log].[span_links] IS NULL OR ISJSON([event_log].[span_links]) = 1)
 );
 --> statement-breakpoint
 CREATE TABLE [correlation_links] (
@@ -76,18 +76,3 @@ CREATE TABLE [account_timeline_summary] (
 	[updated_at] datetime2(3) NOT NULL CONSTRAINT [account_timeline_summary_updated_at_default] DEFAULT (GETUTCDATE()),
 	CONSTRAINT [account_timeline_summary_pkey] PRIMARY KEY([account_id])
 );
---> statement-breakpoint
-CREATE INDEX [ix_event_logs_correlation_id] ON [event_logs] ([correlation_id],[event_timestamp]);--> statement-breakpoint
-CREATE INDEX [ix_event_logs_account_id] ON [event_logs] ([account_id]);--> statement-breakpoint
-CREATE INDEX [ix_event_logs_trace_id] ON [event_logs] ([trace_id]);--> statement-breakpoint
-CREATE INDEX [ix_event_logs_process] ON [event_logs] ([process_name],[event_timestamp]);--> statement-breakpoint
-CREATE INDEX [ix_event_logs_timestamp] ON [event_logs] ([event_timestamp]);--> statement-breakpoint
-CREATE INDEX [ix_event_logs_status] ON [event_logs] ([event_status],[event_timestamp]);--> statement-breakpoint
-CREATE INDEX [ix_event_logs_target_system] ON [event_logs] ([target_system],[event_timestamp]);--> statement-breakpoint
-CREATE UNIQUE INDEX [ix_event_logs_idempotency] ON [event_logs] ([idempotency_key]);--> statement-breakpoint
-CREATE INDEX [ix_event_logs_batch_id] ON [event_logs] ([batch_id],[correlation_id]);--> statement-breakpoint
-CREATE INDEX [ix_correlation_links_account_id] ON [correlation_links] ([account_id]);--> statement-breakpoint
-CREATE INDEX [ix_correlation_links_application_id] ON [correlation_links] ([application_id]);--> statement-breakpoint
-CREATE UNIQUE INDEX [ix_process_definitions_name] ON [process_definitions] ([process_name]);--> statement-breakpoint
-CREATE INDEX [ix_process_definitions_owning_team] ON [process_definitions] ([owning_team]);--> statement-breakpoint
-CREATE INDEX [ix_account_timeline_summary_last_event] ON [account_timeline_summary] ([last_event_at]);

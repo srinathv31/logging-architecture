@@ -11,7 +11,7 @@ import {
 import { sql } from 'drizzle-orm';
 
 export const eventLogs = mssqlTable(
-  'event_logs',
+  'event_log',
   {
     eventLogId: bigint('event_log_id', { mode: 'number' }).identity().primaryKey(),
     executionId: varchar('execution_id', { length: 36 }).default(sql`LOWER(CONVERT(VARCHAR(36), NEWID()))`).notNull(),
@@ -68,19 +68,19 @@ export const eventLogs = mssqlTable(
   (table) => [
     // Check constraints (indexes managed in drizzle-mssql/manual/001_indexes.sql)
     check(
-      'ck_event_logs_event_type',
+      'ck_event_log_event_type',
       sql`${table.eventType} IN ('PROCESS_START', 'STEP', 'PROCESS_END', 'ERROR')`,
     ),
     check(
-      'ck_event_logs_event_status',
+      'ck_event_log_event_status',
       sql`${table.eventStatus} IN ('SUCCESS', 'FAILURE', 'IN_PROGRESS', 'SKIPPED')`,
     ),
     check(
-      'ck_event_logs_http_method',
+      'ck_event_log_http_method',
       sql`${table.httpMethod} IS NULL OR ${table.httpMethod} IN ('GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'HEAD', 'OPTIONS')`,
     ),
     check(
-      'ck_event_logs_span_links_json',
+      'ck_event_log_span_links_json',
       sql`${table.spanLinks} IS NULL OR ISJSON(${table.spanLinks}) = 1`,
     ),
   ],
