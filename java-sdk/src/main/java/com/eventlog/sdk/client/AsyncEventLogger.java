@@ -435,32 +435,42 @@ public class AsyncEventLogger implements AutoCloseable {
         if (!shutdownRequested.compareAndSet(false, true)) {
             return; // Already shutting down
         }
-        
+
         log.info("AsyncEventLogger shutting down - {} events in queue", queue.size());
-        
-        // Wait for queue to drain (with timeout)
+
+        // Stop retry executor from accepting new tasks
+        retryExecutor.shutdown();
+
+        // Wait for senderLoop to drain the queue
         try {
             boolean flushed = shutdownLatch.await(10, TimeUnit.SECONDS);
             if (!flushed) {
                 log.warn("Shutdown timeout - {} events may be lost", queue.size());
-                
-                // Last resort: spill remaining to disk
-                if (spilloverEnabled) {
-                    QueuedEvent event;
-                    while ((event = queue.poll()) != null) {
-                        spillToDisk(event);
-                    }
-                }
             }
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
         }
-        
+
+        // Let pending retries fire so their events land in the queue
+        try {
+            retryExecutor.awaitTermination(2, TimeUnit.SECONDS);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+        }
+
+        // Drain any remaining events to disk (catches stragglers from retry race)
+        if (spilloverEnabled && !queue.isEmpty()) {
+            QueuedEvent event;
+            while ((event = queue.poll()) != null) {
+                spillToDisk(event);
+            }
+        }
+
         // Shutdown executors
         senderExecutor.shutdownNow();
-        retryExecutor.shutdownNow();
-        
-        log.info("AsyncEventLogger shutdown complete - sent: {}, failed: {}, spilled: {}", 
+        retryExecutor.shutdownNow(); // Force stop if graceful didn't finish
+
+        log.info("AsyncEventLogger shutdown complete - sent: {}, failed: {}, spilled: {}",
                 eventsSent.get(), eventsFailed.get(), eventsSpilled.get());
     }
 

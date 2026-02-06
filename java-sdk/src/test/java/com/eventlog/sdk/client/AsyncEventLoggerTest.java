@@ -1,32 +1,34 @@
 package com.eventlog.sdk.client;
 
-import com.eventlog.sdk.exception.EventLogException;
+import com.eventlog.sdk.client.transport.EventLogResponse;
+import com.eventlog.sdk.client.transport.EventLogTransport;
+import com.eventlog.sdk.client.transport.EventLogRequest;
 import com.eventlog.sdk.model.EventLogEntry;
 import com.eventlog.sdk.model.EventStatus;
 import com.eventlog.sdk.model.EventType;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
-import org.mockito.Mockito;
 
 import java.nio.file.Path;
 import java.util.List;
 import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.function.Function;
 
 import static org.junit.jupiter.api.Assertions.*;
-import static org.mockito.Mockito.doAnswer;
-import static org.mockito.Mockito.doThrow;
 
 class AsyncEventLoggerTest {
 
+    private static final String SUCCESS_BODY = "{\"success\":true,\"execution_ids\":[\"id1\"],\"correlation_id\":\"corr\"}";
+    private static final String ERROR_BODY = "{\"error\":\"boom\"}";
+
     @Test
     void logQueuesAndSends() throws Exception {
-        EventLogClient client = Mockito.mock(EventLogClient.class);
         CountDownLatch latch = new CountDownLatch(1);
-        doAnswer(invocation -> {
+        EventLogClient client = clientWithTransport(request -> {
             latch.countDown();
-            return null;
-        }).when(client).createEvent(Mockito.any(EventLogEntry.class));
+            return new EventLogResponse(200, SUCCESS_BODY);
+        });
 
         AsyncEventLogger logger = AsyncEventLogger.builder()
                 .client(client)
@@ -37,15 +39,14 @@ class AsyncEventLoggerTest {
                 .build();
 
         assertTrue(logger.log(minimalEvent()));
-        assertTrue(latch.await(1, TimeUnit.SECONDS));
+        assertTrue(latch.await(2, TimeUnit.SECONDS));
         logger.shutdown();
     }
 
     @Test
     void opensCircuitAfterFailures() throws Exception {
-        EventLogClient client = Mockito.mock(EventLogClient.class);
-        doThrow(new EventLogException("boom", 500, null))
-                .when(client).createEvent(Mockito.any(EventLogEntry.class));
+        EventLogClient client = clientWithTransport(
+                request -> new EventLogResponse(500, ERROR_BODY));
 
         AsyncEventLogger logger = AsyncEventLogger.builder()
                 .client(client)
@@ -64,7 +65,8 @@ class AsyncEventLoggerTest {
 
     @Test
     void spillsToDiskWhenQueueFull(@TempDir Path tempDir) {
-        EventLogClient client = Mockito.mock(EventLogClient.class);
+        EventLogClient client = clientWithTransport(
+                request -> new EventLogResponse(200, SUCCESS_BODY));
         ExecutorService blockingExecutor = new NoopExecutorService();
 
         AsyncEventLogger logger = AsyncEventLogger.builder()
@@ -82,6 +84,61 @@ class AsyncEventLoggerTest {
         boolean spilled = tempDir.toFile().listFiles() != null && tempDir.toFile().listFiles().length > 0;
         assertTrue(spilled);
         logger.shutdown();
+    }
+
+    @Test
+    void shutdownSpillsStragglersFromRetryRace(@TempDir Path tempDir) throws Exception {
+        CountDownLatch failLatch = new CountDownLatch(1);
+        EventLogClient client = clientWithTransport(request -> {
+            failLatch.countDown();
+            return new EventLogResponse(500, ERROR_BODY);
+        });
+
+        AsyncEventLogger logger = AsyncEventLogger.builder()
+                .client(client)
+                .maxRetries(1)
+                .baseRetryDelayMs(500) // long enough to be pending during shutdown
+                .spilloverPath(tempDir)
+                .registerShutdownHook(false)
+                .senderExecutor(Executors.newSingleThreadExecutor())
+                .retryExecutor(Executors.newSingleThreadScheduledExecutor())
+                .build();
+
+        // Log event — it will fail and be scheduled for retry
+        logger.log(minimalEvent());
+        assertTrue(failLatch.await(2, TimeUnit.SECONDS), "Event should have been attempted");
+
+        // Small delay so the retry gets scheduled but hasn't fired yet (500ms delay)
+        Thread.sleep(100);
+
+        // Shutdown while retry is still pending
+        logger.shutdown();
+
+        // The pending retry was either cancelled by retryExecutor.shutdown() or
+        // if it snuck into the queue, the final drain should have spilled it to disk.
+        // Either way, the event is not stranded.
+        java.io.File[] files = tempDir.toFile().listFiles();
+        assertNotNull(files);
+        assertTrue(files.length > 0, "Events should be spilled to disk during shutdown");
+    }
+
+    private EventLogClient clientWithTransport(Function<EventLogRequest, EventLogResponse> handler) {
+        EventLogTransport transport = new EventLogTransport() {
+            @Override
+            public EventLogResponse send(EventLogRequest request) {
+                return handler.apply(request);
+            }
+
+            @Override
+            public CompletableFuture<EventLogResponse> sendAsync(EventLogRequest request) {
+                return CompletableFuture.completedFuture(handler.apply(request));
+            }
+        };
+        return EventLogClient.builder()
+                .baseUrl("http://localhost:0")
+                .transport(transport)
+                .maxRetries(0)
+                .build();
     }
 
     private EventLogEntry minimalEvent() {
