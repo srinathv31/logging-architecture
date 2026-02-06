@@ -2,6 +2,10 @@ package com.eventlog.sdk.client;
 
 import com.eventlog.sdk.exception.EventLogException;
 import com.eventlog.sdk.model.EventLogEntry;
+import com.fasterxml.jackson.databind.DeserializationFeature;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.SerializationFeature;
+import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -70,7 +74,10 @@ public class AsyncEventLogger implements AutoCloseable {
     private final long maxRetryDelayMs;
     private final Path spilloverPath;
     private final boolean spilloverEnabled;
-    
+    private final BlockingQueue<QueuedEvent> spilloverQueue;
+    private final ExecutorService spilloverExecutor;
+    private final ObjectMapper spilloverObjectMapper;
+
     // Metrics
     private final AtomicLong eventsQueued = new AtomicLong(0);
     private final AtomicLong eventsSent = new AtomicLong(0);
@@ -96,7 +103,33 @@ public class AsyncEventLogger implements AutoCloseable {
         this.circuitBreakerResetMs = builder.circuitBreakerResetMs;
         this.spilloverPath = builder.spilloverPath;
         this.spilloverEnabled = builder.spilloverPath != null;
-        
+        if (this.spilloverEnabled) {
+            try {
+                Files.createDirectories(this.spilloverPath);
+            } catch (IOException e) {
+                throw new UncheckedIOException(
+                    "Failed to create spillover directory: " + this.spilloverPath, e);
+            }
+        }
+        this.spilloverQueue = spilloverEnabled
+                ? new LinkedBlockingQueue<>(builder.queueCapacity)
+                : null;
+        this.spilloverExecutor = spilloverEnabled
+                ? (builder.spilloverExecutor != null
+                    ? builder.spilloverExecutor
+                    : Executors.newSingleThreadExecutor(builder.virtualThreads
+                        ? Thread.ofVirtual().name("eventlog-spillover").factory()
+                        : r -> {
+                            Thread t = new Thread(r, "eventlog-spillover");
+                            t.setDaemon(true);
+                            return t;
+                        }))
+                : null;
+        this.spilloverObjectMapper = new ObjectMapper()
+                .registerModule(new JavaTimeModule())
+                .disable(SerializationFeature.WRITE_DATES_AS_TIMESTAMPS)
+                .configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false);
+
         // Start sender thread
         this.senderExecutor = builder.senderExecutor != null
                 ? builder.senderExecutor
@@ -121,7 +154,11 @@ public class AsyncEventLogger implements AutoCloseable {
                         t.setDaemon(true);
                         return t;
                     });
-        
+
+        if (startBackground && spilloverExecutor != null) {
+            spilloverExecutor.submit(this::spilloverLoop);
+        }
+
         // Register shutdown hook
         if (startBackground && builder.registerShutdownHook) {
             this.shutdownHook = new Thread(this::shutdownGracefully, "eventlog-shutdown");
@@ -169,8 +206,7 @@ public class AsyncEventLogger implements AutoCloseable {
         } else {
             // Queue full - try spillover or drop
             if (spilloverEnabled) {
-                spillToDisk(queued);
-                return true;
+                return enqueueSpillover(queued);
             } else {
                 log.warn("Event queue full, dropping event: correlationId={}, processName={}", 
                         event.getCorrelationId(), event.getProcessName());
@@ -332,7 +368,7 @@ public class AsyncEventLogger implements AutoCloseable {
                     maxRetries, queued.event.getCorrelationId());
             
             if (spilloverEnabled) {
-                spillToDisk(queued);
+                enqueueSpillover(queued);
             } else {
                 eventsFailed.incrementAndGet();
             }
@@ -346,7 +382,7 @@ public class AsyncEventLogger implements AutoCloseable {
             QueuedEvent retry = new QueuedEvent(queued.event, queued.attempts + 1, queued.firstAttempt);
             if (!queue.offer(retry)) {
                 if (spilloverEnabled) {
-                    spillToDisk(retry);
+                    enqueueSpillover(retry);
                 } else {
                     eventsFailed.incrementAndGet();
                 }
@@ -389,7 +425,7 @@ public class AsyncEventLogger implements AutoCloseable {
 
     private void handleCircuitOpen(QueuedEvent queued) {
         if (spilloverEnabled) {
-            spillToDisk(queued);
+            enqueueSpillover(queued);
         } else {
             // Re-queue with delay
             retryExecutor.schedule(() -> queue.offer(queued), 1000, TimeUnit.MILLISECONDS);
@@ -400,31 +436,59 @@ public class AsyncEventLogger implements AutoCloseable {
     // Internal - Spillover
     // ========================================================================
 
+    private boolean enqueueSpillover(QueuedEvent queued) {
+        if (!spilloverEnabled || spilloverQueue == null) {
+            eventsFailed.incrementAndGet();
+            return false;
+        }
+
+        boolean queuedForSpillover = spilloverQueue.offer(queued);
+        if (!queuedForSpillover) {
+            log.error("Spillover queue full, dropping event: correlationId={}, processName={}",
+                    queued.event.getCorrelationId(), queued.event.getProcessName());
+            eventsFailed.incrementAndGet();
+        }
+        return queuedForSpillover;
+    }
+
+    private void spilloverLoop() {
+        log.debug("Spillover loop started");
+        while (!shutdownRequested.get() || !spilloverQueue.isEmpty()) {
+            try {
+                QueuedEvent queued = spilloverQueue.poll(100, TimeUnit.MILLISECONDS);
+                if (queued == null) {
+                    continue;
+                }
+                spillToDisk(queued);
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                break;
+            } catch (Exception e) {
+                log.error("Unexpected error in spillover loop", e);
+            }
+        }
+        log.debug("Spillover loop stopped");
+    }
+
     private void spillToDisk(QueuedEvent queued) {
         try {
-            Path file = spilloverPath.resolve("eventlog-spill-" + 
+            Path file = spilloverPath.resolve("eventlog-spill-" +
                     Instant.now().toString().replace(":", "-") + ".json");
-            
-            // Simple JSON serialization (in production, use Jackson)
+
             String json = serializeEvent(queued.event);
             Files.writeString(file, json + "\n", StandardOpenOption.CREATE, StandardOpenOption.APPEND);
-            
+
             eventsSpilled.incrementAndGet();
             log.debug("Event spilled to disk: {}", file);
-            
+
         } catch (IOException e) {
             log.error("Failed to spill event to disk", e);
             eventsFailed.incrementAndGet();
         }
     }
 
-    private String serializeEvent(EventLogEntry event) {
-        // Simplified - in real implementation, use the ObjectMapper from client
-        return String.format("{\"correlation_id\":\"%s\",\"process_name\":\"%s\",\"summary\":\"%s\",\"timestamp\":\"%s\"}",
-                event.getCorrelationId(),
-                event.getProcessName(),
-                event.getSummary().replace("\"", "\\\""),
-                event.getEventTimestamp());
+    private String serializeEvent(EventLogEntry event) throws IOException {
+        return spilloverObjectMapper.writeValueAsString(event);
     }
 
     // ========================================================================
@@ -434,6 +498,14 @@ public class AsyncEventLogger implements AutoCloseable {
     private void shutdownGracefully() {
         if (!shutdownRequested.compareAndSet(false, true)) {
             return; // Already shutting down
+        }
+
+        if (shutdownHook != null) {
+            try {
+                Runtime.getRuntime().removeShutdownHook(shutdownHook);
+            } catch (IllegalStateException e) {
+                // JVM is already shutting down — hook cannot be removed, which is fine
+            }
         }
 
         log.info("AsyncEventLogger shutting down - {} events in queue", queue.size());
@@ -462,13 +534,26 @@ public class AsyncEventLogger implements AutoCloseable {
         if (spilloverEnabled && !queue.isEmpty()) {
             QueuedEvent event;
             while ((event = queue.poll()) != null) {
-                spillToDisk(event);
+                enqueueSpillover(event);
             }
         }
 
         // Shutdown executors
         senderExecutor.shutdownNow();
         retryExecutor.shutdownNow(); // Force stop if graceful didn't finish
+        if (spilloverExecutor != null) {
+            spilloverExecutor.shutdown();
+            try {
+                if (!spilloverExecutor.awaitTermination(10, TimeUnit.SECONDS)) {
+                    log.warn("Spillover shutdown timeout - {} events may be lost",
+                            spilloverQueue != null ? spilloverQueue.size() : 0);
+                    spilloverExecutor.shutdownNow();
+                }
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                spilloverExecutor.shutdownNow();
+            }
+        }
 
         log.info("AsyncEventLogger shutdown complete - sent: {}, failed: {}, spilled: {}",
                 eventsSent.get(), eventsFailed.get(), eventsSpilled.get());
@@ -535,6 +620,7 @@ public class AsyncEventLogger implements AutoCloseable {
         private boolean virtualThreads = false;
         private ExecutorService senderExecutor;
         private ScheduledExecutorService retryExecutor;
+        private ExecutorService spilloverExecutor;
 
         /**
          * Set the EventLogClient (required)
@@ -631,6 +717,14 @@ public class AsyncEventLogger implements AutoCloseable {
          */
         public Builder retryExecutor(ScheduledExecutorService retryExecutor) {
             this.retryExecutor = retryExecutor;
+            return this;
+        }
+
+        /**
+         * Provide a custom spillover executor (advanced usage/testing)
+         */
+        public Builder spilloverExecutor(ExecutorService spilloverExecutor) {
+            this.spilloverExecutor = spilloverExecutor;
             return this;
         }
 
