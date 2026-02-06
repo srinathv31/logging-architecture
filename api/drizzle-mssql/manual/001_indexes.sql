@@ -4,38 +4,38 @@
 -- ===========================================
 
 -- ===========================================
--- event_logs indexes
+-- event_log indexes
 -- ===========================================
 
-IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = 'ix_event_logs_correlation_id' AND object_id = OBJECT_ID('event_logs'))
-    CREATE INDEX [ix_event_logs_correlation_id] ON [event_logs] ([correlation_id], [event_timestamp]);
+IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = 'ix_event_log_correlation_id' AND object_id = OBJECT_ID('event_log'))
+    CREATE INDEX [ix_event_log_correlation_id] ON [event_log] ([correlation_id], [event_timestamp]);
 
-IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = 'ix_event_logs_account_id' AND object_id = OBJECT_ID('event_logs'))
-    CREATE INDEX [ix_event_logs_account_id] ON [event_logs] ([account_id])
+IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = 'ix_event_log_account_id' AND object_id = OBJECT_ID('event_log'))
+    CREATE INDEX [ix_event_log_account_id] ON [event_log] ([account_id])
     WHERE [account_id] IS NOT NULL;
 
-IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = 'ix_event_logs_trace_id' AND object_id = OBJECT_ID('event_logs'))
-    CREATE INDEX [ix_event_logs_trace_id] ON [event_logs] ([trace_id]);
+IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = 'ix_event_log_trace_id' AND object_id = OBJECT_ID('event_log'))
+    CREATE INDEX [ix_event_log_trace_id] ON [event_log] ([trace_id]);
 
-IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = 'ix_event_logs_process' AND object_id = OBJECT_ID('event_logs'))
-    CREATE INDEX [ix_event_logs_process] ON [event_logs] ([process_name], [event_timestamp]);
+IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = 'ix_event_log_process' AND object_id = OBJECT_ID('event_log'))
+    CREATE INDEX [ix_event_log_process] ON [event_log] ([process_name], [event_timestamp]);
 
-IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = 'ix_event_logs_timestamp' AND object_id = OBJECT_ID('event_logs'))
-    CREATE INDEX [ix_event_logs_timestamp] ON [event_logs] ([event_timestamp]);
+IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = 'ix_event_log_timestamp' AND object_id = OBJECT_ID('event_log'))
+    CREATE INDEX [ix_event_log_timestamp] ON [event_log] ([event_timestamp]);
 
-IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = 'ix_event_logs_status' AND object_id = OBJECT_ID('event_logs'))
-    CREATE INDEX [ix_event_logs_status] ON [event_logs] ([event_status], [event_timestamp])
+IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = 'ix_event_log_status' AND object_id = OBJECT_ID('event_log'))
+    CREATE INDEX [ix_event_log_status] ON [event_log] ([event_status], [event_timestamp])
     WHERE [event_status] = 'FAILURE';
 
-IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = 'ix_event_logs_target_system' AND object_id = OBJECT_ID('event_logs'))
-    CREATE INDEX [ix_event_logs_target_system] ON [event_logs] ([target_system], [event_timestamp]);
+IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = 'ix_event_log_target_system' AND object_id = OBJECT_ID('event_log'))
+    CREATE INDEX [ix_event_log_target_system] ON [event_log] ([target_system], [event_timestamp]);
 
-IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = 'ix_event_logs_idempotency' AND object_id = OBJECT_ID('event_logs'))
-    CREATE UNIQUE INDEX [ix_event_logs_idempotency] ON [event_logs] ([idempotency_key])
+IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = 'ix_event_log_idempotency' AND object_id = OBJECT_ID('event_log'))
+    CREATE UNIQUE INDEX [ix_event_log_idempotency] ON [event_log] ([idempotency_key])
     WHERE [idempotency_key] IS NOT NULL;
 
-IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = 'ix_event_logs_batch_id' AND object_id = OBJECT_ID('event_logs'))
-    CREATE INDEX [ix_event_logs_batch_id] ON [event_logs] ([batch_id], [correlation_id])
+IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = 'ix_event_log_batch_id' AND object_id = OBJECT_ID('event_log'))
+    CREATE INDEX [ix_event_log_batch_id] ON [event_log] ([batch_id], [correlation_id])
     WHERE [batch_id] IS NOT NULL;
 
 -- ===========================================

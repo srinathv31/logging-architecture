@@ -12,6 +12,8 @@
 
 # testing
 /coverage
+/nyc_output
+test-results.xml
 
 # next.js
 /.next/
