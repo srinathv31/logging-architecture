@@ -103,6 +103,14 @@ public class AsyncEventLogger implements AutoCloseable {
         this.circuitBreakerResetMs = builder.circuitBreakerResetMs;
         this.spilloverPath = builder.spilloverPath;
         this.spilloverEnabled = builder.spilloverPath != null;
+        if (this.spilloverEnabled) {
+            try {
+                Files.createDirectories(this.spilloverPath);
+            } catch (IOException e) {
+                throw new UncheckedIOException(
+                    "Failed to create spillover directory: " + this.spilloverPath, e);
+            }
+        }
         this.spilloverQueue = spilloverEnabled
                 ? new LinkedBlockingQueue<>(builder.queueCapacity)
                 : null;
@@ -491,7 +499,15 @@ public class AsyncEventLogger implements AutoCloseable {
         if (!shutdownRequested.compareAndSet(false, true)) {
             return; // Already shutting down
         }
-        
+
+        if (shutdownHook != null) {
+            try {
+                Runtime.getRuntime().removeShutdownHook(shutdownHook);
+            } catch (IllegalStateException e) {
+                // JVM is already shutting down — hook cannot be removed, which is fine
+            }
+        }
+
         log.info("AsyncEventLogger shutting down - {} events in queue", queue.size());
         
         // Wait for queue to drain (with timeout)

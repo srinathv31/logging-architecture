@@ -9,6 +9,7 @@ import org.junit.jupiter.api.io.TempDir;
 import org.mockito.Mockito;
 
 import java.io.IOException;
+import java.lang.reflect.Field;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Duration;
@@ -178,6 +179,71 @@ class AsyncEventLoggerTest {
         assertTrue(json.contains("\"identifiers\":{\"order_id\":\"ORD-123\"}"));
         assertTrue(json.contains("\"metadata\":{\"source\":\"test\"}"));
         assertEquals(0, logger.getMetrics().eventsFailed);
+
+        unblockSender.countDown();
+        logger.shutdown();
+    }
+
+    @Test
+    void shutdownHookIsRemovedAfterClose() throws Exception {
+        EventLogClient client = Mockito.mock(EventLogClient.class);
+
+        AsyncEventLogger logger = AsyncEventLogger.builder()
+                .client(client)
+                .registerShutdownHook(true)
+                .senderExecutor(Executors.newSingleThreadExecutor())
+                .retryExecutor(Executors.newSingleThreadScheduledExecutor())
+                .build();
+
+        // Grab the shutdown hook via reflection
+        Field hookField = AsyncEventLogger.class.getDeclaredField("shutdownHook");
+        hookField.setAccessible(true);
+        Thread hook = (Thread) hookField.get(logger);
+        assertNotNull(hook, "shutdown hook should have been registered");
+
+        // Close the logger — should remove the hook
+        logger.close();
+
+        // If the hook was removed, we can re-add it without error
+        Runtime.getRuntime().addShutdownHook(hook);
+        // Clean up: remove the hook we just re-added
+        Runtime.getRuntime().removeShutdownHook(hook);
+    }
+
+    @Test
+    void spilloverCreatesDirectoryIfMissing(@TempDir Path tempDir) throws Exception {
+        Path nested = tempDir.resolve("nested").resolve("spill");
+        assertFalse(Files.exists(nested), "directory should not exist yet");
+
+        EventLogClient client = Mockito.mock(EventLogClient.class);
+        CountDownLatch senderStarted = new CountDownLatch(1);
+        CountDownLatch unblockSender = new CountDownLatch(1);
+        doAnswer(invocation -> {
+            senderStarted.countDown();
+            unblockSender.await(2, TimeUnit.SECONDS);
+            return null;
+        }).when(client).createEvent(Mockito.any(EventLogEntry.class));
+
+        AsyncEventLogger logger = AsyncEventLogger.builder()
+                .client(client)
+                .queueCapacity(1)
+                .spilloverPath(nested)
+                .registerShutdownHook(false)
+                .senderExecutor(Executors.newSingleThreadExecutor())
+                .retryExecutor(Executors.newSingleThreadScheduledExecutor())
+                .build();
+
+        // Constructor should have created the directory
+        assertTrue(Files.isDirectory(nested), "constructor should create spillover directory");
+
+        // Verify spillover actually works in the auto-created directory
+        assertTrue(logger.log(minimalEvent()));
+        assertTrue(senderStarted.await(1, TimeUnit.SECONDS));
+        assertTrue(logger.log(minimalEvent())); // fills queue
+        assertTrue(logger.log(minimalEvent())); // overflows to spillover
+
+        assertTrue(waitUntil(() -> hasSpillFiles(nested), Duration.ofSeconds(2)),
+                "spill files should appear in auto-created directory");
 
         unblockSender.countDown();
         logger.shutdown();
