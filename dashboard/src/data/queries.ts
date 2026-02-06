@@ -1,8 +1,8 @@
 import "server-only";
 
-import { db } from "@/db/client";
-import { eventLogs } from "@/db/schema";
-import { sql, eq, ilike, and, gte, lte, count } from "drizzle-orm";
+import { getDb } from "@/db/drivers/mssql";
+import { eventLogs } from "@/db/schema/event-logs";
+import { sql, eq, like, and, gte, lte } from "drizzle-orm";
 
 export interface TraceListFilters {
   processName?: string;
@@ -37,6 +37,7 @@ export interface TraceListResult {
 }
 
 export async function getTraces(filters: TraceListFilters): Promise<TraceListResult> {
+  const db = await getDb();
   const page = filters.page ?? 1;
   const pageSize = filters.pageSize ?? 25;
   const offset = (page - 1) * pageSize;
@@ -44,7 +45,7 @@ export async function getTraces(filters: TraceListFilters): Promise<TraceListRes
   const conditions = [eq(eventLogs.isDeleted, false)];
 
   if (filters.processName) {
-    conditions.push(ilike(eventLogs.processName, `%${filters.processName}%`));
+    conditions.push(like(eventLogs.processName, `%${filters.processName}%`));
   }
   if (filters.batchId) {
     conditions.push(eq(eventLogs.batchId, filters.batchId));
@@ -71,23 +72,23 @@ export async function getTraces(filters: TraceListFilters): Promise<TraceListRes
         processName: sql<string>`min(${eventLogs.processName})`,
         accountId: sql<string | null>`min(${eventLogs.accountId})`,
         batchId: sql<string | null>`min(${eventLogs.batchId})`,
-        eventCount: sql<number>`count(*)::int`,
-        hasErrors: sql<boolean>`bool_or(${eventLogs.eventStatus} = 'FAILURE')`,
-        latestStatus: sql<string>`(array_agg(${eventLogs.eventStatus} ORDER BY ${eventLogs.eventTimestamp} DESC))[1]`,
-        firstEventAt: sql<string>`min(${eventLogs.eventTimestamp})::text`,
-        lastEventAt: sql<string>`max(${eventLogs.eventTimestamp})::text`,
-        totalDurationMs: sql<number | null>`extract(epoch from (max(${eventLogs.eventTimestamp}) - min(${eventLogs.eventTimestamp}))) * 1000`,
+        eventCount: sql<number>`COUNT(*)`,
+        hasErrors: sql<boolean>`CAST(MAX(CASE WHEN ${eventLogs.eventStatus} = 'FAILURE' THEN 1 ELSE 0 END) AS BIT)`,
+        latestStatus: sql<string>`(SELECT TOP 1 e2.event_status FROM event_log e2 WHERE e2.trace_id = ${eventLogs.traceId} AND e2.is_deleted = 0 ORDER BY e2.event_timestamp DESC)`,
+        firstEventAt: sql<string>`CONVERT(VARCHAR(50), MIN(${eventLogs.eventTimestamp}), 127)`,
+        lastEventAt: sql<string>`CONVERT(VARCHAR(50), MAX(${eventLogs.eventTimestamp}), 127)`,
+        totalDurationMs: sql<number | null>`DATEDIFF(MILLISECOND, MIN(${eventLogs.eventTimestamp}), MAX(${eventLogs.eventTimestamp}))`,
       })
       .from(eventLogs)
       .where(whereClause)
       .groupBy(eventLogs.traceId)
       .orderBy(sql`max(${eventLogs.eventTimestamp}) DESC`)
-      .limit(pageSize)
-      .offset(offset),
+      .offset(offset)
+      .fetch(pageSize),
 
     db
       .select({
-        totalCount: sql<number>`count(distinct ${eventLogs.traceId})::int`,
+        totalCount: sql<number>`COUNT(DISTINCT ${eventLogs.traceId})`,
       })
       .from(eventLogs)
       .where(whereClause),
@@ -158,26 +159,38 @@ export interface DashboardStats {
 }
 
 export async function getDashboardStats(): Promise<DashboardStats> {
-  const [stats] = await db
-    .select({
-      totalTraces: sql<number>`count(distinct ${eventLogs.traceId})::int`,
-      totalAccounts: sql<number>`count(distinct ${eventLogs.accountId})::int`,
-      totalEvents: sql<number>`count(*)::int`,
-      successCount: sql<number>`count(*) filter (where ${eventLogs.eventStatus} = 'SUCCESS')::int`,
-    })
-    .from(eventLogs)
-    .where(eq(eventLogs.isDeleted, false));
+  const db = await getDb();
 
-  const [systemsResult] = await db
-    .select({
-      systems: sql<string[]>`array_agg(distinct ${eventLogs.targetSystem}) || array_agg(distinct ${eventLogs.originatingSystem})`,
-    })
-    .from(eventLogs)
-    .where(eq(eventLogs.isDeleted, false));
+  const [statsResult, targetSystems, originatingSystems] = await Promise.all([
+    db
+      .select({
+        totalTraces: sql<number>`COUNT(DISTINCT ${eventLogs.traceId})`,
+        totalAccounts: sql<number>`COUNT(DISTINCT ${eventLogs.accountId})`,
+        totalEvents: sql<number>`COUNT(*)`,
+        successCount: sql<number>`SUM(CASE WHEN ${eventLogs.eventStatus} = 'SUCCESS' THEN 1 ELSE 0 END)`,
+      })
+      .from(eventLogs)
+      .where(eq(eventLogs.isDeleted, false)),
 
-  const allSystems = new Set(systemsResult?.systems?.filter(Boolean) ?? []);
-  const successRate = stats.totalEvents > 0 
-    ? Math.round((stats.successCount / stats.totalEvents) * 1000) / 10 
+    db
+      .selectDistinct({ system: eventLogs.targetSystem })
+      .from(eventLogs)
+      .where(eq(eventLogs.isDeleted, false)),
+
+    db
+      .selectDistinct({ system: eventLogs.originatingSystem })
+      .from(eventLogs)
+      .where(eq(eventLogs.isDeleted, false)),
+  ]);
+
+  const stats = statsResult[0];
+  const allSystems = new Set([
+    ...targetSystems.map((r) => r.system).filter(Boolean),
+    ...originatingSystems.map((r) => r.system).filter(Boolean),
+  ]);
+
+  const successRate = stats.totalEvents > 0
+    ? Math.round((stats.successCount / stats.totalEvents) * 1000) / 10
     : 0;
 
   return {
@@ -191,6 +204,8 @@ export async function getDashboardStats(): Promise<DashboardStats> {
 }
 
 export async function getTraceDetail(traceId: string): Promise<TraceDetail | null> {
+  const db = await getDb();
+
   const rows = await db
     .select()
     .from(eventLogs)

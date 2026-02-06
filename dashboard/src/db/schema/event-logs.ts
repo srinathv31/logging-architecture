@@ -1,24 +1,20 @@
 import {
-  pgTable,
-  bigserial,
-  uuid,
+  mssqlTable,
+  bigint,
   varchar,
-  text,
-  integer,
-  boolean,
-  timestamp,
-  jsonb,
-  index,
-  uniqueIndex,
+  nvarchar,
+  int,
+  bit,
+  datetime2,
   check,
-} from 'drizzle-orm/pg-core';
+} from 'drizzle-orm/mssql-core';
 import { sql } from 'drizzle-orm';
 
-export const eventLogs = pgTable(
-  'event_logs',
+export const eventLogs = mssqlTable(
+  'event_log',
   {
-    eventLogId: bigserial('event_log_id', { mode: 'number' }).primaryKey(),
-    executionId: uuid('execution_id').default(sql`gen_random_uuid()`).notNull(),
+    eventLogId: bigint('event_log_id', { mode: 'number' }).identity().primaryKey(),
+    executionId: varchar('execution_id', { length: 36 }).default(sql`LOWER(CONVERT(VARCHAR(36), NEWID()))`).notNull(),
 
     // Core identifiers
     correlationId: varchar('correlation_id', { length: 200 }).notNull(),
@@ -26,7 +22,7 @@ export const eventLogs = pgTable(
     traceId: varchar('trace_id', { length: 200 }).notNull(),
     spanId: varchar('span_id', { length: 64 }),
     parentSpanId: varchar('parent_span_id', { length: 64 }),
-    spanLinks: jsonb('span_links'),
+    spanLinks: nvarchar('span_links', { length: 'max', mode: 'json' }),
     batchId: varchar('batch_id', { length: 200 }),
 
     // System context
@@ -36,25 +32,25 @@ export const eventLogs = pgTable(
 
     // Process details
     processName: varchar('process_name', { length: 510 }).notNull(),
-    stepSequence: integer('step_sequence'),
+    stepSequence: int('step_sequence'),
     stepName: varchar('step_name', { length: 510 }),
     eventType: varchar('event_type', { length: 50 }).notNull(),
     eventStatus: varchar('event_status', { length: 50 }).notNull(),
 
     // Business data
-    identifiers: jsonb('identifiers').notNull(),
-    summary: text('summary').notNull(),
+    identifiers: nvarchar('identifiers', { length: 'max', mode: 'json' }).notNull(),
+    summary: nvarchar('summary', { length: 'max' }).notNull(),
     result: varchar('result', { length: 2048 }).notNull(),
-    metadata: jsonb('metadata'),
+    metadata: nvarchar('metadata', { length: 'max', mode: 'json' }),
 
     // Timing
-    eventTimestamp: timestamp('event_timestamp', { withTimezone: false }).notNull(),
-    createdAt: timestamp('created_at', { withTimezone: false }).defaultNow().notNull(),
-    executionTimeMs: integer('execution_time_ms'),
+    eventTimestamp: datetime2('event_timestamp', { precision: 3 }).notNull(),
+    createdAt: datetime2('created_at', { precision: 3 }).default(sql`GETUTCDATE()`).notNull(),
+    executionTimeMs: int('execution_time_ms'),
 
     // HTTP details
     endpoint: varchar('endpoint', { length: 510 }),
-    httpStatusCode: integer('http_status_code'),
+    httpStatusCode: int('http_status_code'),
     httpMethod: varchar('http_method', { length: 20 }),
 
     // Error tracking
@@ -62,42 +58,29 @@ export const eventLogs = pgTable(
     errorMessage: varchar('error_message', { length: 2048 }),
 
     // Payloads
-    requestPayload: text('request_payload'),
-    responsePayload: text('response_payload'),
+    requestPayload: nvarchar('request_payload', { length: 'max' }),
+    responsePayload: nvarchar('response_payload', { length: 'max' }),
 
     // Control fields
     idempotencyKey: varchar('idempotency_key', { length: 128 }),
-    isDeleted: boolean('is_deleted').default(false).notNull(),
+    isDeleted: bit('is_deleted').default(false).notNull(),
   },
   (table) => [
     check(
-      'ck_event_logs_event_type',
+      'ck_event_log_event_type',
       sql`${table.eventType} IN ('PROCESS_START', 'STEP', 'PROCESS_END', 'ERROR')`,
     ),
     check(
-      'ck_event_logs_event_status',
+      'ck_event_log_event_status',
       sql`${table.eventStatus} IN ('SUCCESS', 'FAILURE', 'IN_PROGRESS', 'SKIPPED')`,
     ),
     check(
-      'ck_event_logs_http_method',
+      'ck_event_log_http_method',
       sql`${table.httpMethod} IS NULL OR ${table.httpMethod} IN ('GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'HEAD', 'OPTIONS')`,
     ),
-    index('ix_event_logs_correlation_id').on(table.correlationId, table.eventTimestamp),
-    index('ix_event_logs_account_id')
-      .on(table.accountId)
-      .where(sql`${table.accountId} IS NOT NULL`),
-    index('ix_event_logs_trace_id').on(table.traceId),
-    index('ix_event_logs_process').on(table.processName, table.eventTimestamp),
-    index('ix_event_logs_timestamp').on(table.eventTimestamp),
-    index('ix_event_logs_status')
-      .on(table.eventStatus, table.eventTimestamp)
-      .where(sql`${table.eventStatus} = 'FAILURE'`),
-    index('ix_event_logs_target_system').on(table.targetSystem, table.eventTimestamp),
-    uniqueIndex('ix_event_logs_idempotency')
-      .on(table.idempotencyKey)
-      .where(sql`${table.idempotencyKey} IS NOT NULL`),
-    index('ix_event_logs_batch_id')
-      .on(table.batchId, table.correlationId)
-      .where(sql`${table.batchId} IS NOT NULL`),
+    check(
+      'ck_event_log_span_links_json',
+      sql`${table.spanLinks} IS NULL OR ISJSON(${table.spanLinks}) = 1`,
+    ),
   ],
 );
