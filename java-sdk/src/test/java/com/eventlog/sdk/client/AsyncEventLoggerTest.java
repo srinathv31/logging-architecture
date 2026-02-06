@@ -8,10 +8,15 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.mockito.Mockito;
 
+import java.io.IOException;
+import java.nio.file.Files;
 import java.nio.file.Path;
+import java.time.Duration;
 import java.util.List;
+import java.util.stream.Stream;
 import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.function.BooleanSupplier;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.doAnswer;
@@ -63,24 +68,118 @@ class AsyncEventLoggerTest {
     }
 
     @Test
-    void spillsToDiskWhenQueueFull(@TempDir Path tempDir) {
+    void queueFullSpilloverDoesNotWriteOnCallerThread(@TempDir Path tempDir) throws Exception {
         EventLogClient client = Mockito.mock(EventLogClient.class);
-        ExecutorService blockingExecutor = new NoopExecutorService();
+        CountDownLatch senderStarted = new CountDownLatch(1);
+        CountDownLatch unblockSender = new CountDownLatch(1);
+        doAnswer(invocation -> {
+            senderStarted.countDown();
+            unblockSender.await(2, TimeUnit.SECONDS);
+            return null;
+        }).when(client).createEvent(Mockito.any(EventLogEntry.class));
+
+        ExecutorService spilloverNoopExecutor = new NoopExecutorService();
 
         AsyncEventLogger logger = AsyncEventLogger.builder()
                 .client(client)
                 .queueCapacity(1)
                 .spilloverPath(tempDir)
                 .registerShutdownHook(false)
-                .senderExecutor(blockingExecutor)
+                .senderExecutor(Executors.newSingleThreadExecutor())
+                .retryExecutor(Executors.newSingleThreadScheduledExecutor())
+                .spilloverExecutor(spilloverNoopExecutor)
+                .build();
+
+        assertTrue(logger.log(minimalEvent()));
+        assertTrue(senderStarted.await(1, TimeUnit.SECONDS));
+
+        // Fill queue while sender is blocked, then overflow to spillover.
+        assertTrue(logger.log(minimalEvent()));
+        long startNs = System.nanoTime();
+        assertTrue(logger.log(minimalEvent()));
+        long elapsedMs = TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - startNs);
+
+        assertTrue(elapsedMs < 50, "log() should return quickly on spillover");
+        assertFalse(hasSpillFiles(tempDir), "spillover should not run on caller thread");
+
+        unblockSender.countDown();
+        logger.shutdown();
+    }
+
+    @Test
+    void spillsToDiskWhenQueueFull(@TempDir Path tempDir) throws Exception {
+        EventLogClient client = Mockito.mock(EventLogClient.class);
+        CountDownLatch senderStarted = new CountDownLatch(1);
+        CountDownLatch unblockSender = new CountDownLatch(1);
+        doAnswer(invocation -> {
+            senderStarted.countDown();
+            unblockSender.await(2, TimeUnit.SECONDS);
+            return null;
+        }).when(client).createEvent(Mockito.any(EventLogEntry.class));
+
+        AsyncEventLogger logger = AsyncEventLogger.builder()
+                .client(client)
+                .queueCapacity(1)
+                .spilloverPath(tempDir)
+                .registerShutdownHook(false)
+                .senderExecutor(Executors.newSingleThreadExecutor())
                 .retryExecutor(Executors.newSingleThreadScheduledExecutor())
                 .build();
 
         assertTrue(logger.log(minimalEvent()));
+        assertTrue(senderStarted.await(1, TimeUnit.SECONDS));
+
+        // Fill queue, then overflow into async spillover.
+        assertTrue(logger.log(minimalEvent()));
         assertTrue(logger.log(minimalEvent()));
 
-        boolean spilled = tempDir.toFile().listFiles() != null && tempDir.toFile().listFiles().length > 0;
+        boolean spilled = waitUntil(() -> hasSpillFiles(tempDir), Duration.ofSeconds(2));
         assertTrue(spilled);
+
+        unblockSender.countDown();
+        logger.shutdown();
+    }
+
+    @Test
+    void spilloverSerializesFullEventPayload(@TempDir Path tempDir) throws Exception {
+        EventLogClient client = Mockito.mock(EventLogClient.class);
+        CountDownLatch senderStarted = new CountDownLatch(1);
+        CountDownLatch unblockSender = new CountDownLatch(1);
+        doAnswer(invocation -> {
+            senderStarted.countDown();
+            unblockSender.await(2, TimeUnit.SECONDS);
+            return null;
+        }).when(client).createEvent(Mockito.any(EventLogEntry.class));
+
+        AsyncEventLogger logger = AsyncEventLogger.builder()
+                .client(client)
+                .queueCapacity(1)
+                .spilloverPath(tempDir)
+                .registerShutdownHook(false)
+                .senderExecutor(Executors.newSingleThreadExecutor())
+                .retryExecutor(Executors.newSingleThreadScheduledExecutor())
+                .build();
+
+        assertTrue(logger.log(minimalEvent()));
+        assertTrue(senderStarted.await(1, TimeUnit.SECONDS));
+        assertTrue(logger.log(minimalEvent()));
+        assertTrue(logger.log(eventWithExtendedFields()));
+
+        assertTrue(waitUntil(() -> hasSpillFiles(tempDir), Duration.ofSeconds(2)));
+        Path spillFile;
+        try (Stream<Path> files = Files.list(tempDir)) {
+            spillFile = files.findFirst().orElseThrow();
+        }
+        String json = Files.readString(spillFile);
+
+        assertTrue(json.contains("\"trace_id\":\"trace\""));
+        assertTrue(json.contains("\"event_type\":\"STEP\""));
+        assertTrue(json.contains("\"endpoint\":\"/v1/orders\""));
+        assertTrue(json.contains("\"identifiers\":{\"order_id\":\"ORD-123\"}"));
+        assertTrue(json.contains("\"metadata\":{\"source\":\"test\"}"));
+        assertEquals(0, logger.getMetrics().eventsFailed);
+
+        unblockSender.countDown();
         logger.shutdown();
     }
 
@@ -97,6 +196,44 @@ class AsyncEventLoggerTest {
                 .summary("ok")
                 .result("OK")
                 .build();
+    }
+
+    private EventLogEntry eventWithExtendedFields() {
+        return EventLogEntry.builder()
+                .correlationId("corr-null")
+                .traceId("trace")
+                .applicationId("app")
+                .targetSystem("system")
+                .originatingSystem("system")
+                .processName("PROC")
+                .stepName("Step 2")
+                .eventType(EventType.STEP)
+                .eventStatus(EventStatus.SUCCESS)
+                .summary("done")
+                .endpoint("/v1/orders")
+                .addIdentifier("order_id", "ORD-123")
+                .addMetadata("source", "test")
+                .result("OK")
+                .build();
+    }
+
+    private boolean hasSpillFiles(Path directory) {
+        try (Stream<Path> files = Files.list(directory)) {
+            return files.findAny().isPresent();
+        } catch (IOException e) {
+            return false;
+        }
+    }
+
+    private boolean waitUntil(BooleanSupplier condition, Duration timeout) throws InterruptedException {
+        long deadline = System.nanoTime() + timeout.toNanos();
+        while (System.nanoTime() < deadline) {
+            if (condition.getAsBoolean()) {
+                return true;
+            }
+            Thread.sleep(20);
+        }
+        return condition.getAsBoolean();
     }
 
     private static final class NoopExecutorService extends AbstractExecutorService {
