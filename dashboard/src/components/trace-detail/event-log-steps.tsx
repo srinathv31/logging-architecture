@@ -3,6 +3,7 @@
 import {
   Dialog,
   DialogContent,
+  DialogDescription,
   DialogHeader,
   DialogTitle,
   DialogTrigger,
@@ -102,9 +103,9 @@ export function EventLogSteps({ event }: EventLogStepsProps) {
           <DialogTitle className="text-xl text-left">
             {event.stepName ?? event.processName}
           </DialogTitle>
-          <p className="text-sm text-muted-foreground">
+          <DialogDescription className="text-sm text-muted-foreground">
             Step #{event.stepSequence ?? "—"} &middot; {event.processName}
-          </p>
+          </DialogDescription>
           <div className="flex flex-wrap items-center gap-2 pt-1">
             <Badge
               variant="secondary"
