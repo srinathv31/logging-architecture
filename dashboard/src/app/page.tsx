@@ -4,7 +4,9 @@ import { searchParamsCache } from "@/lib/search-params";
 import { TraceFilters } from "@/components/traces/trace-filters";
 import { TraceTableServer } from "@/components/traces/trace-table-server";
 import { TraceTableSkeleton } from "@/components/traces/trace-table-skeleton";
+import { TraceTableError } from "@/components/traces/trace-table-error";
 import { DashboardStats } from "@/components/layout/dashboard-stats";
+import { ErrorBoundary } from "@/components/error-boundary";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Activity, Server, Network, Eye } from "lucide-react";
 
@@ -98,25 +100,29 @@ export default async function HomePage({
         </div>
 
         {/* Stats Section */}
-        <Suspense fallback={<StatsSkeleton />}>
-          <DashboardStats />
-        </Suspense>
+        <ErrorBoundary fallback={null}>
+          <Suspense fallback={<StatsSkeleton />}>
+            <DashboardStats />
+          </Suspense>
+        </ErrorBoundary>
 
         {/* Filters and Table Section */}
         <div className="space-y-4">
           <TraceFilters />
 
-          <Suspense key={filterHash} fallback={<TraceTableSkeleton />}>
-            <TraceTableServer
-              filters={{
-                processName: params.processName || undefined,
-                batchId: params.batchId || undefined,
-                accountId: params.accountId || undefined,
-                eventStatus: params.eventStatus || undefined,
-                page: params.page,
-              }}
-            />
-          </Suspense>
+          <ErrorBoundary fallback={<TraceTableError />}>
+            <Suspense key={filterHash} fallback={<TraceTableSkeleton />}>
+              <TraceTableServer
+                filters={{
+                  processName: params.processName || undefined,
+                  batchId: params.batchId || undefined,
+                  accountId: params.accountId || undefined,
+                  eventStatus: params.eventStatus || undefined,
+                  page: params.page,
+                }}
+              />
+            </Suspense>
+          </ErrorBoundary>
         </div>
       </div>
     </NuqsAdapter>
