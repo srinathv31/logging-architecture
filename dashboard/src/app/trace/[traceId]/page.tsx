@@ -6,6 +6,8 @@ import { TraceTimeline } from "@/components/trace-detail/trace-timeline";
 import { JourneyNarrative } from "@/components/trace-detail/journey-narrative";
 import { DurationBreakdown } from "@/components/trace-detail/duration-breakdown";
 import { TraceDetailSkeleton } from "@/components/trace-detail/trace-detail-skeleton";
+import { ErrorBoundary } from "@/components/error-boundary";
+import { TraceDetailError } from "./trace-detail-error";
 
 async function TraceContent({ traceId }: { traceId: string }) {
   const detail = await getTraceDetail(traceId);
@@ -34,9 +36,11 @@ export default async function TraceDetailPage({
 
   return (
     <div className="container mx-auto max-w-6xl px-4 py-8">
-      <Suspense fallback={<TraceDetailSkeleton />}>
-        <TraceContent traceId={decodedTraceId} />
-      </Suspense>
+      <ErrorBoundary fallback={<TraceDetailError />}>
+        <Suspense fallback={<TraceDetailSkeleton />}>
+          <TraceContent traceId={decodedTraceId} />
+        </Suspense>
+      </ErrorBoundary>
     </div>
   );
 }
