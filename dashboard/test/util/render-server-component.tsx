@@ -37,14 +37,14 @@ function setFakeReactDispatcher<T>(action: () => T): T {
 
 async function evaluateServerComponent(node: ReactElement): Promise<ReactElement> {
   if (node && node.type?.constructor?.name === 'AsyncFunction') {
-    const evaluatedNode: ReactElement = await (node.type as any)({ ...node.props });
+    const evaluatedNode: ReactElement = await (node.type as any)({ ...(node.props as Record<string, unknown>) });
     return evaluateServerComponent(evaluatedNode);
   }
 
   if (node && node.type?.constructor?.name === 'Function') {
     try {
       return setFakeReactDispatcher(() => {
-        const evaluatedNode: ReactElement = (node.type as any)({ ...node.props });
+        const evaluatedNode: ReactElement = (node.type as any)({ ...(node.props as Record<string, unknown>) });
         return evaluateServerComponent(evaluatedNode);
       });
     } catch {
@@ -85,5 +85,5 @@ export async function renderServerComponent(nodeOrPromise: ReactNode | Promise<R
     return render(evaluatedNode);
   }
 
-  return render(node as ReactElement);
+  return render(node as unknown as ReactElement);
 }

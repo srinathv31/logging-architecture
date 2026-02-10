@@ -15,6 +15,16 @@ vi.mock('next/link', () => ({
   ),
 }));
 
+const mockSetTheme = vi.fn();
+let mockResolvedTheme = 'light';
+
+vi.mock('next-themes', () => ({
+  useTheme: () => ({
+    resolvedTheme: mockResolvedTheme,
+    setTheme: mockSetTheme,
+  }),
+}));
+
 import { AppHeader } from '@/components/layout/app-header';
 
 describe('AppHeader', () => {
@@ -50,8 +60,7 @@ describe('ThemeToggle', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mockPathname = '/';
-    document.documentElement.classList.remove('dark');
-    localStorage.clear();
+    mockResolvedTheme = 'light';
   });
 
   it('renders toggle button', () => {
@@ -60,41 +69,30 @@ describe('ThemeToggle', () => {
     expect(screen.getByText('Toggle theme')).toBeDefined();
   });
 
-  it('toggles dark class on click', () => {
+  it('calls setTheme with dark when current theme is light', () => {
+    mockResolvedTheme = 'light';
     render(<AppHeader />);
 
     const toggleButton = screen.getByText('Toggle theme').closest('button')!;
     fireEvent.click(toggleButton);
 
-    expect(document.documentElement.classList.contains('dark')).toBe(true);
+    expect(mockSetTheme).toHaveBeenCalledWith('dark');
   });
 
-  it('writes theme to localStorage on toggle', () => {
+  it('calls setTheme with light when current theme is dark', () => {
+    mockResolvedTheme = 'dark';
     render(<AppHeader />);
 
     const toggleButton = screen.getByText('Toggle theme').closest('button')!;
     fireEvent.click(toggleButton);
 
-    expect(localStorage.getItem('theme')).toBe('dark');
-  });
-
-  it('toggling twice returns to light mode', () => {
-    render(<AppHeader />);
-
-    const toggleButton = screen.getByText('Toggle theme').closest('button')!;
-    fireEvent.click(toggleButton);
-    fireEvent.click(toggleButton);
-
-    expect(document.documentElement.classList.contains('dark')).toBe(false);
-    expect(localStorage.getItem('theme')).toBe('light');
+    expect(mockSetTheme).toHaveBeenCalledWith('light');
   });
 });
 
 describe('Breadcrumbs', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    document.documentElement.classList.remove('dark');
-    localStorage.clear();
   });
 
   it('returns null on "/" pathname', () => {
