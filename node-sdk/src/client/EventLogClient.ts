@@ -121,7 +121,7 @@ export class EventLogClient {
     accountId: string,
     params?: GetEventsByAccountParams
   ): Promise<GetEventsByAccountResponse> {
-    const queryString = this.buildQueryString(params);
+    const queryString = this.buildQueryString(params as Record<string, unknown>);
     return this.get<GetEventsByAccountResponse>(
       `/api/v1/events/account/${encodeURIComponent(accountId)}${queryString}`
     );
@@ -154,7 +154,7 @@ export class EventLogClient {
     batchId: string,
     params?: GetEventsByBatchParams
   ): Promise<GetEventsByAccountResponse> {
-    const queryString = this.buildQueryString(params);
+    const queryString = this.buildQueryString(params as Record<string, unknown>);
     return this.get<GetEventsByAccountResponse>(
       `/api/v1/events/batch/${encodeURIComponent(batchId)}${queryString}`
     );
@@ -212,8 +212,8 @@ export class EventLogClient {
     for (let attempt = 0; attempt <= this.maxRetries; attempt++) {
       try {
         if (attempt > 0) {
-          // Exponential backoff
-          await this.sleep(500 * attempt);
+          // Exponential backoff with 30s cap
+          await this.sleep(Math.min(500 * Math.pow(2, attempt), 30_000));
         }
 
         // Build headers with auth

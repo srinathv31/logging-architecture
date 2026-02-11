@@ -2,6 +2,8 @@
 // OAUTH TOKEN PROVIDER - Automatic token refresh
 // ============================================================================
 
+import { EventLogLogger, resolveLogger } from '../utils/logger';
+
 /**
  * Interface for providing authentication tokens
  */
@@ -34,6 +36,9 @@ export interface OAuthTokenProviderConfig {
   
   /** Custom fetch implementation */
   fetch?: typeof fetch;
+
+  /** Logger for SDK internal messages. Pass 'silent' to suppress all output. */
+  logger?: EventLogLogger | 'silent';
 }
 
 interface TokenResponse {
@@ -76,6 +81,7 @@ export class OAuthTokenProvider implements TokenProvider {
   private readonly scope?: string;
   private readonly refreshBufferMs: number;
   private readonly fetchFn: typeof fetch;
+  private readonly logger: EventLogLogger;
 
   private cachedToken: CachedToken | null = null;
   private refreshPromise: Promise<string> | null = null;
@@ -91,6 +97,7 @@ export class OAuthTokenProvider implements TokenProvider {
     this.scope = config.scope;
     this.refreshBufferMs = config.refreshBufferMs ?? 60_000;
     this.fetchFn = config.fetch ?? fetch;
+    this.logger = resolveLogger(config.logger);
   }
 
   /**
@@ -169,7 +176,7 @@ export class OAuthTokenProvider implements TokenProvider {
       expiresAt,
     };
 
-    console.log(`[OAuth] Token refreshed, expires in ${expiresIn} seconds`);
+    this.logger.info(`[OAuth] Token refreshed, expires in ${expiresIn} seconds`);
 
     return data.access_token;
   }

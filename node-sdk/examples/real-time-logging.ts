@@ -4,6 +4,10 @@
 //
 // This example shows the correct way to log events in production:
 //
+//   1. Create an EventLogTemplate with shared defaults (ONCE at startup)
+//   2. Spawn a ProcessLogger per business process
+//   3. Call logStart / logStep / logEnd / logError — no boilerplate
+//
 //   ✅ Log each step IMMEDIATELY after it completes (fire-and-forget)
 //   ✅ Never block business logic waiting for event log API
 //   ✅ Events are captured even if process crashes mid-way
@@ -14,17 +18,12 @@
 import {
   EventLogClient,
   AsyncEventLogger,
+  EventLogTemplate,
   EventStatus,
   HttpMethod,
-  createCorrelationId,
-  createTraceId,
+  createDiskSpillover,
   createSpanId,
-  createProcessStartEvent,
-  createStepEvent,
-  createProcessEndEvent,
-  createErrorEvent,
 } from '@yourcompany/eventlog-sdk';
-import * as fs from 'fs';
 
 // ============================================================================
 // SETUP - Do this ONCE at application startup
@@ -41,19 +40,27 @@ const eventLog = new AsyncEventLogger({
   maxRetries: 3,
   circuitBreakerThreshold: 5,
   circuitBreakerResetMs: 30_000,
-  
-  // Optional: Handle permanently failed events
-  onEventFailed: (event, error) => {
-    console.error(`Event permanently failed: ${event.correlation_id}`, error);
+  batchSize: 25,
+  maxPayloadSize: 32_768,
+
+  // Disk-based spillover (replaces manual fs.appendFileSync)
+  onSpillover: createDiskSpillover('/var/log/eventlog-spillover'),
+
+  // Lifecycle hooks for observability
+  onBatchSent: (_events, count) => {
+    console.log(`[EventLog] Batch sent: ${count} events`);
   },
-  
-  // Optional: Spillover to disk when queue full or API down
-  onSpillover: (event) => {
-    fs.appendFileSync(
-      '/var/log/eventlog-spillover.json',
-      JSON.stringify(event) + '\n'
-    );
+  onCircuitOpen: (failures) => {
+    console.warn(`[EventLog] Circuit OPEN after ${failures} consecutive failures`);
   },
+});
+
+// Template with shared defaults — no more repeating these on every event
+const template = new EventLogTemplate({
+  logger: eventLog,
+  applicationId: 'onboarding-service',
+  targetSystem: 'ONBOARDING_SERVICE',
+  originatingSystem: 'WEB_APP',
 });
 
 // ============================================================================
@@ -61,167 +68,102 @@ const eventLog = new AsyncEventLogger({
 // ============================================================================
 
 async function onboardCustomer(customerId: string): Promise<void> {
-  const correlationId = createCorrelationId('onboard');
-  const traceId = createTraceId();
   const accountId = `AC-${customerId}`;
-  const processName = 'CUSTOMER_ONBOARDING';
-  
-  const rootSpanId = createSpanId();
   const processStartTime = Date.now();
+
+  // Spawn a ProcessLogger scoped to this process run
+  const process = template.forProcess('CUSTOMER_ONBOARDING', {
+    accountId,
+    identifiers: { customer_id: customerId },
+  });
 
   // --------------------------------------------------------------------------
   // PROCESS START - Log immediately
   // --------------------------------------------------------------------------
-  eventLog.log(createProcessStartEvent({
-    correlation_id: correlationId,
-    account_id: accountId,
-    trace_id: traceId,
-    span_id: rootSpanId,
-    application_id: 'onboarding-service',
-    target_system: 'ONBOARDING_SERVICE',
-    originating_system: 'WEB_APP',
-    process_name: processName,
-    identifiers: { customer_id: customerId },
-    summary: `Customer onboarding initiated for ${customerId}`,
-    result: 'INITIATED',
-  }));
+  process.logStart(`Customer onboarding initiated for ${customerId}`);
   // ⬆️ Returns IMMEDIATELY - doesn't wait for API
 
   // --------------------------------------------------------------------------
   // STEP 1: Identity Verification
   // --------------------------------------------------------------------------
-  const step1SpanId = createSpanId();
   const step1Start = Date.now();
-  
   const identityResult = await verifyIdentity(customerId);
-  
-  // Log immediately after step completes
-  eventLog.log(createStepEvent({
-    correlation_id: correlationId,
-    account_id: accountId,
-    trace_id: traceId,
-    span_id: step1SpanId,
-    parent_span_id: rootSpanId,
-    application_id: 'onboarding-service',
-    target_system: 'IDENTITY_PROVIDER',
-    originating_system: 'ONBOARDING_SERVICE',
-    process_name: processName,
-    step_sequence: 1,
-    step_name: 'Identity Verification',
-    event_status: identityResult.success ? EventStatus.SUCCESS : EventStatus.FAILURE,
-    identifiers: { verification_id: identityResult.verificationId },
-    summary: `Identity verification - ${identityResult.message}`,
-    result: identityResult.success ? 'VERIFIED' : 'FAILED',
-    execution_time_ms: Date.now() - step1Start,
-  }));
+
+  process.logStep(1, 'Identity Verification',
+    identityResult.success ? EventStatus.SUCCESS : EventStatus.FAILURE,
+    `Identity verification - ${identityResult.message}`,
+    { result: identityResult.success ? 'VERIFIED' : 'FAILED', executionTimeMs: Date.now() - step1Start }
+  );
 
   if (!identityResult.success) {
-    await logProcessFailure(correlationId, traceId, processName, accountId, rootSpanId, 
-      1, 'Identity verification failed', processStartTime);
+    process.logError('Identity verification failed', 'STEP_1_FAILED', 'Identity verification failed', {
+      stepSequence: 1,
+    });
     throw new Error('Identity verification failed');
   }
 
   // --------------------------------------------------------------------------
-  // STEP 2a & 2b: Parallel steps
+  // STEP 2a & 2b: Parallel steps (fork-join pattern)
   // --------------------------------------------------------------------------
   const step2aSpanId = createSpanId();
   const step2bSpanId = createSpanId();
 
-  // Run in parallel - each logs independently when complete
   const [creditResult, complianceResult] = await Promise.all([
     (async () => {
       const start = Date.now();
       const result = await performCreditCheck(customerId);
-      
-      eventLog.log(createStepEvent({
-        correlation_id: correlationId,
-        account_id: accountId,
-        trace_id: traceId,
-        span_id: step2aSpanId,
-        parent_span_id: step1SpanId,
-        application_id: 'onboarding-service',
-        target_system: 'CREDIT_BUREAU',
-        originating_system: 'ONBOARDING_SERVICE',
-        process_name: processName,
-        step_sequence: 2,
-        step_name: 'Credit Check',
-        event_status: result.approved ? EventStatus.SUCCESS : EventStatus.FAILURE,
-        identifiers: { credit_report_id: result.reportId },
-        summary: `Credit check - FICO ${result.ficoScore}, ${result.approved ? 'approved' : 'declined'}`,
-        result: result.approved ? 'APPROVED' : 'DECLINED',
-        execution_time_ms: Date.now() - start,
-      }));
-      
+
+      process.logStep(2, 'Credit Check',
+        result.approved ? EventStatus.SUCCESS : EventStatus.FAILURE,
+        `Credit check - FICO ${result.ficoScore}, ${result.approved ? 'approved' : 'declined'}`,
+        { result: result.approved ? 'APPROVED' : 'DECLINED', spanId: step2aSpanId, executionTimeMs: Date.now() - start }
+      );
       return result;
     })(),
-    
+
     (async () => {
       const start = Date.now();
       const result = await performComplianceCheck(customerId);
-      
-      eventLog.log(createStepEvent({
-        correlation_id: correlationId,
-        account_id: accountId,
-        trace_id: traceId,
-        span_id: step2bSpanId,
-        parent_span_id: step1SpanId,
-        application_id: 'onboarding-service',
-        target_system: 'COMPLIANCE_SERVICE',
-        originating_system: 'ONBOARDING_SERVICE',
-        process_name: processName,
-        step_sequence: 2,  // Same as 2a - indicates parallel
-        step_name: 'Compliance Check',
-        event_status: result.compliant ? EventStatus.SUCCESS : EventStatus.FAILURE,
-        identifiers: { compliance_case_id: result.caseId },
-        summary: `Compliance check - OFAC ${result.ofacStatus}, risk ${result.riskLevel}`,
-        result: result.compliant ? 'COMPLIANT' : 'FLAGGED',
-        execution_time_ms: Date.now() - start,
-      }));
-      
+
+      process.logStep(2, 'Compliance Check',
+        result.compliant ? EventStatus.SUCCESS : EventStatus.FAILURE,
+        `Compliance check - OFAC ${result.ofacStatus}, risk ${result.riskLevel}`,
+        { result: result.compliant ? 'COMPLIANT' : 'FLAGGED', spanId: step2bSpanId, executionTimeMs: Date.now() - start }
+      );
       return result;
     })(),
   ]);
 
   if (!creditResult.approved || !complianceResult.compliant) {
-    await logProcessFailure(correlationId, traceId, processName, accountId, rootSpanId,
-      2, 'Credit or compliance check failed', processStartTime);
+    process.logError('Credit or compliance check failed', 'STEP_2_FAILED', 'Credit or compliance check failed', {
+      stepSequence: 2,
+    });
     throw new Error('Credit or compliance check failed');
   }
 
   // --------------------------------------------------------------------------
-  // STEP 3: Account Provisioning (fork-join with span_links)
+  // STEP 3: Account Provisioning (joins from parallel steps via span_links)
   // --------------------------------------------------------------------------
-  const step3SpanId = createSpanId();
   const step3Start = Date.now();
-  
   const provisionResult = await provisionAccount(accountId);
-  
-  eventLog.log(createStepEvent({
-    correlation_id: correlationId,
-    account_id: accountId,
-    trace_id: traceId,
-    span_id: step3SpanId,
-    parent_span_id: step1SpanId,
-    span_links: [step2aSpanId, step2bSpanId],  // Fork-join: waited for both
-    application_id: 'onboarding-service',
-    target_system: 'CORE_BANKING',
-    originating_system: 'ONBOARDING_SERVICE',
-    process_name: processName,
-    step_sequence: 3,
-    step_name: 'Account Provisioning',
-    event_status: provisionResult.success ? EventStatus.SUCCESS : EventStatus.FAILURE,
-    identifiers: { core_banking_ref: provisionResult.coreBankingRef },
-    summary: `Account provisioned - ${provisionResult.message}`,
-    result: provisionResult.success ? 'PROVISIONED' : 'FAILED',
-    endpoint: '/v3/accounts/provision',
-    http_method: HttpMethod.POST,
-    http_status_code: provisionResult.success ? 201 : 500,
-    execution_time_ms: Date.now() - step3Start,
-  }));
+
+  process.logStep(3, 'Account Provisioning',
+    provisionResult.success ? EventStatus.SUCCESS : EventStatus.FAILURE,
+    `Account provisioned - ${provisionResult.message}`,
+    {
+      result: provisionResult.success ? 'PROVISIONED' : 'FAILED',
+      spanLinks: [step2aSpanId, step2bSpanId],
+      endpoint: '/v3/accounts/provision',
+      httpMethod: HttpMethod.POST,
+      httpStatusCode: provisionResult.success ? 201 : 500,
+      executionTimeMs: Date.now() - step3Start,
+    }
+  );
 
   if (!provisionResult.success) {
-    await logProcessFailure(correlationId, traceId, processName, accountId, rootSpanId,
-      3, 'Account provisioning failed', processStartTime);
+    process.logError('Account provisioning failed', 'STEP_3_FAILED', 'Account provisioning failed', {
+      stepSequence: 3,
+    });
     throw new Error('Account provisioning failed');
   }
 
@@ -229,88 +171,26 @@ async function onboardCustomer(customerId: string): Promise<void> {
   // PROCESS END - Success!
   // --------------------------------------------------------------------------
   const totalDuration = Date.now() - processStartTime;
-  
-  eventLog.log(createProcessEndEvent({
-    correlation_id: correlationId,
-    account_id: accountId,
-    trace_id: traceId,
-    span_id: createSpanId(),
-    parent_span_id: rootSpanId,
-    application_id: 'onboarding-service',
-    target_system: 'WEB_APP',
-    originating_system: 'ONBOARDING_SERVICE',
-    process_name: processName,
-    step_sequence: 4,
-    event_status: EventStatus.SUCCESS,
-    identifiers: { customer_id: customerId },
-    summary: `Customer onboarding completed for ${customerId} in ${totalDuration}ms`,
-    result: 'COMPLETED',
-    execution_time_ms: totalDuration,
-  }));
+
+  process.logEnd(
+    EventStatus.SUCCESS,
+    `Customer onboarding completed for ${customerId} in ${totalDuration}ms`,
+    totalDuration,
+    'COMPLETED'
+  );
 
   console.log('Onboarding complete!');
   console.log('Event Log Metrics:', eventLog.getMetrics());
-}
-
-// Helper for failure logging
-async function logProcessFailure(
-  correlationId: string,
-  traceId: string,
-  processName: string,
-  accountId: string,
-  rootSpanId: string,
-  failedStep: number,
-  reason: string,
-  processStartTime: number
-): Promise<void> {
-  eventLog.log(createErrorEvent({
-    correlation_id: correlationId,
-    account_id: accountId,
-    trace_id: traceId,
-    span_id: createSpanId(),
-    parent_span_id: rootSpanId,
-    application_id: 'onboarding-service',
-    target_system: 'WEB_APP',
-    originating_system: 'ONBOARDING_SERVICE',
-    process_name: processName,
-    step_sequence: failedStep,
-    identifiers: {},
-    summary: `Onboarding failed at step ${failedStep}: ${reason}`,
-    result: 'FAILED',
-    error_code: `STEP_${failedStep}_FAILED`,
-    error_message: reason,
-    execution_time_ms: Date.now() - processStartTime,
-  }));
 }
 
 // ============================================================================
 // MOCK BUSINESS LOGIC (replace with actual implementations)
 // ============================================================================
 
-interface IdentityResult {
-  success: boolean;
-  verificationId: string;
-  message: string;
-}
-
-interface CreditResult {
-  approved: boolean;
-  ficoScore: number;
-  reportId: string;
-}
-
-interface ComplianceResult {
-  compliant: boolean;
-  ofacStatus: string;
-  riskLevel: string;
-  caseId: string;
-}
-
-interface ProvisionResult {
-  success: boolean;
-  coreBankingRef: string;
-  message: string;
-}
+interface IdentityResult { success: boolean; verificationId: string; message: string; }
+interface CreditResult { approved: boolean; ficoScore: number; reportId: string; }
+interface ComplianceResult { compliant: boolean; ofacStatus: string; riskLevel: string; caseId: string; }
+interface ProvisionResult { success: boolean; coreBankingRef: string; message: string; }
 
 async function verifyIdentity(customerId: string): Promise<IdentityResult> {
   await sleep(100);
@@ -352,25 +232,31 @@ onboardCustomer('CUST-12345')
  * KEY TAKEAWAYS
  * ============================================================================
  *
- * 1. USE eventLog.log() - Fire-and-forget, never blocks
+ * 1. EventLogTemplate + ProcessLogger eliminate boilerplate:
+ *    - Set shared fields (applicationId, targetSystem, etc.) ONCE in the template
+ *    - Each forProcess() call auto-generates correlationId + traceId
+ *    - logStart/logStep/logEnd/logError handle event_type and event_status
  *
  * 2. LOG IMMEDIATELY after each step:
  *    const result = await doSomething();
- *    eventLog.log(event);  // RIGHT HERE
+ *    process.logStep(1, 'StepName', EventStatus.SUCCESS, 'Done');
  *
  * 3. DON'T collect and send at end:
  *    ❌ const events: EventLogEntry[] = [];
  *    ❌ events.push(step1Event);
- *    ❌ events.push(step2Event);
  *    ❌ await client.createEvents(events);  // If crash, all lost!
  *
  * 4. PARALLEL STEPS log independently as they complete
  *
  * 5. AsyncEventLogger handles:
- *    - Retries with exponential backoff
- *    - Circuit breaker when API down
- *    - Spillover callback for dead letter queue
+ *    - Batching (batchSize), retries with exponential backoff
+ *    - Circuit breaker with lifecycle hooks (onCircuitOpen, onBatchSent)
+ *    - Disk spillover via createDiskSpillover() (NDJSON files, debounced)
+ *    - Payload truncation (maxPayloadSize)
  *    - Graceful shutdown
+ *
+ * 6. For one-off events outside a process, use eventBuilder() (see fluent-builder.ts)
+ * 7. For unit testing, use MockAsyncEventLogger (see testing-with-mock.ts)
  *
  * ============================================================================
  */

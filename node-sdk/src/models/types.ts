@@ -240,6 +240,9 @@ export interface EventLogClientConfig {
   
   /** Custom fetch implementation (for testing or custom environments) */
   fetch?: typeof fetch;
+
+  /** Logger for SDK internal messages. Pass 'silent' to suppress all output. */
+  logger?: import('../utils/logger').EventLogLogger | 'silent';
 }
 
 // ----------------------------------------------------------------------------

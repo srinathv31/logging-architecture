@@ -1,6 +1,6 @@
 // ============================================================================
 // EVENT LOG SDK - MAIN EXPORTS
-// Version 1.4
+// Version 2.0
 // ============================================================================
 
 // Models and Types
@@ -25,10 +25,10 @@ export {
 
 // Client
 export { EventLogClient, EventLogError } from './client/EventLogClient';
-export { 
-  AsyncEventLogger, 
-  type AsyncEventLoggerConfig, 
-  type AsyncEventLoggerMetrics 
+export {
+  AsyncEventLogger,
+  type AsyncEventLoggerConfig,
+  type AsyncEventLoggerMetrics
 } from './client/AsyncEventLogger';
 export {
   type TokenProvider,
@@ -52,4 +52,26 @@ export {
   generateSummary,
   maskLast4,
   validateEvent,
+  truncatePayload,
 } from './utils/helpers';
+
+// Logger
+export {
+  type EventLogLogger,
+  ConsoleLogger,
+  SilentLogger,
+  resolveLogger,
+} from './utils/logger';
+
+// Builder
+export {
+  EventLogEntryBuilder,
+  eventBuilder,
+} from './utils/EventLogEntryBuilder';
+
+// Disk Spillover
+export { createDiskSpillover } from './utils/diskSpillover';
+
+// Template System
+export { EventLogTemplate } from './client/EventLogTemplate';
+export { ProcessLogger } from './client/ProcessLogger';

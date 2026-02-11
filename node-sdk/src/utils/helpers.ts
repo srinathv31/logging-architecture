@@ -151,6 +151,38 @@ export function maskLast4(value: string): string {
 }
 
 // ----------------------------------------------------------------------------
+// Payload Truncation
+// ----------------------------------------------------------------------------
+
+/**
+ * Truncate a payload string if it exceeds maxBytes.
+ * Uses byte length (UTF-8) for accuracy.
+ */
+export function truncatePayload(
+  payload: string | undefined,
+  maxBytes: number
+): string | undefined {
+  if (!payload) return payload;
+  const encoder = new TextEncoder();
+  const bytes = encoder.encode(payload);
+  if (bytes.length <= maxBytes) return payload;
+
+  // Binary search for the right character cutoff
+  let lo = 0;
+  let hi = payload.length;
+  while (lo < hi) {
+    const mid = (lo + hi + 1) >>> 1;
+    if (encoder.encode(payload.slice(0, mid)).length <= maxBytes - 11) {
+      // 11 = "[TRUNCATED]".length
+      lo = mid;
+    } else {
+      hi = mid - 1;
+    }
+  }
+  return payload.slice(0, lo) + '[TRUNCATED]';
+}
+
+// ----------------------------------------------------------------------------
 // Validation
 // ----------------------------------------------------------------------------
 
