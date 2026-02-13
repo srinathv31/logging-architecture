@@ -15,4 +15,5 @@ dist/
 
 # Logs
 *.log
-java-sdk/target/
+applogs/
+java-sdk/**/target/

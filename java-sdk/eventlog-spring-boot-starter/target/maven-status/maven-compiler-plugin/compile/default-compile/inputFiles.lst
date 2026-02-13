@@ -1,8 +1,0 @@
-/Users/srinathvenkatesh/Documents/CodeProjects/APIProjects/event-log-api/logging-architecture/java-sdk/eventlog-spring-boot-starter/src/main/java/com/eventlog/sdk/autoconfigure/EventLogAutoConfiguration.java
-/Users/srinathvenkatesh/Documents/CodeProjects/APIProjects/event-log-api/logging-architecture/java-sdk/eventlog-spring-boot-starter/src/main/java/com/eventlog/sdk/autoconfigure/EventLogBaseAutoConfigurationCondition.java
-/Users/srinathvenkatesh/Documents/CodeProjects/APIProjects/event-log-api/logging-architecture/java-sdk/eventlog-spring-boot-starter/src/main/java/com/eventlog/sdk/autoconfigure/EventLogProperties.java
-/Users/srinathvenkatesh/Documents/CodeProjects/APIProjects/event-log-api/logging-architecture/java-sdk/eventlog-spring-boot-starter/src/main/java/com/eventlog/sdk/autoconfigure/EventLogRefreshAutoConfiguration.java
-/Users/srinathvenkatesh/Documents/CodeProjects/APIProjects/event-log-api/logging-architecture/java-sdk/eventlog-spring-boot-starter/src/main/java/com/eventlog/sdk/autoconfigure/EventLogShutdown.java
-/Users/srinathvenkatesh/Documents/CodeProjects/APIProjects/event-log-api/logging-architecture/java-sdk/eventlog-spring-boot-starter/src/main/java/com/eventlog/sdk/autoconfigure/logging/LogEventAspect.java
-/Users/srinathvenkatesh/Documents/CodeProjects/APIProjects/event-log-api/logging-architecture/java-sdk/eventlog-spring-boot-starter/src/main/java/com/eventlog/sdk/autoconfigure/transport/RestClientTransport.java
-/Users/srinathvenkatesh/Documents/CodeProjects/APIProjects/event-log-api/logging-architecture/java-sdk/eventlog-spring-boot-starter/src/main/java/com/eventlog/sdk/autoconfigure/transport/WebClientTransport.java
