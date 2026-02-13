@@ -14,6 +14,7 @@ import java.nio.file.*;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Set;
 import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -84,6 +85,9 @@ public class AsyncEventLogger implements AutoCloseable {
     private final AtomicLong eventsFailed = new AtomicLong(0);
     private final AtomicLong eventsSpilled = new AtomicLong(0);
     
+    // Pending retry tracking (CAS gate for shutdown-retry race)
+    private final Set<QueuedEvent> pendingRetryEvents = ConcurrentHashMap.newKeySet();
+
     // Shutdown handling
     private final AtomicBoolean shutdownRequested = new AtomicBoolean(false);
     private final CountDownLatch shutdownLatch = new CountDownLatch(1);
@@ -377,18 +381,30 @@ public class AsyncEventLogger implements AutoCloseable {
 
     private void scheduleRetry(QueuedEvent queued) {
         long delay = calculateRetryDelay(queued.attempts);
-        
-        retryExecutor.schedule(() -> {
-            QueuedEvent retry = new QueuedEvent(queued.event, queued.attempts + 1, queued.firstAttempt);
-            if (!queue.offer(retry)) {
-                if (spilloverEnabled) {
-                    enqueueSpillover(retry);
-                } else {
-                    eventsFailed.incrementAndGet();
+        QueuedEvent retry = new QueuedEvent(queued.event, queued.attempts + 1, queued.firstAttempt);
+        pendingRetryEvents.add(retry);
+
+        try {
+            retryExecutor.schedule(() -> {
+                if (pendingRetryEvents.remove(retry)) {
+                    if (!queue.offer(retry)) {
+                        if (spilloverEnabled) {
+                            enqueueSpillover(retry);
+                        } else {
+                            eventsFailed.incrementAndGet();
+                        }
+                    }
                 }
+            }, delay, TimeUnit.MILLISECONDS);
+        } catch (RejectedExecutionException e) {
+            pendingRetryEvents.remove(retry);
+            if (spilloverEnabled) {
+                enqueueSpillover(retry);
+            } else {
+                eventsFailed.incrementAndGet();
             }
-        }, delay, TimeUnit.MILLISECONDS);
-        
+        }
+
         log.debug("Scheduled retry in {}ms for correlationId={}", delay, queued.event.getCorrelationId());
     }
 
@@ -510,10 +526,10 @@ public class AsyncEventLogger implements AutoCloseable {
 
         log.info("AsyncEventLogger shutting down - {} events in queue", queue.size());
 
-        // Stop retry executor from accepting new tasks
-        retryExecutor.shutdown();
+        // Cancel pending retries immediately — don't rely on them firing
+        retryExecutor.shutdownNow();
 
-        // Wait for senderLoop to drain the queue
+        // Wait for sender to drain current queue
         try {
             boolean flushed = shutdownLatch.await(10, TimeUnit.SECONDS);
             if (!flushed) {
@@ -523,14 +539,18 @@ public class AsyncEventLogger implements AutoCloseable {
             Thread.currentThread().interrupt();
         }
 
-        // Let pending retries fire so their events land in the queue
-        try {
-            retryExecutor.awaitTermination(2, TimeUnit.SECONDS);
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
+        // Claim any events still in pending retries (cancelled tasks)
+        for (QueuedEvent pending : pendingRetryEvents) {
+            if (pendingRetryEvents.remove(pending)) {
+                if (spilloverEnabled) {
+                    enqueueSpillover(pending);
+                } else {
+                    eventsFailed.incrementAndGet();
+                }
+            }
         }
 
-        // Drain any remaining events to disk (catches stragglers from retry race)
+        // Drain any remaining events from the main queue
         if (spilloverEnabled && !queue.isEmpty()) {
             QueuedEvent event;
             while ((event = queue.poll()) != null) {
@@ -540,7 +560,6 @@ public class AsyncEventLogger implements AutoCloseable {
 
         // Shutdown executors
         senderExecutor.shutdownNow();
-        retryExecutor.shutdownNow(); // Force stop if graceful didn't finish
         if (spilloverExecutor != null) {
             spilloverExecutor.shutdown();
             try {

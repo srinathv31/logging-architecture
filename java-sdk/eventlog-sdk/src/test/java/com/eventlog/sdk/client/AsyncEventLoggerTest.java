@@ -258,26 +258,21 @@ class AsyncEventLoggerTest {
         AsyncEventLogger logger = AsyncEventLogger.builder()
                 .client(client)
                 .maxRetries(1)
-                .baseRetryDelayMs(500) // long enough to be pending during shutdown
+                .baseRetryDelayMs(60_000) // won't fire before shutdown — guaranteed pending
                 .spilloverPath(tempDir)
                 .registerShutdownHook(false)
                 .senderExecutor(Executors.newSingleThreadExecutor())
                 .retryExecutor(Executors.newSingleThreadScheduledExecutor())
                 .build();
 
-        // Log event — it will fail and be scheduled for retry
         logger.log(minimalEvent());
         assertTrue(failLatch.await(2, TimeUnit.SECONDS), "Event should have been attempted");
 
-        // Small delay so the retry gets scheduled but hasn't fired yet (500ms delay)
-        Thread.sleep(100);
-
-        // Shutdown while retry is still pending
+        // Shutdown immediately — no Thread.sleep needed.
+        // The retry is pending (60s delay), and the production fix
+        // ensures shutdownNow() cancels it and spills via pendingRetryEvents.
         logger.shutdown();
 
-        // The pending retry was either cancelled by retryExecutor.shutdown() or
-        // if it snuck into the queue, the final drain should have spilled it to disk.
-        // Either way, the event is not stranded.
         java.io.File[] files = tempDir.toFile().listFiles();
         assertNotNull(files);
         assertTrue(files.length > 0, "Events should be spilled to disk during shutdown");
