@@ -278,6 +278,148 @@ class AsyncEventLoggerTest {
         assertTrue(files.length > 0, "Events should be spilled to disk during shutdown");
     }
 
+    @Test
+    void logDropsEventWhenQueueFullWithoutSpillover() throws Exception {
+        CountDownLatch senderStarted = new CountDownLatch(1);
+        CountDownLatch unblockSender = new CountDownLatch(1);
+        EventLogClient client = clientWithTransport(request -> {
+            senderStarted.countDown();
+            try { unblockSender.await(2, TimeUnit.SECONDS); } catch (InterruptedException e) { Thread.currentThread().interrupt(); }
+            return new EventLogResponse(200, SUCCESS_BODY);
+        });
+
+        AsyncEventLogger logger = AsyncEventLogger.builder()
+                .client(client)
+                .queueCapacity(1)
+                .maxRetries(0)
+                .registerShutdownHook(false)
+                .senderExecutor(Executors.newSingleThreadExecutor())
+                .retryExecutor(Executors.newSingleThreadScheduledExecutor())
+                .build();
+
+        // First event: queued, sender picks it up and blocks
+        assertTrue(logger.log(minimalEvent()));
+        assertTrue(senderStarted.await(1, TimeUnit.SECONDS));
+
+        // Second event: fills queue (capacity 1)
+        assertTrue(logger.log(minimalEvent()));
+
+        // Third event: queue full, no spillover → dropped
+        assertFalse(logger.log(minimalEvent()));
+        assertTrue(logger.getMetrics().eventsFailed >= 1);
+
+        unblockSender.countDown();
+        logger.shutdown();
+    }
+
+    @Test
+    void retryReQueuesAndSendsSuccessfully() throws Exception {
+        AtomicInteger callCount = new AtomicInteger(0);
+        EventLogClient client = clientWithTransport(request -> {
+            if (callCount.incrementAndGet() == 1) {
+                return new EventLogResponse(500, ERROR_BODY);
+            }
+            return new EventLogResponse(200, SUCCESS_BODY);
+        });
+
+        AsyncEventLogger logger = AsyncEventLogger.builder()
+                .client(client)
+                .maxRetries(1)
+                .baseRetryDelayMs(50)
+                .circuitBreakerThreshold(100)
+                .registerShutdownHook(false)
+                .senderExecutor(Executors.newSingleThreadExecutor())
+                .retryExecutor(Executors.newSingleThreadScheduledExecutor())
+                .build();
+
+        logger.log(minimalEvent());
+
+        boolean sent = waitUntil(() -> logger.getMetrics().eventsSent == 1, Duration.ofSeconds(2));
+        assertTrue(sent, "Event should be retried and sent successfully");
+        assertEquals(1, logger.getMetrics().eventsSent);
+
+        logger.shutdown();
+    }
+
+    @Test
+    void exhaustedRetriesSpillWithSpilloverEnabled(@TempDir Path tempDir) throws Exception {
+        EventLogClient client = clientWithTransport(
+                request -> new EventLogResponse(500, ERROR_BODY));
+
+        AsyncEventLogger logger = AsyncEventLogger.builder()
+                .client(client)
+                .maxRetries(1)
+                .baseRetryDelayMs(50)
+                .circuitBreakerThreshold(100)
+                .spilloverPath(tempDir)
+                .registerShutdownHook(false)
+                .senderExecutor(Executors.newSingleThreadExecutor())
+                .retryExecutor(Executors.newSingleThreadScheduledExecutor())
+                .build();
+
+        logger.log(minimalEvent());
+
+        boolean spilled = waitUntil(() -> hasSpillFiles(tempDir), Duration.ofSeconds(2));
+        assertTrue(spilled, "Event should be spilled after retries exhausted");
+
+        logger.shutdown();
+    }
+
+    @Test
+    void scheduleRetryHandlesRejectedExecution() throws Exception {
+        ScheduledExecutorService deadRetryExecutor = Executors.newSingleThreadScheduledExecutor();
+        deadRetryExecutor.shutdownNow();
+
+        EventLogClient client = clientWithTransport(
+                request -> new EventLogResponse(500, ERROR_BODY));
+
+        AsyncEventLogger logger = AsyncEventLogger.builder()
+                .client(client)
+                .maxRetries(1)
+                .circuitBreakerThreshold(100)
+                .registerShutdownHook(false)
+                .senderExecutor(Executors.newSingleThreadExecutor())
+                .retryExecutor(deadRetryExecutor)
+                .build();
+
+        logger.log(minimalEvent());
+
+        boolean failed = waitUntil(() -> logger.getMetrics().eventsFailed >= 1, Duration.ofSeconds(2));
+        assertTrue(failed, "Event should be counted as failed when retry executor rejects");
+
+        logger.shutdown();
+    }
+
+    @Test
+    void shutdownCountsFailedForPendingRetriesWithoutSpillover() throws Exception {
+        CountDownLatch failLatch = new CountDownLatch(1);
+        EventLogClient client = clientWithTransport(request -> {
+            failLatch.countDown();
+            return new EventLogResponse(500, ERROR_BODY);
+        });
+
+        AsyncEventLogger logger = AsyncEventLogger.builder()
+                .client(client)
+                .maxRetries(1)
+                .baseRetryDelayMs(60_000)
+                .circuitBreakerThreshold(100)
+                .registerShutdownHook(false)
+                .senderExecutor(Executors.newSingleThreadExecutor())
+                .retryExecutor(Executors.newSingleThreadScheduledExecutor())
+                .build();
+
+        logger.log(minimalEvent());
+        assertTrue(failLatch.await(2, TimeUnit.SECONDS), "Event should have been attempted");
+
+        // Allow time for scheduleRetry to add to pendingRetryEvents
+        Thread.sleep(100);
+
+        logger.shutdown();
+
+        assertTrue(logger.getMetrics().eventsFailed >= 1,
+                "Pending retry should be counted as failed during shutdown");
+    }
+
     private EventLogClient clientWithTransport(Function<EventLogRequest, EventLogResponse> handler) {
         EventLogTransport transport = new EventLogTransport() {
             @Override

@@ -207,17 +207,17 @@ public class AsyncEventLogger implements AutoCloseable {
         if (queue.offer(queued)) {
             eventsQueued.incrementAndGet();
             return true;
-        } else {
-            // Queue full - try spillover or drop
-            if (spilloverEnabled) {
-                return enqueueSpillover(queued);
-            } else {
-                log.warn("Event queue full, dropping event: correlationId={}, processName={}", 
-                        event.getCorrelationId(), event.getProcessName());
-                eventsFailed.incrementAndGet();
-                return false;
-            }
         }
+
+        // Queue full - try spillover or drop
+        if (spilloverEnabled) {
+            return enqueueSpillover(queued);
+        }
+
+        log.warn("Event queue full, dropping event: correlationId={}, processName={}",
+                event.getCorrelationId(), event.getProcessName());
+        eventsFailed.incrementAndGet();
+        return false;
     }
 
     /**
@@ -367,15 +367,16 @@ public class AsyncEventLogger implements AutoCloseable {
         // Retry or give up
         if (queued.attempts < maxRetries) {
             scheduleRetry(queued);
+            return;
+        }
+
+        log.error("Event permanently failed after {} attempts: correlationId={}",
+                maxRetries, queued.event.getCorrelationId());
+
+        if (spilloverEnabled) {
+            enqueueSpillover(queued);
         } else {
-            log.error("Event permanently failed after {} attempts: correlationId={}", 
-                    maxRetries, queued.event.getCorrelationId());
-            
-            if (spilloverEnabled) {
-                enqueueSpillover(queued);
-            } else {
-                eventsFailed.incrementAndGet();
-            }
+            eventsFailed.incrementAndGet();
         }
     }
 
@@ -386,14 +387,13 @@ public class AsyncEventLogger implements AutoCloseable {
 
         try {
             retryExecutor.schedule(() -> {
-                if (pendingRetryEvents.remove(retry)) {
-                    if (!queue.offer(retry)) {
-                        if (spilloverEnabled) {
-                            enqueueSpillover(retry);
-                        } else {
-                            eventsFailed.incrementAndGet();
-                        }
-                    }
+                if (!pendingRetryEvents.remove(retry)) return;
+                if (queue.offer(retry)) return;
+
+                if (spilloverEnabled) {
+                    enqueueSpillover(retry);
+                } else {
+                    eventsFailed.incrementAndGet();
                 }
             }, delay, TimeUnit.MILLISECONDS);
         } catch (RejectedExecutionException e) {
@@ -541,12 +541,12 @@ public class AsyncEventLogger implements AutoCloseable {
 
         // Claim any events still in pending retries (cancelled tasks)
         for (QueuedEvent pending : pendingRetryEvents) {
-            if (pendingRetryEvents.remove(pending)) {
-                if (spilloverEnabled) {
-                    enqueueSpillover(pending);
-                } else {
-                    eventsFailed.incrementAndGet();
-                }
+            if (!pendingRetryEvents.remove(pending)) continue;
+
+            if (spilloverEnabled) {
+                enqueueSpillover(pending);
+            } else {
+                eventsFailed.incrementAndGet();
             }
         }
 
