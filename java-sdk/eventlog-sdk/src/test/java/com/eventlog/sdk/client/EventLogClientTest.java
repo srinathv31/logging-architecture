@@ -4,7 +4,10 @@ import com.eventlog.sdk.client.transport.EventLogRequest;
 import com.eventlog.sdk.client.transport.EventLogResponse;
 import com.eventlog.sdk.client.transport.EventLogTransport;
 import com.eventlog.sdk.exception.EventLogException;
-import com.eventlog.sdk.model.ApiResponses.GetEventsByAccountResponse;
+import com.eventlog.sdk.model.ApiResponses.*;
+import com.eventlog.sdk.model.EventLogEntry;
+import com.eventlog.sdk.model.EventStatus;
+import com.eventlog.sdk.model.EventType;
 import org.junit.jupiter.api.Test;
 
 import java.time.Duration;
@@ -15,6 +18,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ExecutionException;
 
 import static org.junit.jupiter.api.Assertions.*;
 
@@ -82,6 +86,433 @@ class EventLogClientTest {
         assertTrue(uri.contains("/v1/events/account/acct+1"));
         assertTrue(uri.contains("processName=My+Process"));
         assertTrue(uri.contains("page=2"));
+    }
+
+    // ========================================================================
+    // New tests for coverage
+    // ========================================================================
+
+    @Test
+    void createEventPostsAndParsesResponse() {
+        String responseBody = "{\"success\":true,\"execution_ids\":[\"exec-1\"],\"correlation_id\":\"corr-1\"}";
+        SequencedTransport transport = new SequencedTransport(
+                new EventLogResponse(200, responseBody)
+        );
+
+        EventLogClient client = EventLogClient.builder()
+                .baseUrl("https://eventlog-api.test")
+                .transport(transport)
+                .maxRetries(0)
+                .build();
+
+        CreateEventResponse response = client.createEvent(minimalEvent());
+        assertTrue(response.isSuccess());
+        assertEquals(List.of("exec-1"), response.getExecutionIds());
+        assertEquals("corr-1", response.getCorrelationId());
+
+        EventLogRequest request = transport.getRequests().get(0);
+        assertEquals("POST", request.getMethod());
+        assertTrue(request.getUri().toString().endsWith("/v1/events"));
+        assertNotNull(request.getBody());
+    }
+
+    @Test
+    void createEventsPostsBatchResponse() {
+        String responseBody = "{\"success\":true,\"total_received\":2,\"total_inserted\":2,\"execution_ids\":[\"e1\",\"e2\"],\"errors\":[]}";
+        SequencedTransport transport = new SequencedTransport(
+                new EventLogResponse(200, responseBody)
+        );
+
+        EventLogClient client = EventLogClient.builder()
+                .baseUrl("https://eventlog-api.test")
+                .transport(transport)
+                .maxRetries(0)
+                .build();
+
+        BatchCreateEventResponse response = client.createEvents(List.of(minimalEvent(), minimalEvent()));
+        assertTrue(response.isSuccess());
+        assertEquals(2, response.getTotalReceived());
+        assertEquals(2, response.getTotalInserted());
+        assertEquals(2, response.getExecutionIds().size());
+
+        EventLogRequest request = transport.getRequests().get(0);
+        assertTrue(request.getUri().toString().endsWith("/v1/events/batch"));
+    }
+
+    @Test
+    void createEventAsyncReturnsCompletableFuture() throws Exception {
+        String responseBody = "{\"success\":true,\"execution_ids\":[\"exec-async\"],\"correlation_id\":\"corr-async\"}";
+        SequencedTransport transport = new SequencedTransport(
+                new EventLogResponse(200, responseBody)
+        );
+
+        EventLogClient client = EventLogClient.builder()
+                .baseUrl("https://eventlog-api.test")
+                .transport(transport)
+                .maxRetries(0)
+                .build();
+
+        CompletableFuture<CreateEventResponse> future = client.createEventAsync(minimalEvent());
+        CreateEventResponse response = future.get();
+        assertTrue(response.isSuccess());
+        assertEquals("corr-async", response.getCorrelationId());
+    }
+
+    @Test
+    void getEventsByCorrelationParsesResponse() {
+        String responseBody = "{\"correlation_id\":\"corr-1\",\"account_id\":\"acct-1\",\"events\":[],\"is_linked\":true}";
+        SequencedTransport transport = new SequencedTransport(
+                new EventLogResponse(200, responseBody)
+        );
+
+        EventLogClient client = EventLogClient.builder()
+                .baseUrl("https://eventlog-api.test")
+                .transport(transport)
+                .maxRetries(0)
+                .build();
+
+        GetEventsByCorrelationResponse response = client.getEventsByCorrelation("corr-1");
+        assertEquals("corr-1", response.getCorrelationId());
+        assertEquals("acct-1", response.getAccountId());
+        assertTrue(response.isLinked());
+        assertNotNull(response.getEvents());
+
+        EventLogRequest request = transport.getRequests().get(0);
+        assertTrue(request.getUri().toString().contains("/v1/events/correlation/corr-1"));
+        assertEquals("GET", request.getMethod());
+    }
+
+    @Test
+    void getEventsByTraceParsesResponse() {
+        String responseBody = "{\"trace_id\":\"trace-1\",\"events\":[],\"systems_involved\":[\"sysA\",\"sysB\"],\"total_duration_ms\":1500}";
+        SequencedTransport transport = new SequencedTransport(
+                new EventLogResponse(200, responseBody)
+        );
+
+        EventLogClient client = EventLogClient.builder()
+                .baseUrl("https://eventlog-api.test")
+                .transport(transport)
+                .maxRetries(0)
+                .build();
+
+        GetEventsByTraceResponse response = client.getEventsByTrace("trace-1");
+        assertEquals("trace-1", response.getTraceId());
+        assertEquals(List.of("sysA", "sysB"), response.getSystemsInvolved());
+        assertEquals(1500, response.getTotalDurationMs());
+    }
+
+    @Test
+    void getBatchSummaryParsesResponse() {
+        String responseBody = "{\"batch_id\":\"batch-1\",\"total_processes\":10,\"completed\":8,\"in_progress\":1,\"failed\":1,\"correlation_ids\":[\"c1\"],\"started_at\":\"2024-01-01\",\"last_event_at\":\"2024-01-02\"}";
+        SequencedTransport transport = new SequencedTransport(
+                new EventLogResponse(200, responseBody)
+        );
+
+        EventLogClient client = EventLogClient.builder()
+                .baseUrl("https://eventlog-api.test")
+                .transport(transport)
+                .maxRetries(0)
+                .build();
+
+        BatchSummaryResponse response = client.getBatchSummary("batch-1");
+        assertEquals("batch-1", response.getBatchId());
+        assertEquals(10, response.getTotalProcesses());
+        assertEquals(8, response.getCompleted());
+        assertEquals(1, response.getInProgress());
+        assertEquals(1, response.getFailed());
+
+        EventLogRequest request = transport.getRequests().get(0);
+        assertTrue(request.getUri().toString().contains("/v1/events/batch/batch-1/summary"));
+    }
+
+    @Test
+    void createCorrelationLinkPostsCorrectBody() {
+        String responseBody = "{\"success\":true,\"correlation_id\":\"corr-1\",\"account_id\":\"acct-1\",\"linked_at\":\"2024-01-01T00:00:00Z\"}";
+        SequencedTransport transport = new SequencedTransport(
+                new EventLogResponse(200, responseBody)
+        );
+
+        EventLogClient client = EventLogClient.builder()
+                .baseUrl("https://eventlog-api.test")
+                .transport(transport)
+                .maxRetries(0)
+                .build();
+
+        // Test simple 2-arg overload
+        CreateCorrelationLinkResponse response = client.createCorrelationLink("corr-1", "acct-1");
+        assertTrue(response.isSuccess());
+        assertEquals("corr-1", response.getCorrelationId());
+        assertEquals("acct-1", response.getAccountId());
+
+        EventLogRequest request = transport.getRequests().get(0);
+        assertEquals("POST", request.getMethod());
+        assertTrue(request.getUri().toString().contains("/v1/correlation-links"));
+        assertTrue(request.getBody().contains("corr-1"));
+        assertTrue(request.getBody().contains("acct-1"));
+    }
+
+    @Test
+    void createCorrelationLinkFullOverloadIncludesAllFields() {
+        String responseBody = "{\"success\":true,\"correlation_id\":\"corr-2\",\"account_id\":\"acct-2\",\"linked_at\":\"2024-01-01T00:00:00Z\"}";
+        SequencedTransport transport = new SequencedTransport(
+                new EventLogResponse(200, responseBody)
+        );
+
+        EventLogClient client = EventLogClient.builder()
+                .baseUrl("https://eventlog-api.test")
+                .transport(transport)
+                .maxRetries(0)
+                .build();
+
+        CreateCorrelationLinkResponse response = client.createCorrelationLink(
+                "corr-2", "acct-2", "app-1", "cust-1", "5678");
+        assertTrue(response.isSuccess());
+
+        EventLogRequest request = transport.getRequests().get(0);
+        String body = request.getBody();
+        assertTrue(body.contains("corr-2"));
+        assertTrue(body.contains("acct-2"));
+        assertTrue(body.contains("app-1"));
+        assertTrue(body.contains("cust-1"));
+        assertTrue(body.contains("5678"));
+    }
+
+    @Test
+    void tokenProviderAddsAuthorizationHeader() {
+        SequencedTransport transport = new SequencedTransport(
+                new EventLogResponse(200, successAccountResponse("acct"))
+        );
+
+        EventLogClient client = EventLogClient.builder()
+                .baseUrl("https://eventlog-api.test")
+                .transport(transport)
+                .tokenProvider(() -> "my-secret-token")
+                .maxRetries(0)
+                .build();
+
+        client.getEventsByAccount("acct");
+
+        EventLogRequest request = transport.getRequests().get(0);
+        assertEquals("Bearer my-secret-token", request.getHeaders().get("Authorization"));
+    }
+
+    @Test
+    void baseUrlTrailingSlashIsStripped() {
+        SequencedTransport transport = new SequencedTransport(
+                new EventLogResponse(200, successAccountResponse("acct"))
+        );
+
+        EventLogClient client = EventLogClient.builder()
+                .baseUrl("https://eventlog-api.test/")
+                .transport(transport)
+                .maxRetries(0)
+                .build();
+
+        client.getEventsByAccount("acct");
+
+        EventLogRequest request = transport.getRequests().get(0);
+        String uri = request.getUri().toString();
+        assertFalse(uri.contains("//v1"), "Double slash should not appear; trailing slash should be stripped");
+        assertTrue(uri.startsWith("https://eventlog-api.test/v1"));
+    }
+
+    @Test
+    void retriesOnRateLimitThenSucceeds() {
+        SequencedTransport transport = new SequencedTransport(
+                new EventLogResponse(429, "{\"error_code\":\"RATE_LIMITED\"}"),
+                new EventLogResponse(200, successAccountResponse("acct"))
+        );
+
+        EventLogClient client = EventLogClient.builder()
+                .baseUrl("https://eventlog-api.test")
+                .transport(transport)
+                .maxRetries(1)
+                .retryDelay(Duration.ZERO)
+                .build();
+
+        GetEventsByAccountResponse response = client.getEventsByAccount("acct");
+        assertEquals("acct", response.getAccountId());
+        assertEquals(2, transport.getRequestCount(), "Should retry after 429");
+    }
+
+    @Test
+    void builderThrowsWhenBaseUrlIsNull() {
+        assertThrows(IllegalStateException.class,
+                () -> EventLogClient.builder().build());
+    }
+
+    @Test
+    void builderThrowsWhenBaseUrlIsBlank() {
+        assertThrows(IllegalStateException.class,
+                () -> EventLogClient.builder().baseUrl("  ").build());
+    }
+
+    @Test
+    void closeDoesNotThrow() {
+        EventLogClient client = EventLogClient.builder()
+                .baseUrl("https://eventlog-api.test")
+                .transport(new SequencedTransport())
+                .build();
+
+        assertDoesNotThrow(client::close);
+    }
+
+    @Test
+    void builderApiKeyCreatesStaticTokenProvider() {
+        SequencedTransport transport = new SequencedTransport(
+                new EventLogResponse(200, successAccountResponse("acct"))
+        );
+
+        @SuppressWarnings("deprecation")
+        EventLogClient client = EventLogClient.builder()
+                .baseUrl("https://eventlog-api.test")
+                .transport(transport)
+                .apiKey("test-api-key")
+                .maxRetries(0)
+                .build();
+
+        client.getEventsByAccount("acct");
+
+        EventLogRequest request = transport.getRequests().get(0);
+        assertEquals("Bearer test-api-key", request.getHeaders().get("Authorization"));
+    }
+
+    @Test
+    void builderApplicationIdAddsHeader() {
+        SequencedTransport transport = new SequencedTransport(
+                new EventLogResponse(200, successAccountResponse("acct"))
+        );
+
+        EventLogClient client = EventLogClient.builder()
+                .baseUrl("https://eventlog-api.test")
+                .transport(transport)
+                .applicationId("my-app")
+                .maxRetries(0)
+                .build();
+
+        client.getEventsByAccount("acct");
+
+        EventLogRequest request = transport.getRequests().get(0);
+        assertEquals("my-app", request.getHeaders().get("X-Application-Id"));
+    }
+
+    @Test
+    void createEventsAsyncReturnsCompletableFuture() throws Exception {
+        String responseBody = "{\"success\":true,\"total_received\":1,\"total_inserted\":1,\"execution_ids\":[\"e1\"],\"errors\":[]}";
+        SequencedTransport transport = new SequencedTransport(
+                new EventLogResponse(200, responseBody)
+        );
+
+        EventLogClient client = EventLogClient.builder()
+                .baseUrl("https://eventlog-api.test")
+                .transport(transport)
+                .maxRetries(0)
+                .build();
+
+        var future = client.createEventsAsync(List.of(minimalEvent()));
+        var response = future.get();
+        assertTrue(response.isSuccess());
+    }
+
+    @Test
+    void getEventsByAccountWithNoParamsWorks() {
+        SequencedTransport transport = new SequencedTransport(
+                new EventLogResponse(200, successAccountResponse("acct"))
+        );
+
+        EventLogClient client = EventLogClient.builder()
+                .baseUrl("https://eventlog-api.test")
+                .transport(transport)
+                .maxRetries(0)
+                .build();
+
+        GetEventsByAccountResponse response = client.getEventsByAccount("acct");
+        assertEquals("acct", response.getAccountId());
+        assertFalse(transport.getRequests().get(0).getUri().toString().contains("?"));
+    }
+
+    @Test
+    void exhaustedRetriesThrowsException() {
+        SequencedTransport transport = new SequencedTransport(
+                new EventLogResponse(500, "{}"),
+                new EventLogResponse(500, "{}"),
+                new EventLogResponse(500, "{}")
+        );
+
+        EventLogClient client = EventLogClient.builder()
+                .baseUrl("https://eventlog-api.test")
+                .transport(transport)
+                .maxRetries(2)
+                .retryDelay(Duration.ZERO)
+                .build();
+
+        assertThrows(EventLogException.class, () -> client.getEventsByAccount("acct"));
+        assertEquals(3, transport.getRequestCount());
+    }
+
+    @Test
+    void getEventsByAccountParsesAllFields() {
+        String responseBody = "{\"account_id\":\"acct\",\"events\":[],\"total_count\":42,\"page\":2,\"page_size\":25,\"has_more\":true}";
+        SequencedTransport transport = new SequencedTransport(
+                new EventLogResponse(200, responseBody)
+        );
+
+        EventLogClient client = EventLogClient.builder()
+                .baseUrl("https://eventlog-api.test")
+                .transport(transport)
+                .maxRetries(0)
+                .build();
+
+        GetEventsByAccountResponse response = client.getEventsByAccount("acct");
+        assertEquals("acct", response.getAccountId());
+        assertEquals(42, response.getTotalCount());
+        assertEquals(2, response.getPage());
+        assertEquals(25, response.getPageSize());
+        assertTrue(response.isHasMore());
+        assertNotNull(response.getEvents());
+    }
+
+    @Test
+    void getBatchSummaryParsesAllFields() {
+        String responseBody = "{\"batch_id\":\"b1\",\"total_processes\":10,\"completed\":7,\"in_progress\":2,\"failed\":1,\"correlation_ids\":[\"c1\",\"c2\"],\"started_at\":\"2024-01-01\",\"last_event_at\":\"2024-01-02\"}";
+        SequencedTransport transport = new SequencedTransport(
+                new EventLogResponse(200, responseBody)
+        );
+
+        EventLogClient client = EventLogClient.builder()
+                .baseUrl("https://eventlog-api.test")
+                .transport(transport)
+                .maxRetries(0)
+                .build();
+
+        BatchSummaryResponse response = client.getBatchSummary("b1");
+        assertEquals("b1", response.getBatchId());
+        assertEquals(10, response.getTotalProcesses());
+        assertEquals(7, response.getCompleted());
+        assertEquals(2, response.getInProgress());
+        assertEquals(1, response.getFailed());
+        assertEquals(List.of("c1", "c2"), response.getCorrelationIds());
+        assertEquals("2024-01-01", response.getStartedAt());
+        assertEquals("2024-01-02", response.getLastEventAt());
+    }
+
+    // ========================================================================
+    // Helpers
+    // ========================================================================
+
+    private static EventLogEntry minimalEvent() {
+        return EventLogEntry.builder()
+                .correlationId("corr")
+                .traceId("trace")
+                .applicationId("app")
+                .targetSystem("system")
+                .originatingSystem("system")
+                .processName("PROC")
+                .eventType(EventType.STEP)
+                .eventStatus(EventStatus.SUCCESS)
+                .summary("ok")
+                .result("OK")
+                .build();
     }
 
     private static String successAccountResponse(String accountId) {

@@ -420,6 +420,211 @@ class AsyncEventLoggerTest {
                 "Pending retry should be counted as failed during shutdown");
     }
 
+    // ========================================================================
+    // New tests for coverage
+    // ========================================================================
+
+    @Test
+    void logBatchQueuesAllEvents() throws Exception {
+        AtomicInteger sendCount = new AtomicInteger(0);
+        EventLogClient client = clientWithTransport(request -> {
+            sendCount.incrementAndGet();
+            return new EventLogResponse(200, SUCCESS_BODY);
+        });
+
+        AsyncEventLogger logger = AsyncEventLogger.builder()
+                .client(client)
+                .maxRetries(0)
+                .registerShutdownHook(false)
+                .senderExecutor(Executors.newSingleThreadExecutor())
+                .retryExecutor(Executors.newSingleThreadScheduledExecutor())
+                .build();
+
+        List<EventLogEntry> batch = List.of(minimalEvent(), minimalEvent(), minimalEvent());
+        int queued = logger.log(batch);
+
+        assertEquals(3, queued, "All 3 events should be queued");
+
+        boolean allSent = waitUntil(() -> logger.getMetrics().eventsSent == 3, Duration.ofSeconds(2));
+        assertTrue(allSent, "All batch events should be sent");
+
+        logger.shutdown();
+    }
+
+    @Test
+    void logReturnsFalseAfterShutdown() throws Exception {
+        EventLogClient client = clientWithTransport(
+                request -> new EventLogResponse(200, SUCCESS_BODY));
+
+        AsyncEventLogger logger = AsyncEventLogger.builder()
+                .client(client)
+                .maxRetries(0)
+                .registerShutdownHook(false)
+                .senderExecutor(Executors.newSingleThreadExecutor())
+                .retryExecutor(Executors.newSingleThreadScheduledExecutor())
+                .build();
+
+        logger.shutdown();
+        assertFalse(logger.log(minimalEvent()), "log() should return false after shutdown");
+    }
+
+    @Test
+    void flushReturnsTrueWhenQueueDrains() throws Exception {
+        EventLogClient client = clientWithTransport(
+                request -> new EventLogResponse(200, SUCCESS_BODY));
+
+        AsyncEventLogger logger = AsyncEventLogger.builder()
+                .client(client)
+                .maxRetries(0)
+                .registerShutdownHook(false)
+                .senderExecutor(Executors.newSingleThreadExecutor())
+                .retryExecutor(Executors.newSingleThreadScheduledExecutor())
+                .build();
+
+        logger.log(minimalEvent());
+        boolean flushed = logger.flush(2000);
+        assertTrue(flushed, "flush() should return true when queue is drained");
+
+        logger.shutdown();
+    }
+
+    @Test
+    void flushReturnsFalseOnTimeout() throws Exception {
+        CountDownLatch senderStarted = new CountDownLatch(1);
+        CountDownLatch unblockSender = new CountDownLatch(1);
+        EventLogClient client = clientWithTransport(request -> {
+            senderStarted.countDown();
+            try { unblockSender.await(5, TimeUnit.SECONDS); } catch (InterruptedException e) { Thread.currentThread().interrupt(); }
+            return new EventLogResponse(200, SUCCESS_BODY);
+        });
+
+        AsyncEventLogger logger = AsyncEventLogger.builder()
+                .client(client)
+                .maxRetries(0)
+                .registerShutdownHook(false)
+                .senderExecutor(Executors.newSingleThreadExecutor())
+                .retryExecutor(Executors.newSingleThreadScheduledExecutor())
+                .build();
+
+        // First event blocks the sender
+        logger.log(minimalEvent());
+        assertTrue(senderStarted.await(1, TimeUnit.SECONDS));
+
+        // Second event stays in queue since sender is blocked
+        logger.log(minimalEvent());
+
+        boolean flushed = logger.flush(100);
+        assertFalse(flushed, "flush() should return false when timeout expires before queue drains");
+
+        unblockSender.countDown();
+        logger.shutdown();
+    }
+
+    @Test
+    void flushReturnsFalseOnInterrupt() throws Exception {
+        CountDownLatch senderStarted = new CountDownLatch(1);
+        CountDownLatch unblockSender = new CountDownLatch(1);
+        EventLogClient client = clientWithTransport(request -> {
+            senderStarted.countDown();
+            try { unblockSender.await(5, TimeUnit.SECONDS); } catch (InterruptedException e) { Thread.currentThread().interrupt(); }
+            return new EventLogResponse(200, SUCCESS_BODY);
+        });
+
+        AsyncEventLogger logger = AsyncEventLogger.builder()
+                .client(client)
+                .maxRetries(0)
+                .registerShutdownHook(false)
+                .senderExecutor(Executors.newSingleThreadExecutor())
+                .retryExecutor(Executors.newSingleThreadScheduledExecutor())
+                .build();
+
+        logger.log(minimalEvent());
+        assertTrue(senderStarted.await(1, TimeUnit.SECONDS));
+        logger.log(minimalEvent());
+
+        Thread callingThread = Thread.currentThread();
+        // Schedule interrupt while flush is sleeping
+        Executors.newSingleThreadScheduledExecutor().schedule(
+                callingThread::interrupt, 50, TimeUnit.MILLISECONDS);
+
+        boolean flushed = logger.flush(5000);
+        assertFalse(flushed, "flush() should return false when interrupted");
+        // Clear the interrupt flag
+        assertTrue(Thread.interrupted());
+
+        unblockSender.countDown();
+        logger.shutdown();
+    }
+
+    @Test
+    void getQueueDepthReflectsQueueSize() throws Exception {
+        CountDownLatch senderStarted = new CountDownLatch(1);
+        CountDownLatch unblockSender = new CountDownLatch(1);
+        EventLogClient client = clientWithTransport(request -> {
+            senderStarted.countDown();
+            try { unblockSender.await(5, TimeUnit.SECONDS); } catch (InterruptedException e) { Thread.currentThread().interrupt(); }
+            return new EventLogResponse(200, SUCCESS_BODY);
+        });
+
+        AsyncEventLogger logger = AsyncEventLogger.builder()
+                .client(client)
+                .maxRetries(0)
+                .registerShutdownHook(false)
+                .senderExecutor(Executors.newSingleThreadExecutor())
+                .retryExecutor(Executors.newSingleThreadScheduledExecutor())
+                .build();
+
+        // First event picked up by sender
+        logger.log(minimalEvent());
+        assertTrue(senderStarted.await(1, TimeUnit.SECONDS));
+
+        // Second event stays in queue
+        logger.log(minimalEvent());
+        assertEquals(1, logger.getQueueDepth(), "Queue should have 1 pending event");
+
+        unblockSender.countDown();
+        logger.shutdown();
+    }
+
+    @Test
+    void metricsToStringIncludesAllFields() throws Exception {
+        EventLogClient client = clientWithTransport(
+                request -> new EventLogResponse(200, SUCCESS_BODY));
+
+        AsyncEventLogger logger = AsyncEventLogger.builder()
+                .client(client)
+                .maxRetries(0)
+                .registerShutdownHook(false)
+                .senderExecutor(Executors.newSingleThreadExecutor())
+                .retryExecutor(Executors.newSingleThreadScheduledExecutor())
+                .build();
+
+        logger.log(minimalEvent());
+        waitUntil(() -> logger.getMetrics().eventsSent == 1, Duration.ofSeconds(2));
+
+        AsyncEventLogger.Metrics metrics = logger.getMetrics();
+        String str = metrics.toString();
+        assertTrue(str.contains("queued="), "toString should include queued");
+        assertTrue(str.contains("sent="), "toString should include sent");
+        assertTrue(str.contains("failed="), "toString should include failed");
+        assertTrue(str.contains("spilled="), "toString should include spilled");
+        assertTrue(str.contains("depth="), "toString should include depth");
+        assertTrue(str.contains("circuitOpen="), "toString should include circuitOpen");
+
+        logger.shutdown();
+    }
+
+    @Test
+    void builderThrowsWhenClientIsNull() {
+        IllegalStateException ex = assertThrows(IllegalStateException.class,
+                () -> AsyncEventLogger.builder().build());
+        assertTrue(ex.getMessage().contains("client"), "Should mention 'client' in error message");
+    }
+
+    // ========================================================================
+    // Helpers
+    // ========================================================================
+
     private EventLogClient clientWithTransport(Function<EventLogRequest, EventLogResponse> handler) {
         EventLogTransport transport = new EventLogTransport() {
             @Override
