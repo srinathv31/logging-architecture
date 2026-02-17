@@ -19,6 +19,12 @@
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
         <jackson.version>2.16.1</jackson.version>
         <slf4j.version>2.0.11</slf4j.version>
+
+        <!-- SonarQube - exclude non-testable code from coverage calculation -->
+        <sonar.coverage.exclusions>
+            src/main/java/com/eventlog/sdk/examples/**,
+            src/main/java/com/eventlog/sdk/client/transport/JdkHttpTransport.java
+        </sonar.coverage.exclusions>
     </properties>
 
     <dependencies>
