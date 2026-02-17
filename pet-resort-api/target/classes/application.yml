@@ -1,0 +1,26 @@
+spring:
+  application:
+    name: pet-resort-api
+
+server:
+  port: 8080
+
+eventlog:
+  enabled: true
+  base-url: http://localhost:3000
+  application-id: pet-resort-api
+  target-system: PET_RESORT
+  originating-system: PET_RESORT
+  api-key: local-dev-key
+  transport: jdk
+  async:
+    enabled: true
+    queue-capacity: 1000
+    virtual-threads: true
+  annotation:
+    enabled: true
+
+logging:
+  level:
+    com.eventlog.sdk: DEBUG
+    com.example.petresort: DEBUG
