@@ -5,7 +5,8 @@ import { Separator } from "@/components/ui/separator";
 import { Button } from "@/components/ui/button";
 import { STATUS_ICONS } from "@/lib/constants";
 import type { TraceDetail } from "@/data/queries";
-import { Activity, Timer, Copy, Check, Server, Calendar } from "lucide-react";
+import type { RetryInfo } from "@/lib/span-tree";
+import { Activity, Timer, Copy, Check, Server, Calendar, RefreshCw } from "lucide-react";
 import { useState } from "react";
 
 function formatDuration(ms: number | null): string {
@@ -70,6 +71,7 @@ function formatTimeRange(startTime: string, endTime: string): { start: string; e
 interface TraceHeaderProps {
   traceId: string;
   detail: TraceDetail;
+  retryInfo?: RetryInfo | null;
 }
 
 function CopyButton({ text }: { text: string }) {
@@ -97,11 +99,19 @@ function CopyButton({ text }: { text: string }) {
   );
 }
 
-export function TraceHeader({ traceId, detail }: TraceHeaderProps) {
+export function TraceHeader({ traceId, detail, retryInfo }: TraceHeaderProps) {
   // Determine overall status for header styling
+  // When retries exist, use the final attempt's outcome instead of raw status counts
+  const retryOverallStatus = retryInfo
+    ? retryInfo.overallStatus === "success"
+      ? "SUCCESS"
+      : retryInfo.overallStatus === "failure"
+        ? "FAILURE"
+        : "IN_PROGRESS"
+    : null;
   const hasFailures = (detail.statusCounts["FAILURE"] ?? 0) > 0;
   const hasInProgress = (detail.statusCounts["IN_PROGRESS"] ?? 0) > 0;
-  const overallStatus = hasFailures ? "FAILURE" : hasInProgress ? "IN_PROGRESS" : "SUCCESS";
+  const overallStatus = retryOverallStatus ?? (hasFailures ? "FAILURE" : hasInProgress ? "IN_PROGRESS" : "SUCCESS");
 
   return (
     <div className="space-y-4">
@@ -122,9 +132,17 @@ export function TraceHeader({ traceId, detail }: TraceHeaderProps) {
                   <h1 className="text-2xl font-bold tracking-tight">
                     {formatProcessName(detail.processName)}
                   </h1>
-                  <Badge variant="secondary" className="text-[10px] mt-0.5">
-                    Trace Journey
-                  </Badge>
+                  <div className="flex items-center gap-1.5 mt-0.5">
+                    <Badge variant="secondary" className="text-[10px]">
+                      Trace Journey
+                    </Badge>
+                    {retryInfo && (
+                      <Badge className="text-[10px] bg-amber-500/10 border border-amber-500/30 text-amber-600 dark:text-amber-400 hover:bg-amber-500/20">
+                        <RefreshCw className="h-2.5 w-2.5 mr-1" />
+                        {retryInfo.attempts.length} Attempts
+                      </Badge>
+                    )}
+                  </div>
                 </div>
               </div>
               <div className="flex flex-wrap items-center gap-2">

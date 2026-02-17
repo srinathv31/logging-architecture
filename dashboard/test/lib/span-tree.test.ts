@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { buildSpanTree, hasParallelExecution, buildSystemFlow } from '@/lib/span-tree';
+import { buildSpanTree, hasParallelExecution, buildSystemFlow, detectAttempts } from '@/lib/span-tree';
 import type { TraceEvent } from '@/data/queries';
 
 function makeEvent(overrides: Partial<TraceEvent> & { eventLogId: number; targetSystem: string }): TraceEvent {
@@ -215,5 +215,127 @@ describe('buildSystemFlow', () => {
     expect(flow[1].isParallel).toBe(true);
     expect(flow[1].systems).toEqual(expect.arrayContaining(['ServiceA', 'ServiceB']));
     expect(flow[2]).toEqual({ systems: ['Database'], isParallel: false });
+  });
+});
+
+describe('detectAttempts', () => {
+  it('returns null for empty events', () => {
+    expect(detectAttempts([])).toBeNull();
+  });
+
+  it('returns null for zero PROCESS_START events', () => {
+    const events = [
+      makeEvent({ eventLogId: 1, targetSystem: 'SystemA', eventType: 'API_CALL' }),
+      makeEvent({ eventLogId: 2, targetSystem: 'SystemB', eventType: 'API_CALL' }),
+    ];
+
+    expect(detectAttempts(events)).toBeNull();
+  });
+
+  it('returns null for single PROCESS_START (non-retry)', () => {
+    const events = [
+      makeEvent({ eventLogId: 1, targetSystem: 'Gateway', eventType: 'PROCESS_START', spanId: 'span-1' }),
+      makeEvent({ eventLogId: 2, targetSystem: 'SystemA', eventType: 'API_CALL', parentSpanId: 'span-1' }),
+      makeEvent({ eventLogId: 3, targetSystem: 'Gateway', eventType: 'PROCESS_END', eventStatus: 'SUCCESS', parentSpanId: 'span-1' }),
+    ];
+
+    expect(detectAttempts(events)).toBeNull();
+  });
+
+  it('detects 2 attempts with correct event grouping via parentSpanId', () => {
+    const events = [
+      // Attempt 1
+      makeEvent({ eventLogId: 1, targetSystem: 'Gateway', eventType: 'PROCESS_START', spanId: 'span-1', eventTimestamp: '2025-01-01T00:00:00.000Z' }),
+      makeEvent({ eventLogId: 2, targetSystem: 'SystemA', eventType: 'API_CALL', parentSpanId: 'span-1', eventStatus: 'FAILURE', eventTimestamp: '2025-01-01T00:00:01.000Z' }),
+      // Attempt 2
+      makeEvent({ eventLogId: 3, targetSystem: 'Gateway', eventType: 'PROCESS_START', spanId: 'span-2', eventTimestamp: '2025-01-01T00:00:05.000Z' }),
+      makeEvent({ eventLogId: 4, targetSystem: 'SystemA', eventType: 'API_CALL', parentSpanId: 'span-2', eventStatus: 'SUCCESS', eventTimestamp: '2025-01-01T00:00:06.000Z' }),
+      makeEvent({ eventLogId: 5, targetSystem: 'Gateway', eventType: 'PROCESS_END', parentSpanId: 'span-2', eventStatus: 'SUCCESS', eventTimestamp: '2025-01-01T00:00:07.000Z' }),
+    ];
+
+    const result = detectAttempts(events);
+
+    expect(result).not.toBeNull();
+    expect(result!.attempts).toHaveLength(2);
+    expect(result!.attempts[0].attemptNumber).toBe(1);
+    expect(result!.attempts[0].events).toHaveLength(2); // PROCESS_START + API_CALL
+    expect(result!.attempts[1].attemptNumber).toBe(2);
+    expect(result!.attempts[1].events).toHaveLength(3); // PROCESS_START + API_CALL + PROCESS_END
+  });
+
+  it('reports overallStatus "success" when final attempt succeeded', () => {
+    const events = [
+      makeEvent({ eventLogId: 1, targetSystem: 'Gateway', eventType: 'PROCESS_START', spanId: 'span-1', eventTimestamp: '2025-01-01T00:00:00.000Z' }),
+      makeEvent({ eventLogId: 2, targetSystem: 'SystemA', eventType: 'API_CALL', parentSpanId: 'span-1', eventStatus: 'FAILURE', eventTimestamp: '2025-01-01T00:00:01.000Z' }),
+      makeEvent({ eventLogId: 3, targetSystem: 'Gateway', eventType: 'PROCESS_START', spanId: 'span-2', eventTimestamp: '2025-01-01T00:00:05.000Z' }),
+      makeEvent({ eventLogId: 4, targetSystem: 'SystemA', eventType: 'API_CALL', parentSpanId: 'span-2', eventStatus: 'SUCCESS', eventTimestamp: '2025-01-01T00:00:06.000Z' }),
+      makeEvent({ eventLogId: 5, targetSystem: 'Gateway', eventType: 'PROCESS_END', parentSpanId: 'span-2', eventStatus: 'SUCCESS', eventTimestamp: '2025-01-01T00:00:07.000Z' }),
+    ];
+
+    const result = detectAttempts(events)!;
+
+    expect(result.overallStatus).toBe('success');
+    expect(result.attempts[0].status).toBe('failure');
+    expect(result.attempts[1].status).toBe('success');
+    expect(result.finalAttempt).toBe(result.attempts[1]);
+  });
+
+  it('reports overallStatus "failure" when all attempts failed', () => {
+    const events = [
+      makeEvent({ eventLogId: 1, targetSystem: 'Gateway', eventType: 'PROCESS_START', spanId: 'span-1', eventTimestamp: '2025-01-01T00:00:00.000Z' }),
+      makeEvent({ eventLogId: 2, targetSystem: 'SystemA', eventType: 'API_CALL', parentSpanId: 'span-1', eventStatus: 'FAILURE', eventTimestamp: '2025-01-01T00:00:01.000Z' }),
+      makeEvent({ eventLogId: 3, targetSystem: 'Gateway', eventType: 'PROCESS_START', spanId: 'span-2', eventTimestamp: '2025-01-01T00:00:05.000Z' }),
+      makeEvent({ eventLogId: 4, targetSystem: 'SystemA', eventType: 'API_CALL', parentSpanId: 'span-2', eventStatus: 'FAILURE', eventTimestamp: '2025-01-01T00:00:06.000Z' }),
+    ];
+
+    const result = detectAttempts(events)!;
+
+    expect(result.overallStatus).toBe('failure');
+    expect(result.attempts[0].status).toBe('failure');
+    expect(result.attempts[1].status).toBe('failure');
+  });
+
+  it('assigns orphan events (no matching parentSpanId) to closest preceding attempt', () => {
+    const events = [
+      makeEvent({ eventLogId: 1, targetSystem: 'Gateway', eventType: 'PROCESS_START', spanId: 'span-1', eventTimestamp: '2025-01-01T00:00:00.000Z' }),
+      makeEvent({ eventLogId: 2, targetSystem: 'SystemA', eventType: 'API_CALL', parentSpanId: 'orphan-id', eventTimestamp: '2025-01-01T00:00:01.000Z' }),
+      makeEvent({ eventLogId: 3, targetSystem: 'Gateway', eventType: 'PROCESS_START', spanId: 'span-2', eventTimestamp: '2025-01-01T00:00:05.000Z' }),
+      makeEvent({ eventLogId: 4, targetSystem: 'SystemB', eventType: 'API_CALL', parentSpanId: 'another-orphan', eventTimestamp: '2025-01-01T00:00:06.000Z' }),
+    ];
+
+    const result = detectAttempts(events)!;
+
+    expect(result.attempts).toHaveLength(2);
+    // Orphan event 2 should be assigned to attempt 1 (closest preceding)
+    expect(result.attempts[0].events.map((e) => e.eventLogId)).toContain(2);
+    // Orphan event 4 should be assigned to attempt 2 (closest preceding)
+    expect(result.attempts[1].events.map((e) => e.eventLogId)).toContain(4);
+  });
+
+  it('ignores PROCESS_START events with different processName (sub-process)', () => {
+    const events = [
+      // Main process
+      makeEvent({ eventLogId: 1, targetSystem: 'Gateway', eventType: 'PROCESS_START', spanId: 'span-1', processName: 'CHECKIN', eventTimestamp: '2025-01-01T00:00:00.000Z' }),
+      // Sub-process (different processName) — should NOT create a second attempt
+      makeEvent({ eventLogId: 2, targetSystem: 'SubSystem', eventType: 'PROCESS_START', spanId: 'span-sub', processName: 'VALIDATE_TICKET', parentSpanId: 'span-1', eventTimestamp: '2025-01-01T00:00:01.000Z' }),
+      makeEvent({ eventLogId: 3, targetSystem: 'Gateway', eventType: 'PROCESS_END', parentSpanId: 'span-1', processName: 'CHECKIN', eventStatus: 'SUCCESS', eventTimestamp: '2025-01-01T00:00:02.000Z' }),
+    ];
+
+    expect(detectAttempts(events)).toBeNull();
+  });
+
+  it('reports overallStatus "in_progress" when final attempt has no end or failure', () => {
+    const events = [
+      makeEvent({ eventLogId: 1, targetSystem: 'Gateway', eventType: 'PROCESS_START', spanId: 'span-1', eventStatus: 'FAILURE', eventTimestamp: '2025-01-01T00:00:00.000Z' }),
+      makeEvent({ eventLogId: 2, targetSystem: 'SystemA', eventType: 'API_CALL', parentSpanId: 'span-1', eventStatus: 'FAILURE', eventTimestamp: '2025-01-01T00:00:01.000Z' }),
+      makeEvent({ eventLogId: 3, targetSystem: 'Gateway', eventType: 'PROCESS_START', spanId: 'span-2', eventTimestamp: '2025-01-01T00:00:05.000Z' }),
+      makeEvent({ eventLogId: 4, targetSystem: 'SystemA', eventType: 'API_CALL', parentSpanId: 'span-2', eventStatus: 'SUCCESS', eventTimestamp: '2025-01-01T00:00:06.000Z' }),
+      // No PROCESS_END for attempt 2
+    ];
+
+    const result = detectAttempts(events)!;
+
+    expect(result.overallStatus).toBe('in_progress');
+    expect(result.attempts[1].status).toBe('in_progress');
   });
 });

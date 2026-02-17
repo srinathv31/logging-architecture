@@ -100,7 +100,7 @@ public final class EventLogUtils {
                 .traceId(traceId)
                 .processName(processName)
                 .eventType(EventType.PROCESS_START)
-                .eventStatus(EventStatus.IN_PROGRESS)
+                .eventStatus(EventStatus.SUCCESS)
                 .stepSequence(0);
     }
 
@@ -115,7 +115,7 @@ public final class EventLogUtils {
      * @param originatingSystem Originating system
      * @param summary Summary text
      * @param result Result text
-     * @return Builder with PROCESS_START defaults (step_sequence=0, status=IN_PROGRESS)
+     * @return Builder with PROCESS_START defaults (step_sequence=0, status=SUCCESS)
      */
     public static EventLogEntry.Builder processStart(
             String correlationId,
@@ -134,7 +134,7 @@ public final class EventLogUtils {
                 .originatingSystem(originatingSystem)
                 .processName(processName)
                 .eventType(EventType.PROCESS_START)
-                .eventStatus(EventStatus.IN_PROGRESS)
+                .eventStatus(EventStatus.SUCCESS)
                 .stepSequence(0)
                 .summary(summary)
                 .result(result);

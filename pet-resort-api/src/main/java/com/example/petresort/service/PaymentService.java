@@ -39,13 +39,13 @@ public class PaymentService {
      * Demonstrates raw EventLogEntry.builder() usage — the most manual approach.
      * Useful when you need full control over every field.
      */
-    public boolean processPayment(String bookingId, BigDecimal amount, String cardLast4) {
+    public boolean processPayment(String bookingId, BigDecimal amount, String cardLast4, String parentSpanId) {
         String correlationId = MDC.get("correlationId");
         String traceId = MDC.get("traceId");
         long start = System.currentTimeMillis();
 
         // Build the event entry using the raw builder
-        EventLogEntry paymentEvent = EventLogEntry.builder()
+        EventLogEntry.Builder paymentBuilder = EventLogEntry.builder()
                 .correlationId(correlationId)
                 .traceId(traceId)
                 .spanId(EventLogUtils.createSpanId())
@@ -65,20 +65,25 @@ public class PaymentService {
                         "amount", amount.toString(),
                         "card_last4", EventLogUtils.maskLast4(cardLast4),
                         "currency", "USD"))
-                .executionTimeMs((int) (System.currentTimeMillis() - start))
-                .build();
+                .executionTimeMs((int) (System.currentTimeMillis() - start));
+
+        if (parentSpanId != null && !parentSpanId.isBlank()) {
+            paymentBuilder.parentSpanId(parentSpanId);
+        }
+
+        EventLogEntry paymentEvent = paymentBuilder.build();
 
         // Fire-and-forget via AsyncEventLogger
         asyncEventLogger.log(paymentEvent);
 
-        // Demonstrate toBuilder() — copy and modify pattern
-        EventLogEntry auditCopy = paymentEvent.toBuilder()
+        // Demonstrate toBuilder() — copy and modify pattern (fresh spanId for audit)
+        EventLogEntry.Builder auditBuilder = paymentEvent.toBuilder()
+                .spanId(EventLogUtils.createSpanId())
                 .processName("PAYMENT_AUDIT")
                 .stepName("Audit Trail")
                 .summary("Payment audit record created")
-                .result("AUDIT_RECORDED")
-                .build();
-        asyncEventLogger.log(auditCopy);
+                .result("AUDIT_RECORDED");
+        asyncEventLogger.log(auditBuilder.build());
 
         log.debug("Payment processed for booking {} — amount: {}, card: {}",
                 bookingId, amount, EventLogUtils.maskLast4(cardLast4));
@@ -89,5 +94,10 @@ public class PaymentService {
         }
 
         return true;
+    }
+
+    @Deprecated
+    public boolean processPayment(String bookingId, BigDecimal amount, String cardLast4) {
+        return processPayment(bookingId, amount, cardLast4, null);
     }
 }

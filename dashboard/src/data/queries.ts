@@ -210,7 +210,7 @@ export async function getTraceDetail(traceId: string): Promise<TraceDetail | nul
     .select()
     .from(eventLogs)
     .where(and(eq(eventLogs.traceId, traceId), eq(eventLogs.isDeleted, false)))
-    .orderBy(eventLogs.stepSequence, eventLogs.eventTimestamp);
+    .orderBy(eventLogs.eventTimestamp, eventLogs.eventLogId);
 
   if (rows.length === 0) return null;
 

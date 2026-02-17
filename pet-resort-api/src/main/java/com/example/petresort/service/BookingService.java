@@ -113,11 +113,13 @@ public class BookingService {
         // Step 2: Check Availability
         processLogger.logStep(2, "Check Availability", EventStatus.IN_PROGRESS,
                 EventLogUtils.generateSummary("Check", "availability", "in progress"));
+        String step2SpanId = processLogger.getLastStepSpanId();
 
         // Simulate availability check (always available for demo)
+        // Reuse same spanId for the status transition (IN_PROGRESS → SUCCESS)
         processLogger.logStep(2, "Check Availability", EventStatus.SUCCESS,
                 EventLogUtils.generateSummary("Check", "availability", "confirmed"),
-                "DATES_AVAILABLE");
+                "DATES_AVAILABLE", step2SpanId);
 
         // Step 3: Confirm Booking
         Booking booking = new Booking(bookingId, request.petId(), pet.ownerId(),
@@ -227,6 +229,7 @@ public class BookingService {
         String correlationId = MDC.get("correlationId");
         String traceId = MDC.get("traceId");
         String batchId = EventLogUtils.createBatchId("checkout");
+        String rootSpanId = EventLogUtils.createSpanId();
         String appId = "pet-resort-api";
         String target = "PET_RESORT";
         String origin = "PET_RESORT";
@@ -238,6 +241,7 @@ public class BookingService {
                         EventLogUtils.generateSummary("Check out", "pet", "started"),
                         "CHECK_OUT_STARTED")
                 .batchId(batchId)
+                .spanId(rootSpanId)
                 .build();
         asyncEventLogger.log(startEvent);
 
@@ -252,6 +256,8 @@ public class BookingService {
                             EventLogUtils.generateSummary("Check out", "pet", "failed"),
                             "NOT_FOUND")
                     .batchId(batchId)
+                    .spanId(EventLogUtils.createSpanId())
+                    .parentSpanId(rootSpanId)
                     .build();
             asyncEventLogger.log(errorEvent);
             throw new BookingNotFoundException(bookingId);
@@ -265,6 +271,8 @@ public class BookingService {
                             EventLogUtils.generateSummary("Check out", "pet", "failed", "not checked in"),
                             "INVALID_STATE")
                     .batchId(batchId)
+                    .spanId(EventLogUtils.createSpanId())
+                    .parentSpanId(rootSpanId)
                     .build();
             asyncEventLogger.log(errorEvent);
             throw new BookingConflictException(bookingId, "NOT_CHECKED_IN",
@@ -278,13 +286,15 @@ public class BookingService {
                         EventLogUtils.generateSummary("Verify", "check-in status", "confirmed"),
                         "VERIFIED")
                 .batchId(batchId)
+                .spanId(EventLogUtils.createSpanId())
+                .parentSpanId(rootSpanId)
                 .build();
         asyncEventLogger.log(verifyEvent);
 
         // Step 2: Process Payment — with maskLast4 and spanLinks
         String paymentSpanId = EventLogUtils.createSpanId();
 
-        paymentService.processPayment(bookingId, request.paymentAmount(), request.cardNumberLast4());
+        paymentService.processPayment(bookingId, request.paymentAmount(), request.cardNumberLast4(), rootSpanId);
 
         EventLogEntry paymentStep = EventLogUtils.step(
                         correlationId, traceId, "CHECK_OUT_PET",
@@ -295,6 +305,7 @@ public class BookingService {
                         "PAYMENT_SUCCESS")
                 .batchId(batchId)
                 .spanId(paymentSpanId)
+                .parentSpanId(rootSpanId)
                 .spanLinks(List.of(traceId))
                 .addMetadata("amount", request.paymentAmount().toString())
                 .addMetadata("card_last4", EventLogUtils.maskLast4(request.cardNumberLast4()))
@@ -315,6 +326,8 @@ public class BookingService {
                         EventLogUtils.generateSummary("Release", "pet", "released"),
                         "PET_RELEASED")
                 .batchId(batchId)
+                .spanId(EventLogUtils.createSpanId())
+                .parentSpanId(rootSpanId)
                 .idempotencyKey(idempotencyKey)
                 .build();
         asyncEventLogger.log(releaseEvent);
@@ -328,6 +341,8 @@ public class BookingService {
                         EventLogUtils.generateSummary("Check out", "pet", "completed"),
                         "CHECK_OUT_COMPLETE")
                 .batchId(batchId)
+                .spanId(EventLogUtils.createSpanId())
+                .parentSpanId(rootSpanId)
                 .build();
         asyncEventLogger.log(endEvent);
 
