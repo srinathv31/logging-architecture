@@ -295,9 +295,6 @@ public final class EventLogTemplate {
         private String endpoint;
         private HttpMethod httpMethod;
         private Integer httpStatusCode;
-        private Integer lastStepSequence;
-        private String lastStepName;
-
         private ProcessLogger(String processName) {
             this.processName = processName;
         }
@@ -417,8 +414,6 @@ public final class EventLogTemplate {
                 EventStatus status,
                 String summary,
                 String result) {
-            this.lastStepSequence = stepSequence;
-            this.lastStepName = stepName;
             EventLogEntry.Builder builder = baseBuilder(EventType.STEP)
                     .eventStatus(status)
                     .stepSequence(stepSequence)
@@ -439,8 +434,6 @@ public final class EventLogTemplate {
                 String summary,
                 String result,
                 String spanIdOverride) {
-            this.lastStepSequence = stepSequence;
-            this.lastStepName = stepName;
             EventLogEntry.Builder builder = baseBuilder(EventType.STEP)
                     .eventStatus(status)
                     .stepSequence(stepSequence)
@@ -463,19 +456,6 @@ public final class EventLogTemplate {
                 EventStatus status,
                 String summary) {
             return logStep(stepSequence, stepName, status, summary, status.name());
-        }
-
-        /**
-         * Retry the previous step with a new status and summary.
-         * Reuses the last logStep()'s stepSequence and stepName.
-         * The dashboard detects retries when same stepSequence + same stepName
-         * appear with different spanIds.
-         */
-        public boolean retryStep(EventStatus status, String summary, String result) {
-            if (lastStepSequence == null || lastStepName == null) {
-                throw new IllegalStateException("No previous step to retry — call logStep() first");
-            }
-            return logStep(lastStepSequence, lastStepName, status, summary, result);
         }
 
         public boolean processEnd(

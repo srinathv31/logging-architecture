@@ -84,7 +84,7 @@ public class RoomServiceService {
             processLogger.addMetadata("attempt", 2);
             try { Thread.sleep(150); } catch (InterruptedException e) { Thread.currentThread().interrupt(); }
 
-            processLogger.retryStep(EventStatus.SUCCESS,
+            processLogger.logStep(1, "Account Lookup", EventStatus.SUCCESS,
                     "Account " + pet.ownerId() + " verified on retry — "
                             + (owner != null ? owner.name() : "unknown")
                             + ", active booking " + request.bookingId(),

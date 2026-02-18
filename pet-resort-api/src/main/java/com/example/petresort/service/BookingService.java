@@ -174,7 +174,7 @@ public class BookingService {
         processLogger.addMetadata("expanded_search", true);
         try { Thread.sleep(1200); } catch (InterruptedException e) { Thread.currentThread().interrupt(); }
 
-        processLogger.retryStep(EventStatus.SUCCESS,
+        processLogger.logStep(2, "Kennel Availability Check", EventStatus.SUCCESS,
                 "Heat-lamp kennel found in expanded zone D+ for " + pet.name() + " (" + pet.species()
                         + ") — attempt 2 succeeded",
                 "KENNEL_AVAILABLE");
