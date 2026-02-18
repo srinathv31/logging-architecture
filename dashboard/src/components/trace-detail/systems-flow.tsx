@@ -1,6 +1,6 @@
 "use client";
 
-import { CheckCircle2, XCircle, Clock, Network } from "lucide-react";
+import { CheckCircle2, XCircle, Clock, Network, RefreshCw } from "lucide-react";
 import type { TraceEvent } from "@/data/queries";
 import { buildStepFlow, type StepFlowNode, type RetryInfo } from "@/lib/span-tree";
 import {
@@ -187,10 +187,11 @@ export function SystemsFlow({ events, retryInfo }: SystemsFlowProps) {
         )}
       </div>
 
-      <div className="flex items-center justify-start gap-0 overflow-x-auto pb-2">
+      <div className="flex items-center justify-start gap-0 overflow-x-auto pt-4 pb-2">
         <TooltipProvider>
           {flow.map((node, index) => {
             const isParallel = node.type === "parallel" && node.steps.length > 1;
+            const isRetry = node.type === "retry" && node.steps.length > 1;
 
             return (
               <div key={index} className="flex items-center">
@@ -205,6 +206,19 @@ export function SystemsFlow({ events, retryInfo }: SystemsFlowProps) {
                     {node.steps.map((step, stepIdx) => (
                       <StepNodeCard key={stepIdx} step={step} />
                     ))}
+                  </div>
+                ) : isRetry ? (
+                  <div className="relative mt-1">
+                    <div className="absolute -top-3 left-1/2 -translate-x-1/2 z-10 flex items-center gap-1
+                                    bg-amber-500/10 border border-amber-500/30 rounded-full px-2 py-0.5">
+                      <RefreshCw className="h-2.5 w-2.5 text-amber-500" />
+                      <span className="text-[9px] font-semibold text-amber-600 dark:text-amber-400">
+                        {node.steps.length} attempts
+                      </span>
+                    </div>
+                    <div className="border border-dashed border-amber-500/40 rounded-lg p-1 pt-2">
+                      <StepNodeCard step={node.steps[node.steps.length - 1]} />
+                    </div>
                   </div>
                 ) : (
                   <StepNodeCard step={node.steps[0]} />

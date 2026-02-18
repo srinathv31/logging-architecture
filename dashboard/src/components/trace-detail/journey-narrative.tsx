@@ -1,5 +1,5 @@
 import type { TraceDetail } from "@/data/queries";
-import { hasParallelExecution, type RetryInfo } from "@/lib/span-tree";
+import { hasParallelExecution, buildStepFlow, type RetryInfo } from "@/lib/span-tree";
 import { BookOpen } from "lucide-react";
 
 interface JourneyNarrativeProps {
@@ -54,6 +54,10 @@ export function JourneyNarrative({ detail, retryInfo }: JourneyNarrativeProps) {
   const hasFailures = (detail.statusCounts["FAILURE"] ?? 0) > 0;
   const failureCount = detail.statusCounts["FAILURE"] ?? 0;
   const isParallel = hasParallelExecution(detail.events);
+  const flow = buildStepFlow(detail.events);
+  const retryNodes = flow.filter((n) => n.type === "retry");
+  const stepRetriesResolved = retryNodes.length > 0 &&
+    retryNodes.every((n) => n.steps[n.steps.length - 1].eventStatus === "SUCCESS");
 
   const hasProcessEnd = detail.events.some(
     (e) => e.eventType === "PROCESS_END"
@@ -141,6 +145,13 @@ export function JourneyNarrative({ detail, retryInfo }: JourneyNarrativeProps) {
               <span className="font-medium text-primary">in parallel</span>.{" "}
             </span>
           )}
+          {!retryInfo && retryNodes.length > 0 && (
+            <span>
+              {retryNodes.length} step{retryNodes.length > 1 ? "s" : ""} required{" "}
+              <span className="font-medium text-amber-600 dark:text-amber-400">retries</span>
+              {stepRetriesResolved ? " and resolved successfully" : ""}.{" "}
+            </span>
+          )}
           {retryInfo ? (
             <>
               Completed in{" "}
@@ -175,16 +186,16 @@ export function JourneyNarrative({ detail, retryInfo }: JourneyNarrativeProps) {
 
         {errorEvents.length > 0 && (
           <div className={`mt-3 rounded-lg border px-3 py-2 ${
-            retryInfo?.overallStatus === "success"
+            retryInfo?.overallStatus === "success" || stepRetriesResolved
               ? "border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-950/50"
               : "border-red-200 dark:border-red-800 bg-red-50 dark:bg-red-950/50"
           }`}>
             <p className={`text-xs font-medium ${
-              retryInfo?.overallStatus === "success"
+              retryInfo?.overallStatus === "success" || stepRetriesResolved
                 ? "text-amber-800 dark:text-amber-200"
                 : "text-red-800 dark:text-red-200"
             }`}>
-              {retryInfo?.overallStatus === "success"
+              {retryInfo?.overallStatus === "success" || stepRetriesResolved
                 ? "Errors from earlier attempt(s): "
                 : "Error summary: "}
               {errorEvents.map((e) => e.errorMessage).join("; ")}

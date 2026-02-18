@@ -3,6 +3,7 @@ import { Badge } from "@/components/ui/badge";
 import { StepCard } from "./step-card";
 import { SystemsFlow } from "./systems-flow";
 import { ParallelGroup } from "./parallel-group";
+import { RetryGroup } from "./retry-group";
 import { buildSpanTree, type Attempt, type RetryInfo } from "@/lib/span-tree";
 import { Clock, RefreshCw, CheckCircle2, XCircle, Loader2 } from "lucide-react";
 
@@ -80,6 +81,20 @@ function AttemptGroup({
           <div className="absolute left-[15px] top-0 bottom-0 w-0.5 bg-gradient-to-b from-primary via-primary/50 to-border" />
 
           {timeline.map((entry, entryIndex) => {
+            if (entry.type === "retry") {
+              return (
+                <div
+                  key={`retry-${entryIndex}`}
+                  className="relative pb-6"
+                >
+                  <RetryGroup
+                    events={entry.events}
+                    firstTimestamp={firstTimestamp}
+                  />
+                </div>
+              );
+            }
+
             if (entry.type === "parallel") {
               return (
                 <div
@@ -197,6 +212,20 @@ export function TraceTimeline({ events, retryInfo }: TraceTimelineProps) {
           <div className="absolute left-[15px] top-0 bottom-0 w-0.5 bg-gradient-to-b from-primary via-primary/50 to-border" />
 
           {timeline.map((entry, entryIndex) => {
+            if (entry.type === "retry") {
+              return (
+                <div
+                  key={`retry-${entryIndex}`}
+                  className="relative pb-6"
+                >
+                  <RetryGroup
+                    events={entry.events}
+                    firstTimestamp={firstTimestamp}
+                  />
+                </div>
+              );
+            }
+
             if (entry.type === "parallel") {
               return (
                 <div

@@ -111,7 +111,11 @@ export function TraceHeader({ traceId, detail, retryInfo }: TraceHeaderProps) {
     : null;
   const hasFailures = (detail.statusCounts["FAILURE"] ?? 0) > 0;
   const hasInProgress = (detail.statusCounts["IN_PROGRESS"] ?? 0) > 0;
-  const overallStatus = retryOverallStatus ?? (hasFailures ? "FAILURE" : hasInProgress ? "IN_PROGRESS" : "SUCCESS");
+  const processEndSuccess = detail.events.some(
+    (e) => e.eventType === "PROCESS_END" && e.eventStatus === "SUCCESS"
+  );
+  const overallStatus = retryOverallStatus
+    ?? (processEndSuccess ? "SUCCESS" : hasFailures ? "FAILURE" : hasInProgress ? "IN_PROGRESS" : "SUCCESS");
 
   return (
     <div className="space-y-4">

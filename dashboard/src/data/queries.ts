@@ -74,9 +74,19 @@ export async function getTraces(filters: TraceListFilters): Promise<TraceListRes
         batchId: sql<string | null>`min(${eventLogs.batchId})`,
         eventCount: sql<number>`COUNT(*)`,
         hasErrors: sql<boolean>`CAST(MAX(CASE WHEN ${eventLogs.eventStatus} = 'FAILURE' THEN 1 ELSE 0 END) AS BIT)`,
-        latestStatus: sql<string>`(SELECT TOP 1 e2.event_status FROM event_log e2 WHERE e2.trace_id = ${eventLogs.traceId} AND e2.is_deleted = 0 ORDER BY e2.event_timestamp DESC)`,
-        firstEventAt: sql<string>`CONVERT(VARCHAR(50), MIN(${eventLogs.eventTimestamp}), 127)`,
-        lastEventAt: sql<string>`CONVERT(VARCHAR(50), MAX(${eventLogs.eventTimestamp}), 127)`,
+        latestStatus: sql<string>`COALESCE(
+          (SELECT TOP 1 e2.event_status FROM event_log e2
+           WHERE e2.trace_id = [event_log].[trace_id] AND e2.is_deleted = 0
+             AND e2.event_type = 'PROCESS_END'
+           ORDER BY e2.event_timestamp DESC),
+          CASE
+            WHEN MAX(CASE WHEN ${eventLogs.eventStatus} = 'FAILURE' THEN 1 ELSE 0 END) = 1 THEN 'FAILURE'
+            WHEN MAX(CASE WHEN ${eventLogs.eventStatus} = 'IN_PROGRESS' THEN 1 ELSE 0 END) = 1 THEN 'IN_PROGRESS'
+            ELSE 'SUCCESS'
+          END
+        )`,
+        firstEventAt: sql<string>`CONVERT(VARCHAR(50), MIN(${eventLogs.eventTimestamp}), 127) + 'Z'`,
+        lastEventAt: sql<string>`CONVERT(VARCHAR(50), MAX(${eventLogs.eventTimestamp}), 127) + 'Z'`,
         totalDurationMs: sql<number | null>`DATEDIFF(MILLISECOND, MIN(${eventLogs.eventTimestamp}), MAX(${eventLogs.eventTimestamp}))`,
       })
       .from(eventLogs)

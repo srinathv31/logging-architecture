@@ -145,7 +145,7 @@ export interface EnrichedEvent {
 }
 
 export interface TimelineEntry {
-  type: "sequential" | "parallel";
+  type: "sequential" | "parallel" | "retry";
   events: TraceEvent[];
 }
 
@@ -175,13 +175,20 @@ export function buildSpanTree(events: TraceEvent[]): TimelineEntry[] {
     }
   }
 
-  // Identify which groups are actually parallel (more than 1 event with different spanIds)
+  // Identify which groups are parallel vs retry (more than 1 event with different spanIds)
   const parallelGroupKeys = new Set<string>();
+  const retryGroupKeys = new Set<string>();
   for (const [key, group] of groups) {
     if (group.length > 1) {
       const uniqueSpanIds = new Set(group.map((e) => e.spanId).filter(Boolean));
       if (uniqueSpanIds.size > 1) {
-        parallelGroupKeys.add(key);
+        // Same stepName → retry; different stepNames → parallel
+        const uniqueStepNames = new Set(group.map((e) => e.stepName).filter(Boolean));
+        if (uniqueStepNames.size <= 1) {
+          retryGroupKeys.add(key);
+        } else {
+          parallelGroupKeys.add(key);
+        }
       }
     }
   }
@@ -198,7 +205,13 @@ export function buildSpanTree(events: TraceEvent[]): TimelineEntry[] {
         ? `${event.parentSpanId}:${event.stepSequence}`
         : null;
 
-    if (key && parallelGroupKeys.has(key)) {
+    if (key && retryGroupKeys.has(key)) {
+      // This is a step-level retry group — sort by timestamp for attempt ordering
+      const group = groups.get(key)!;
+      group.sort((a, b) => new Date(a.eventTimestamp).getTime() - new Date(b.eventTimestamp).getTime());
+      for (const e of group) processedIds.add(e.eventLogId);
+      timeline.push({ type: "retry", events: group });
+    } else if (key && parallelGroupKeys.has(key)) {
       // This is part of a parallel group — emit the entire group
       const group = groups.get(key)!;
       for (const e of group) processedIds.add(e.eventLogId);
@@ -230,7 +243,7 @@ export interface FlowNode {
 }
 
 export interface StepFlowNode {
-  type: "sequential" | "parallel";
+  type: "sequential" | "parallel" | "retry";
   steps: {
     stepName: string | null;
     stepSequence: number | null;
