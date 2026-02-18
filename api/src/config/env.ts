@@ -2,7 +2,7 @@ import "dotenv/config";
 import { z } from "zod";
 
 const envSchema = z.object({
-  DATABASE_URL: z.string().url(),
+  DATABASE_URL: z.string().min(1),
   PORT: z.coerce.number().int().positive().default(3000),
   HOST: z.string().default("0.0.0.0"),
   NODE_ENV: z
@@ -13,9 +13,13 @@ const envSchema = z.object({
     .default("info"),
   DRIZZLE_LOG: z.enum(["true", "false"]).default("false"),
   FULLTEXT_ENABLED: z.enum(["true", "false"]).default("true"),
-  // MSSQL Azure AD authentication
+  // MSSQL connection
   DB_SERVER: z.string().optional(),
   DB_NAME: z.string().optional(),
+  // Local SQL auth (optional — when set, skips Azure AD MSI)
+  DB_USER: z.string().optional(),
+  DB_PASSWORD: z.string().optional(),
+  // Azure AD MSI authentication
   MSI_ENDPOINT: z.string().optional(),
   MSI_SECRET: z.string().optional(),
 });

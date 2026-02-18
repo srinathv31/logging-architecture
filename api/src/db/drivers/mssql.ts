@@ -14,6 +14,8 @@ let drizzleDb: NodeMsSqlDatabase | null = null;
 let tokenTimestamp = 0;
 let refreshPromise: Promise<void> | null = null;
 
+const useSqlAuth = !!(env.DB_USER && env.DB_PASSWORD);
+
 /**
  * Fetches an Azure AD access token from the MSI endpoint with retry logic
  */
@@ -60,12 +62,8 @@ async function getConfig(): Promise<mssql.config> {
     throw new Error("DB_SERVER and DB_NAME are required for MSSQL connection");
   }
 
-  const token = await getToken();
-  tokenTimestamp = Date.now();
-
-  return {
+  const baseConfig: mssql.config = {
     server: env.DB_SERVER,
-    // Pool config at top level (not nested under options)
     pool: {
       max: 10,
       min: 0,
@@ -73,11 +71,34 @@ async function getConfig(): Promise<mssql.config> {
       acquireTimeoutMillis: 15000,
     },
     options: {
-      encrypt: true,
       database: env.DB_NAME,
       rowCollectionOnRequestCompletion: true,
       requestTimeout: 30000,
       connectTimeout: 30000,
+    },
+  };
+
+  if (useSqlAuth) {
+    return {
+      ...baseConfig,
+      user: env.DB_USER,
+      password: env.DB_PASSWORD,
+      options: {
+        ...baseConfig.options,
+        encrypt: false,
+        trustServerCertificate: true,
+      },
+    };
+  }
+
+  const token = await getToken();
+  tokenTimestamp = Date.now();
+
+  return {
+    ...baseConfig,
+    options: {
+      ...baseConfig.options,
+      encrypt: true,
     },
     authentication: {
       type: "azure-active-directory-access-token",
@@ -115,8 +136,9 @@ async function refreshConnection(): Promise<void> {
  * Uses a mutex pattern to prevent race conditions during token refresh.
  */
 export async function getDb(): Promise<NodeMsSqlDatabase> {
-  // Happy path: return cached instance if token is valid and pool is connected
-  if (!isTokenExpired() && pool?.connected && drizzleDb) {
+  // Happy path: return cached instance if pool is connected
+  // SQL auth doesn't need token refresh; only Azure AD tokens expire
+  if ((useSqlAuth || !isTokenExpired()) && pool?.connected && drizzleDb) {
     return drizzleDb;
   }
 

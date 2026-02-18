@@ -9,8 +9,8 @@ async function start() {
   try {
     await getDb();
     app.log.info('Database connection established');
-    await runMigrations();
-    app.log.info('Database migrations applied');
+    // await runMigrations();
+    // app.log.info('Database migrations applied');
     await app.listen({ port: env.PORT, host: env.HOST });
   } catch (err) {
     app.log.error(err);
