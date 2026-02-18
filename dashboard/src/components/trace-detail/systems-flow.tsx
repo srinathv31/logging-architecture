@@ -2,7 +2,11 @@
 
 import { CheckCircle2, XCircle, Clock, Network, RefreshCw } from "lucide-react";
 import type { TraceEvent } from "@/data/queries";
-import { buildStepFlow, type StepFlowNode, type RetryInfo } from "@/lib/span-tree";
+import {
+  buildStepFlow,
+  type StepFlowNode,
+  type RetryInfo,
+} from "@/lib/span-tree";
 import {
   Tooltip,
   TooltipContent,
@@ -37,7 +41,7 @@ function getStepStatus(status: string): StepStatus {
 
 function getStepLabel(step: StepFlowNode["steps"][number]): string {
   if (step.stepName) return step.stepName;
-  return step.eventType;
+  return step.processName;
 }
 
 function formatMs(ms: number): string {
@@ -103,10 +107,7 @@ function Arrow() {
         className="stroke-primary/40 flow-line-animated"
         strokeWidth="2"
       />
-      <polygon
-        points="28,5 38,10 28,15"
-        className="fill-primary/40"
-      />
+      <polygon points="28,5 38,10 28,15" className="fill-primary/40" />
     </svg>
   );
 }
@@ -117,7 +118,12 @@ function ForkArrows({ count }: { count: number }) {
   const spacing = count > 1 ? (height - 20) / (count - 1) : 0;
 
   return (
-    <svg width="50" height={height} viewBox={`0 0 50 ${height}`} className="shrink-0">
+    <svg
+      width="50"
+      height={height}
+      viewBox={`0 0 50 ${height}`}
+      className="shrink-0"
+    >
       {Array.from({ length: count }).map((_, i) => {
         const y = count > 1 ? 10 + i * spacing : mid;
         return (
@@ -145,7 +151,12 @@ function JoinArrows({ count }: { count: number }) {
   const spacing = count > 1 ? (height - 20) / (count - 1) : 0;
 
   return (
-    <svg width="50" height={height} viewBox={`0 0 50 ${height}`} className="shrink-0">
+    <svg
+      width="50"
+      height={height}
+      viewBox={`0 0 50 ${height}`}
+      className="shrink-0"
+    >
       {Array.from({ length: count }).map((_, i) => {
         const y = count > 1 ? 10 + i * spacing : mid;
         return (
@@ -190,7 +201,8 @@ export function SystemsFlow({ events, retryInfo }: SystemsFlowProps) {
       <div className="flex items-center justify-start gap-0 overflow-x-auto pt-4 pb-2">
         <TooltipProvider>
           {flow.map((node, index) => {
-            const isParallel = node.type === "parallel" && node.steps.length > 1;
+            const isParallel =
+              node.type === "parallel" && node.steps.length > 1;
             const isRetry = node.type === "retry" && node.steps.length > 1;
 
             return (
@@ -209,8 +221,10 @@ export function SystemsFlow({ events, retryInfo }: SystemsFlowProps) {
                   </div>
                 ) : isRetry ? (
                   <div className="relative mt-1">
-                    <div className="absolute -top-3 left-1/2 -translate-x-1/2 z-10 flex items-center gap-1
-                                    bg-amber-500/10 border border-amber-500/30 rounded-full px-2 py-0.5">
+                    <div
+                      className="absolute -top-3 left-1/2 -translate-x-1/2 z-10 flex items-center gap-1
+                                    bg-amber-500/10 border border-amber-500/30 rounded-full px-2 py-0.5"
+                    >
                       <RefreshCw className="h-2.5 w-2.5 text-amber-500" />
                       <span className="text-[9px] font-semibold text-amber-600 dark:text-amber-400">
                         {node.steps.length} attempts

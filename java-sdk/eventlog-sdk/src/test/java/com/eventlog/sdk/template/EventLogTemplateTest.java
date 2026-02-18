@@ -335,6 +335,41 @@ class EventLogTemplateTest {
     }
 
     @Test
+    void processStartWithAwaitCompletionSetsInProgress() {
+        EventLogTemplate template = createTemplate();
+        EventLogTemplate.ProcessLogger proc = template.forProcess("LONG_PROC")
+                .withCorrelationId("corr").withTraceId("trace")
+                .withAwaitCompletion();
+
+        proc.processStart("Starting long process", "INIT");
+
+        ArgumentCaptor<EventLogEntry> captor = ArgumentCaptor.forClass(EventLogEntry.class);
+        verify(mockLogger).log(captor.capture());
+
+        EventLogEntry event = captor.getValue();
+        assertEquals(EventType.PROCESS_START, event.getEventType());
+        assertEquals(EventStatus.IN_PROGRESS, event.getEventStatus());
+        assertEquals(0, event.getStepSequence());
+        assertEquals("Starting long process", event.getSummary());
+    }
+
+    @Test
+    void processStartDefaultsToSuccess() {
+        EventLogTemplate template = createTemplate();
+        EventLogTemplate.ProcessLogger proc = template.forProcess("QUICK_PROC")
+                .withCorrelationId("corr").withTraceId("trace");
+
+        proc.processStart("Starting", "INIT");
+
+        ArgumentCaptor<EventLogEntry> captor = ArgumentCaptor.forClass(EventLogEntry.class);
+        verify(mockLogger).log(captor.capture());
+
+        EventLogEntry event = captor.getValue();
+        assertEquals(EventType.PROCESS_START, event.getEventType());
+        assertEquals(EventStatus.SUCCESS, event.getEventStatus());
+    }
+
+    @Test
     void builderThrowsOnNullEventLog() {
         assertThrows(NullPointerException.class,
                 () -> EventLogTemplate.builder(null)

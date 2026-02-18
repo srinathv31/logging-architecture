@@ -295,6 +295,7 @@ public final class EventLogTemplate {
         private String endpoint;
         private HttpMethod httpMethod;
         private Integer httpStatusCode;
+        private boolean awaitCompletion = false;
         private ProcessLogger(String processName) {
             this.processName = processName;
         }
@@ -370,6 +371,11 @@ public final class EventLogTemplate {
             return this;
         }
 
+        public ProcessLogger withAwaitCompletion() {
+            this.awaitCompletion = true;
+            return this;
+        }
+
         /**
          * Get the root span ID for this process, initializing lazily if needed.
          */
@@ -400,7 +406,7 @@ public final class EventLogTemplate {
 
         public boolean processStart(String summary, String result) {
             EventLogEntry.Builder builder = baseBuilder(EventType.PROCESS_START)
-                    .eventStatus(EventStatus.SUCCESS)
+                    .eventStatus(awaitCompletion ? EventStatus.IN_PROGRESS : EventStatus.SUCCESS)
                     .stepSequence(0)
                     .summary(summary)
                     .result(result);

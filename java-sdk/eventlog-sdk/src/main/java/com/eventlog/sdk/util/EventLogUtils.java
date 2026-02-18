@@ -86,7 +86,7 @@ public final class EventLogUtils {
      * @param correlationId Process-level anchor ID
      * @param traceId Request-level trace ID
      * @param processName Business process name
-     * @return Builder with PROCESS_START defaults (step_sequence=0, status=IN_PROGRESS)
+     * @return Builder with PROCESS_START defaults (step_sequence=0, status=SUCCESS)
      *         Note: This overload does not set applicationId, targetSystem, originatingSystem,
      *         summary, or result. Set those fields before build(), or use the overload that
      *         accepts them.

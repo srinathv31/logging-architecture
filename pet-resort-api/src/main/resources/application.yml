@@ -7,7 +7,7 @@ server:
 
 eventlog:
   enabled: true
-  base-url: http://localhost:3000
+  base-url: http://localhost:3001
   application-id: pet-resort-api
   target-system: PET_RESORT
   originating-system: PET_RESORT
