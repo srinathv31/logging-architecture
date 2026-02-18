@@ -12,6 +12,7 @@ import com.eventlog.sdk.template.EventLogTemplate.ProcessLogger;
 import com.eventlog.sdk.util.EventLogUtils;
 import com.example.petresort.exception.BookingConflictException;
 import com.example.petresort.exception.BookingNotFoundException;
+import com.example.petresort.exception.KennelVendorTimeoutException;
 import com.example.petresort.exception.PetNotFoundException;
 import com.example.petresort.model.*;
 import com.example.petresort.store.InMemoryBookingStore;
@@ -21,11 +22,9 @@ import org.slf4j.LoggerFactory;
 import org.slf4j.MDC;
 import org.springframework.stereotype.Service;
 
-import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.Collection;
 import java.util.List;
-import java.util.Map;
 
 @Service
 public class BookingService {
@@ -75,65 +74,216 @@ public class BookingService {
                 .orElse(null);
 
         String bookingId = bookingStore.nextId();
+        String simulate = MDC.get("simulate");
 
         // Create the ProcessLogger for this multi-step process
         ProcessLogger processLogger = eventLogTemplate.forProcess("CREATE_BOOKING")
                 .withCorrelationId(correlationId)
                 .withTraceId(traceId)
                 .withSpanId(spanId)
+                .withEndpoint("/api/bookings")
+                .withHttpMethod(HttpMethod.POST)
                 .addIdentifier("pet_id", request.petId())
                 .addIdentifier("booking_id", bookingId);
 
         if (pet != null) {
             processLogger
+                    .withAccountId(pet.ownerId())
                     .addIdentifier("owner_id", pet.ownerId())
                     .addMetadata("species", pet.species().name())
                     .addMetadata("breed", pet.breed())
-                    .addMetadata("special_instructions", pet.specialInstructions());
+                    .addMetadata("pet_name", pet.name());
+            if (pet.specialInstructions() != null) {
+                processLogger.addMetadata("special_instructions", pet.specialInstructions());
+            }
         }
 
         // Step 0: PROCESS_START
         processLogger.processStart(
-                EventLogUtils.generateSummary("Create", "booking", "started"),
+                "Initiating booking " + bookingId + " for "
+                        + (pet != null ? pet.name() + " (" + pet.species() + ")" : request.petId()),
                 "BOOKING_STARTED");
 
         // Step 1: Validate Pet
         if (pet == null) {
             processLogger.error("PET_NOT_FOUND",
                     "Pet not found: " + request.petId(),
-                    EventLogUtils.generateSummary("Create", "booking", "failed", "pet not found"),
+                    "Booking " + bookingId + " failed — pet " + request.petId() + " does not exist in the system",
                     "VALIDATION_FAILED");
             throw new PetNotFoundException(request.petId());
         }
 
+        try { Thread.sleep(50); } catch (InterruptedException e) { Thread.currentThread().interrupt(); }
+
+        processLogger.withTargetSystem("PET_RESORT");
         processLogger.logStep(1, "Validate Pet", EventStatus.SUCCESS,
-                EventLogUtils.generateSummary("Validate", "pet", "passed"),
+                "Pet " + pet.name() + " (ID: " + pet.petId() + ", " + pet.species() + " - " + pet.breed() + ") validated for booking",
                 "PET_VALID");
 
-        // Step 2: Check Availability
-        processLogger.logStep(2, "Check Availability", EventStatus.IN_PROGRESS,
-                EventLogUtils.generateSummary("Check", "availability", "in progress"));
-        String step2SpanId = processLogger.getLastStepSpanId();
+        // ── Branch based on X-Simulate header ──
 
-        // Simulate availability check (always available for demo)
-        // Reuse same spanId for the status transition (IN_PROGRESS → SUCCESS)
-        processLogger.logStep(2, "Check Availability", EventStatus.SUCCESS,
-                EventLogUtils.generateSummary("Check", "availability", "confirmed"),
-                "DATES_AVAILABLE", step2SpanId);
+        if ("kennel-timeout".equals(simulate)) {
+            return createBookingKennelTimeout(processLogger, pet, bookingId);
+        } else if ("kennel-retry".equals(simulate)) {
+            return createBookingKennelRetry(processLogger, pet, bookingId, request, correlationId, traceId, start);
+        } else {
+            return createBookingHappyPath(processLogger, pet, bookingId, request, correlationId, traceId, start);
+        }
+    }
 
-        // Step 3: Confirm Booking
+    /**
+     * Scenario 2: Kennel vendor timeout — dedicated error, no PROCESS_END
+     */
+    private Booking createBookingKennelTimeout(ProcessLogger processLogger, Pet pet, String bookingId) {
+        processLogger.withTargetSystem("KENNEL_VENDOR");
+        try { Thread.sleep(2000); } catch (InterruptedException e) { Thread.currentThread().interrupt(); }
+
+        processLogger.logStep(2, "Kennel Availability Check", EventStatus.FAILURE,
+                "Kennel vendor timed out after 2000ms while checking availability for " + pet.species()
+                        + " — no response from KENNEL_VENDOR",
+                "KENNEL_CHECK_TIMEOUT");
+
+        processLogger.error("KENNEL_VENDOR_TIMEOUT",
+                "Kennel vendor did not respond within 2000ms for pet " + pet.petId(),
+                "Booking " + bookingId + " aborted — KENNEL_VENDOR unreachable, pet " + pet.name()
+                        + " cannot be accommodated",
+                "BOOKING_ABORTED");
+
+        throw new KennelVendorTimeoutException(pet.petId(),
+                "Kennel vendor timed out while checking availability for " + pet.name());
+    }
+
+    /**
+     * Scenario 3: Kennel retry — attempt 1 fails, attempt 2 succeeds
+     */
+    private Booking createBookingKennelRetry(ProcessLogger processLogger, Pet pet, String bookingId,
+                                              CreateBookingRequest request, String correlationId,
+                                              String traceId, long start) {
+        // Kennel Check — Attempt 1 (FAILURE)
+        processLogger.withTargetSystem("KENNEL_VENDOR");
+        processLogger.addMetadata("attempt", 1);
+        try { Thread.sleep(800); } catch (InterruptedException e) { Thread.currentThread().interrupt(); }
+
+        processLogger.logStep(2, "Kennel Availability Check", EventStatus.FAILURE,
+                "No heat-lamp kennels available in zone D for " + pet.species()
+                        + " — attempt 1 failed, expanding search area",
+                "NO_HEATED_KENNELS");
+
+        // Kennel Check — Attempt 2 (SUCCESS) — retryStep reuses stepSequence + stepName
+        processLogger.addMetadata("attempt", 2);
+        processLogger.addMetadata("expanded_search", true);
+        try { Thread.sleep(1200); } catch (InterruptedException e) { Thread.currentThread().interrupt(); }
+
+        processLogger.retryStep(EventStatus.SUCCESS,
+                "Heat-lamp kennel found in expanded zone D+ for " + pet.name() + " (" + pet.species()
+                        + ") — attempt 2 succeeded",
+                "KENNEL_AVAILABLE");
+
+        // Vet Check
+        processLogger.withTargetSystem("VET_CHECK_API");
+        try { Thread.sleep(1500); } catch (InterruptedException e) { Thread.currentThread().interrupt(); }
+
+        processLogger.logStep(3, "Veterinary Health Check", EventStatus.SUCCESS,
+                "Health clearance received from VET_CHECK_API for " + pet.name()
+                        + " — reptile heat requirements noted",
+                "VET_CLEARED");
+
+        // Confirm Booking
         Booking booking = new Booking(bookingId, request.petId(), pet.ownerId(),
                 request.checkInDate(), request.checkOutDate());
         bookingStore.save(booking);
 
-        processLogger.logStep(3, "Confirm Booking", EventStatus.SUCCESS,
-                EventLogUtils.generateSummary("Confirm", "booking", "created"),
+        processLogger.withTargetSystem("PET_RESORT");
+        processLogger.logStep(4, "Confirm Booking", EventStatus.SUCCESS,
+                "Booking " + bookingId + " confirmed for " + pet.name() + " — "
+                        + request.checkInDate() + " to " + request.checkOutDate()
+                        + ", owner: " + pet.ownerId(),
                 "BOOKING_CONFIRMED");
+
+        // PROCESS_END
+        int duration = (int) (System.currentTimeMillis() - start);
+        processLogger.withHttpStatusCode(201);
+        processLogger.processEnd(5, EventStatus.SUCCESS,
+                "Booking " + bookingId + " completed in " + duration + "ms — " + pet.name()
+                        + " (" + pet.species() + ") booked with kennel retry, owner " + pet.ownerId(),
+                "BOOKING_CREATED", duration);
+
+        try {
+            eventLogClient.createCorrelationLink(correlationId, pet.ownerId());
+        } catch (Exception e) {
+            log.warn("Failed to create correlation link: {}", e.getMessage());
+        }
+
+        log.info("Booking {} created for pet {} (owner {}) with kennel retry",
+                bookingId, request.petId(), pet.ownerId());
+        return booking;
+    }
+
+    /**
+     * Scenarios 1 & 4: Happy path — parallel kennel + vet checks, fork-join confirm with span_links
+     */
+    private Booking createBookingHappyPath(ProcessLogger processLogger, Pet pet, String bookingId,
+                                            CreateBookingRequest request, String correlationId,
+                                            String traceId, long start) {
+        // Step 2a: Kennel Availability Check (parallel)
+        processLogger.withTargetSystem("KENNEL_VENDOR");
+        try { Thread.sleep(800); } catch (InterruptedException e) { Thread.currentThread().interrupt(); }
+
+        processLogger.logStep(2, "Kennel Availability Check", EventStatus.SUCCESS,
+                "Kennel availability confirmed via KENNEL_VENDOR for " + pet.species()
+                        + " in zone " + getZone(pet.species()),
+                "KENNEL_AVAILABLE");
+        String kennelSpanId = processLogger.getLastStepSpanId();
+
+        // Step 2b: Veterinary Health Check (parallel — same step_sequence, different span_id)
+        processLogger.withTargetSystem("VET_CHECK_API");
+        try { Thread.sleep(700); } catch (InterruptedException e) { Thread.currentThread().interrupt(); }
+
+        processLogger.logStep(2, "Veterinary Health Check", EventStatus.SUCCESS,
+                "Health clearance received from VET_CHECK_API for " + pet.name()
+                        + " — no conditions flagged",
+                "VET_CLEARED");
+        String vetSpanId = processLogger.getLastStepSpanId();
+
+        // Step 3: Confirm Booking with span_links referencing both parallel steps (fork-join)
+        Booking booking = new Booking(bookingId, request.petId(), pet.ownerId(),
+                request.checkInDate(), request.checkOutDate());
+        bookingStore.save(booking);
+
+        // Use raw builder for span_links support (ProcessLogger doesn't expose spanLinks)
+        String confirmSpanId = EventLogUtils.createSpanId();
+        EventLogEntry confirmEvent = EventLogEntry.builder()
+                .correlationId(correlationId)
+                .traceId(traceId)
+                .spanId(confirmSpanId)
+                .parentSpanId(processLogger.getRootSpanId())
+                .applicationId("pet-resort-api")
+                .targetSystem("PET_RESORT")
+                .originatingSystem("PET_RESORT")
+                .processName("CREATE_BOOKING")
+                .accountId(pet.ownerId())
+                .stepSequence(3)
+                .stepName("Confirm Booking")
+                .eventType(EventType.STEP)
+                .eventStatus(EventStatus.SUCCESS)
+                .summary("Booking " + bookingId + " confirmed for " + pet.name() + " — "
+                        + request.checkInDate() + " to " + request.checkOutDate()
+                        + ", owner: " + pet.ownerId())
+                .result("BOOKING_CONFIRMED")
+                .spanLinks(List.of(kennelSpanId, vetSpanId))
+                .addIdentifier("pet_id", request.petId())
+                .addIdentifier("booking_id", bookingId)
+                .addIdentifier("owner_id", pet.ownerId())
+                .build();
+        asyncEventLogger.log(confirmEvent);
 
         // Step 4: PROCESS_END
         int duration = (int) (System.currentTimeMillis() - start);
+        processLogger.withTargetSystem("PET_RESORT");
+        processLogger.withHttpStatusCode(201);
         processLogger.processEnd(4, EventStatus.SUCCESS,
-                EventLogUtils.generateSummary("Create", "booking", "completed"),
+                "Booking " + bookingId + " completed in " + duration + "ms — " + pet.name()
+                        + " (" + pet.species() + ") booked successfully, owner " + pet.ownerId(),
                 "BOOKING_CREATED", duration);
 
         // Create correlation link between this booking flow and the owner's account
@@ -147,6 +297,15 @@ public class BookingService {
         return booking;
     }
 
+    private static String getZone(PetSpecies species) {
+        return switch (species) {
+            case DOG -> "A";
+            case CAT -> "B";
+            case BIRD, RABBIT -> "C";
+            case REPTILE -> "D";
+        };
+    }
+
     public Booking checkIn(String bookingId, CheckInRequest request) {
         long start = System.currentTimeMillis();
         String correlationId = MDC.get("correlationId");
@@ -158,38 +317,56 @@ public class BookingService {
         ProcessLogger processLogger = eventLogTemplate.forProcess("CHECK_IN_PET")
                 .withCorrelationId(correlationId)
                 .withTraceId(traceId)
-                .withParentSpanId(parentSpanId);
+                .withParentSpanId(parentSpanId)
+                .withEndpoint("/api/bookings/" + bookingId + "/check-in")
+                .withHttpMethod(HttpMethod.POST);
+
+        if (booking != null) {
+            processLogger
+                    .withAccountId(booking.getOwnerId())
+                    .addIdentifier("booking_id", bookingId)
+                    .addIdentifier("pet_id", booking.getPetId())
+                    .addIdentifier("owner_id", booking.getOwnerId());
+        }
 
         // Step 0: PROCESS_START with request payload
         processLogger.addMetadata("request_payload",
                 request != null && request.kennelPreference() != null
                         ? "{\"kennelPreference\":\"" + request.kennelPreference() + "\"}" : "{}");
         processLogger.processStart(
-                EventLogUtils.generateSummary("Check in", "pet", "started"),
+                "Initiating check-in for booking " + bookingId,
                 "CHECK_IN_STARTED");
 
         // Step 1: Verify Booking
         if (booking == null) {
             processLogger.error("BOOKING_NOT_FOUND",
                     "Booking not found: " + bookingId,
-                    EventLogUtils.generateSummary("Check in", "pet", "failed", "booking not found"));
+                    "Check-in failed — booking " + bookingId + " does not exist");
             throw new BookingNotFoundException(bookingId);
         }
 
         if (booking.getStatus() != BookingStatus.PENDING) {
             processLogger.error("DOUBLE_CHECK_IN",
                     "Booking " + bookingId + " is already " + booking.getStatus(),
-                    EventLogUtils.generateSummary("Check in", "pet", "failed", "invalid state"));
+                    "Check-in failed — booking " + bookingId + " is " + booking.getStatus()
+                            + ", expected PENDING");
             throw new BookingConflictException(bookingId, "DOUBLE_CHECK_IN",
                     "Booking is already " + booking.getStatus());
         }
 
+        Pet pet = petStore.findById(booking.getPetId()).orElseThrow();
+
+        try { Thread.sleep(50); } catch (InterruptedException e) { Thread.currentThread().interrupt(); }
+
         processLogger.logStep(1, "Verify Booking", EventStatus.SUCCESS,
-                EventLogUtils.generateSummary("Verify", "booking", "valid"),
+                "Booking " + bookingId + " verified — " + pet.name() + " (" + pet.species()
+                        + ") is PENDING check-in",
                 "BOOKING_VERIFIED");
 
         // Step 2: Assign Kennel (delegated to KennelService which uses @LogEvent)
-        Pet pet = petStore.findById(booking.getPetId()).orElseThrow();
+        processLogger.withTargetSystem("KENNEL_VENDOR");
+        try { Thread.sleep(600); } catch (InterruptedException e) { Thread.currentThread().interrupt(); }
+
         String preference = request != null ? request.kennelPreference() : null;
         KennelService.KennelAssignment assignment = kennelService.assignKennel(pet.species(), preference);
 
@@ -197,6 +374,9 @@ public class BookingService {
         processLogger.addMetadata("kennel_zone", assignment.zone());
 
         // Step 3: Record Check-In
+        processLogger.withTargetSystem("PET_RESORT");
+        try { Thread.sleep(80); } catch (InterruptedException e) { Thread.currentThread().interrupt(); }
+
         booking.setStatus(BookingStatus.CHECKED_IN);
         booking.setKennelNumber(assignment.kennelNumber());
         booking.setCheckedInAt(Instant.now());
@@ -205,15 +385,16 @@ public class BookingService {
         processLogger.addMetadata("response_payload",
                 "{\"kennelNumber\":\"" + assignment.kennelNumber() + "\",\"status\":\"CHECKED_IN\"}");
         processLogger.logStep(3, "Record Check-In", EventStatus.SUCCESS,
-                EventLogUtils.generateSummary("Record", "check-in", "completed",
-                        "kennel " + assignment.kennelNumber()),
+                pet.name() + " (" + pet.species() + ") checked into kennel "
+                        + assignment.kennelNumber() + " (zone " + assignment.zone() + ")",
                 "CHECK_IN_RECORDED");
 
         // Step 4: PROCESS_END
         int duration = (int) (System.currentTimeMillis() - start);
+        processLogger.withHttpStatusCode(200);
         processLogger.processEnd(4, EventStatus.SUCCESS,
-                EventLogUtils.generateSummary("Check in", "pet", "completed",
-                        pet.name() + " in kennel " + assignment.kennelNumber()),
+                "Check-in completed in " + duration + "ms — " + pet.name()
+                        + " is in kennel " + assignment.kennelNumber(),
                 "CHECK_IN_COMPLETE", duration);
 
         log.info("Pet {} checked into kennel {}", booking.getPetId(), assignment.kennelNumber());
@@ -231,29 +412,34 @@ public class BookingService {
         String batchId = EventLogUtils.createBatchId("checkout");
         String rootSpanId = EventLogUtils.createSpanId();
         String appId = "pet-resort-api";
-        String target = "PET_RESORT";
         String origin = "PET_RESORT";
+
+        Booking booking = bookingStore.findById(bookingId).orElse(null);
+        Pet pet = booking != null ? petStore.findById(booking.getPetId()).orElse(null) : null;
 
         // Step 0: PROCESS_START via EventLogUtils
         EventLogEntry startEvent = EventLogUtils.processStart(
                         correlationId, traceId, "CHECK_OUT_PET",
-                        appId, target, origin,
-                        EventLogUtils.generateSummary("Check out", "pet", "started"),
+                        appId, "PET_RESORT", origin,
+                        "Initiating check-out for booking " + bookingId
+                                + (pet != null ? " — " + pet.name() + " (" + pet.species() + ")" : ""),
                         "CHECK_OUT_STARTED")
                 .batchId(batchId)
                 .spanId(rootSpanId)
+                .accountId(booking != null ? booking.getOwnerId() : null)
+                .endpoint("/api/bookings/" + bookingId + "/check-out")
+                .httpMethod(HttpMethod.POST)
+                .addIdentifier("booking_id", bookingId)
                 .build();
         asyncEventLogger.log(startEvent);
 
         // Step 1: Verify Check-In
-        Booking booking = bookingStore.findById(bookingId).orElse(null);
-
         if (booking == null) {
             EventLogEntry errorEvent = EventLogUtils.error(
                             correlationId, traceId, "CHECK_OUT_PET",
                             "BOOKING_NOT_FOUND", "Booking not found: " + bookingId,
-                            appId, target, origin,
-                            EventLogUtils.generateSummary("Check out", "pet", "failed"),
+                            appId, "PET_RESORT", origin,
+                            "Check-out failed — booking " + bookingId + " does not exist",
                             "NOT_FOUND")
                     .batchId(batchId)
                     .spanId(EventLogUtils.createSpanId())
@@ -267,8 +453,9 @@ public class BookingService {
             EventLogEntry errorEvent = EventLogUtils.error(
                             correlationId, traceId, "CHECK_OUT_PET",
                             "NOT_CHECKED_IN", "Booking " + bookingId + " is " + booking.getStatus(),
-                            appId, target, origin,
-                            EventLogUtils.generateSummary("Check out", "pet", "failed", "not checked in"),
+                            appId, "PET_RESORT", origin,
+                            "Check-out failed — booking " + bookingId + " is " + booking.getStatus()
+                                    + ", expected CHECKED_IN",
                             "INVALID_STATE")
                     .batchId(batchId)
                     .spanId(EventLogUtils.createSpanId())
@@ -282,53 +469,92 @@ public class BookingService {
         EventLogEntry verifyEvent = EventLogUtils.step(
                         correlationId, traceId, "CHECK_OUT_PET",
                         1, "Verify Check-In", EventStatus.SUCCESS,
-                        appId, target, origin,
-                        EventLogUtils.generateSummary("Verify", "check-in status", "confirmed"),
+                        appId, "PET_RESORT", origin,
+                        "Booking " + bookingId + " verified — " + pet.name()
+                                + " is CHECKED_IN at kennel " + booking.getKennelNumber(),
                         "VERIFIED")
                 .batchId(batchId)
                 .spanId(EventLogUtils.createSpanId())
                 .parentSpanId(rootSpanId)
+                .accountId(booking.getOwnerId())
+                .addIdentifier("booking_id", bookingId)
+                .addIdentifier("pet_id", booking.getPetId())
+                .addIdentifier("owner_id", booking.getOwnerId())
                 .build();
         asyncEventLogger.log(verifyEvent);
 
-        // Step 2: Process Payment — with maskLast4 and spanLinks
+        // Step 2a: Process Payment (STRIPE) — parallel with invoice
         String paymentSpanId = EventLogUtils.createSpanId();
+        String idempotencyKey = "checkout-" + bookingId + "-" + Instant.now().getEpochSecond();
 
         paymentService.processPayment(bookingId, request.paymentAmount(), request.cardNumberLast4(), rootSpanId);
+
+        try { Thread.sleep(1200); } catch (InterruptedException e) { Thread.currentThread().interrupt(); }
 
         EventLogEntry paymentStep = EventLogUtils.step(
                         correlationId, traceId, "CHECK_OUT_PET",
                         2, "Process Payment", EventStatus.SUCCESS,
-                        appId, target, origin,
-                        EventLogUtils.generateSummary("Process", "payment", "completed",
-                                request.paymentAmount() + " charged"),
+                        appId, "STRIPE", origin,
+                        "Payment of $" + request.paymentAmount() + " processed via STRIPE for booking "
+                                + bookingId + " — card ending ***" + request.cardNumberLast4(),
                         "PAYMENT_SUCCESS")
                 .batchId(batchId)
                 .spanId(paymentSpanId)
                 .parentSpanId(rootSpanId)
-                .spanLinks(List.of(traceId))
+                .accountId(booking.getOwnerId())
+                .idempotencyKey(idempotencyKey)
+                .requestPayload("{\"amount\":" + request.paymentAmount()
+                        + ",\"currency\":\"USD\",\"card_last4\":\""
+                        + EventLogUtils.maskLast4(request.cardNumberLast4())
+                        + "\",\"booking_id\":\"" + bookingId + "\"}")
+                .responsePayload("{\"charge_id\":\"ch_" + bookingId.replace("BKG-", "")
+                        + "\",\"status\":\"succeeded\",\"amount\":" + request.paymentAmount() + "}")
+                .addIdentifier("booking_id", bookingId)
+                .addIdentifier("card_number_last4", EventLogUtils.maskLast4(request.cardNumberLast4()))
                 .addMetadata("amount", request.paymentAmount().toString())
-                .addMetadata("card_last4", EventLogUtils.maskLast4(request.cardNumberLast4()))
                 .build();
         asyncEventLogger.log(paymentStep);
 
-        // Step 3: Release Pet — with idempotencyKey
+        // Step 2b: Generate Invoice (PET_RESORT) — parallel with payment
+        String invoiceSpanId = EventLogUtils.createSpanId();
+        try { Thread.sleep(400); } catch (InterruptedException e) { Thread.currentThread().interrupt(); }
+
+        EventLogEntry invoiceStep = EventLogUtils.step(
+                        correlationId, traceId, "CHECK_OUT_PET",
+                        2, "Generate Invoice", EventStatus.SUCCESS,
+                        appId, "PET_RESORT", origin,
+                        "Invoice generated for booking " + bookingId + " — total $"
+                                + request.paymentAmount() + " for " + pet.name() + "'s stay",
+                        "INVOICE_GENERATED")
+                .batchId(batchId)
+                .spanId(invoiceSpanId)
+                .parentSpanId(rootSpanId)
+                .accountId(booking.getOwnerId())
+                .addIdentifier("booking_id", bookingId)
+                .build();
+        asyncEventLogger.log(invoiceStep);
+
+        // Step 3: Release Kennel — with span_links referencing payment and invoice (fork-join)
         booking.setStatus(BookingStatus.CHECKED_OUT);
         booking.setTotalAmount(request.paymentAmount());
         booking.setCheckedOutAt(Instant.now());
         bookingStore.save(booking);
 
-        String idempotencyKey = "checkout-" + bookingId + "-" + Instant.now().getEpochSecond();
+        try { Thread.sleep(300); } catch (InterruptedException e) { Thread.currentThread().interrupt(); }
+
         EventLogEntry releaseEvent = EventLogUtils.step(
                         correlationId, traceId, "CHECK_OUT_PET",
-                        3, "Release Pet", EventStatus.SUCCESS,
-                        appId, target, origin,
-                        EventLogUtils.generateSummary("Release", "pet", "released"),
-                        "PET_RELEASED")
+                        3, "Release Kennel", EventStatus.SUCCESS,
+                        appId, "KENNEL_VENDOR", origin,
+                        "Kennel " + booking.getKennelNumber() + " released via KENNEL_VENDOR — "
+                                + pet.name() + " checked out after stay",
+                        "KENNEL_RELEASED")
                 .batchId(batchId)
                 .spanId(EventLogUtils.createSpanId())
                 .parentSpanId(rootSpanId)
-                .idempotencyKey(idempotencyKey)
+                .accountId(booking.getOwnerId())
+                .spanLinks(List.of(paymentSpanId, invoiceSpanId))
+                .addIdentifier("booking_id", bookingId)
                 .build();
         asyncEventLogger.log(releaseEvent);
 
@@ -337,12 +563,17 @@ public class BookingService {
         EventLogEntry endEvent = EventLogUtils.processEnd(
                         correlationId, traceId, "CHECK_OUT_PET",
                         4, EventStatus.SUCCESS, duration,
-                        appId, target, origin,
-                        EventLogUtils.generateSummary("Check out", "pet", "completed"),
+                        appId, "PET_RESORT", origin,
+                        "Check-out completed in " + duration + "ms — " + pet.name()
+                                + " released from kennel " + booking.getKennelNumber()
+                                + ", total $" + request.paymentAmount(),
                         "CHECK_OUT_COMPLETE")
                 .batchId(batchId)
                 .spanId(EventLogUtils.createSpanId())
                 .parentSpanId(rootSpanId)
+                .accountId(booking.getOwnerId())
+                .httpStatusCode(200)
+                .addIdentifier("booking_id", bookingId)
                 .build();
         asyncEventLogger.log(endEvent);
 

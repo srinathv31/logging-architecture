@@ -28,6 +28,9 @@ public class KennelService {
               failureSummary = "Kennel assignment failed",
               failureResult = "ASSIGNMENT_FAILED")
     public KennelAssignment assignKennel(PetSpecies species, String preference) {
+        // Simulate kennel vendor API latency
+        try { Thread.sleep(100); } catch (InterruptedException e) { Thread.currentThread().interrupt(); }
+
         String zone = ZONE_MAP.getOrDefault(species, "A");
         int number = ThreadLocalRandom.current().nextInt(1, 20);
 

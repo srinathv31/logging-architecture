@@ -42,6 +42,11 @@ public class EventLogMdcFilter extends OncePerRequestFilter {
             MDC.put("traceId", traceId);
             MDC.put("spanId", spanId);
 
+            String simulate = request.getHeader("X-Simulate");
+            if (simulate != null && !simulate.isBlank()) {
+                MDC.put("simulate", simulate);
+            }
+
             response.setHeader(CORRELATION_ID_HEADER, correlationId);
             response.setHeader(TRACE_ID_HEADER, traceId);
             response.setHeader(SPAN_ID_HEADER, spanId);

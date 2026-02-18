@@ -44,21 +44,24 @@ public class PaymentService {
         String traceId = MDC.get("traceId");
         long start = System.currentTimeMillis();
 
+        // Simulate Stripe API call latency
+        try { Thread.sleep(100); } catch (InterruptedException e) { Thread.currentThread().interrupt(); }
+
         // Build the event entry using the raw builder
         EventLogEntry.Builder paymentBuilder = EventLogEntry.builder()
                 .correlationId(correlationId)
                 .traceId(traceId)
                 .spanId(EventLogUtils.createSpanId())
                 .applicationId(applicationId)
-                .targetSystem(targetSystem)
+                .targetSystem("STRIPE")
                 .originatingSystem(originatingSystem)
                 .processName("PROCESS_PAYMENT")
                 .stepSequence(1)
                 .stepName("Charge Card")
                 .eventType(EventType.STEP)
                 .eventStatus(EventStatus.SUCCESS)
-                .summary(EventLogUtils.generateSummary("Process", "payment",
-                        "charged", amount + " to card"))
+                .summary("Payment of $" + amount + " processed via STRIPE for booking "
+                        + bookingId + " — card ending ***" + EventLogUtils.maskLast4(cardLast4))
                 .result("PAYMENT_PROCESSED")
                 .metadata(Map.of(
                         "booking_id", bookingId,
