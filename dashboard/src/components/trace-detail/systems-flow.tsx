@@ -1,8 +1,12 @@
 "use client";
 
-import { CheckCircle2, XCircle, Clock, MinusCircle, Server, Network } from "lucide-react";
+import { CheckCircle2, XCircle, Clock, Network, RefreshCw } from "lucide-react";
 import type { TraceEvent } from "@/data/queries";
-import { buildSystemFlow } from "@/lib/span-tree";
+import {
+  buildStepFlow,
+  type StepFlowNode,
+  type RetryInfo,
+} from "@/lib/span-tree";
 import {
   Tooltip,
   TooltipContent,
@@ -12,36 +16,32 @@ import {
 
 interface SystemsFlowProps {
   events: TraceEvent[];
+  retryInfo?: RetryInfo | null;
 }
 
-interface SystemNode {
-  name: string;
-  eventCount: number;
-  successCount: number;
-  failureCount: number;
-  inProgressCount: number;
-  totalTimeMs: number;
-}
+type StepStatus = "success" | "failure" | "inProgress";
 
 const STATUS_ICONS = {
   success: CheckCircle2,
   failure: XCircle,
   inProgress: Clock,
-  mixed: MinusCircle,
 };
 
 const STATUS_COLORS = {
   success: "text-green-500 bg-green-500/10 border-green-500/30",
   failure: "text-red-500 bg-red-500/10 border-red-500/30",
   inProgress: "text-yellow-500 bg-yellow-500/10 border-yellow-500/30",
-  mixed: "text-gray-500 bg-gray-500/10 border-gray-500/30",
 };
 
-function getSystemStatus(node: SystemNode): "success" | "failure" | "inProgress" | "mixed" {
-  if (node.failureCount > 0) return "failure";
-  if (node.inProgressCount > 0) return "inProgress";
-  if (node.successCount === node.eventCount) return "success";
-  return "mixed";
+function getStepStatus(status: string): StepStatus {
+  if (status === "FAILURE") return "failure";
+  if (status === "IN_PROGRESS") return "inProgress";
+  return "success";
+}
+
+function getStepLabel(step: StepFlowNode["steps"][number]): string {
+  if (step.stepName) return step.stepName;
+  return step.processName;
 }
 
 function formatMs(ms: number): string {
@@ -51,56 +51,44 @@ function formatMs(ms: number): string {
   return `${(ms / 60000).toFixed(1)}m`;
 }
 
-function SystemNodeCard({ node }: { node: SystemNode }) {
-  const status = getSystemStatus(node);
+function StepNodeCard({ step }: { step: StepFlowNode["steps"][number] }) {
+  const status = getStepStatus(step.eventStatus);
   const StatusIcon = STATUS_ICONS[status];
   const colorClasses = STATUS_COLORS[status];
+  const label = getStepLabel(step);
 
   return (
     <Tooltip>
       <TooltipTrigger asChild>
         <div
           className={`
-            flex flex-col items-center gap-1.5 p-4 rounded-xl border-2 min-w-[120px]
+            flex flex-col items-center gap-1 px-3 py-2 rounded-lg border-2 min-w-[100px]
             transition-all hover:scale-105 hover:shadow-md cursor-default
             ${colorClasses}
           `}
         >
-          <div className="flex items-center gap-2">
-            <Server className="h-4 w-4 opacity-60" />
-            <StatusIcon className="h-4 w-4" />
-          </div>
-          <span className="text-xs font-semibold text-center whitespace-nowrap">
-            {node.name}
+          <StatusIcon className="h-3.5 w-3.5" />
+          <span className="text-[11px] font-semibold text-center whitespace-nowrap leading-tight">
+            {label}
           </span>
-          <div className="flex items-center gap-2 text-[10px] text-muted-foreground">
-            <span>
-              {node.eventCount} event{node.eventCount !== 1 ? "s" : ""}
+          <span className="text-[9px] text-muted-foreground whitespace-nowrap">
+            {step.targetSystem}
+          </span>
+          {step.executionTimeMs != null && step.executionTimeMs > 0 && (
+            <span className="text-[9px] font-mono text-muted-foreground">
+              {formatMs(step.executionTimeMs)}
             </span>
-            {node.totalTimeMs > 0 && (
-              <>
-                <span className="opacity-40">|</span>
-                <span className="font-mono">{formatMs(node.totalTimeMs)}</span>
-              </>
-            )}
-          </div>
+          )}
         </div>
       </TooltipTrigger>
       <TooltipContent>
         <div className="text-xs space-y-1">
-          <p className="font-semibold">{node.name}</p>
-          <p>Total: {node.eventCount} events</p>
-          {node.totalTimeMs > 0 && (
-            <p className="font-mono">Time: {formatMs(node.totalTimeMs)}</p>
-          )}
-          {node.successCount > 0 && (
-            <p className="text-green-500">Success: {node.successCount}</p>
-          )}
-          {node.failureCount > 0 && (
-            <p className="text-red-500">Failures: {node.failureCount}</p>
-          )}
-          {node.inProgressCount > 0 && (
-            <p className="text-yellow-500">In Progress: {node.inProgressCount}</p>
+          <p className="font-semibold">{label}</p>
+          <p>Type: {step.eventType}</p>
+          <p>Status: {step.eventStatus}</p>
+          <p>System: {step.targetSystem}</p>
+          {step.executionTimeMs != null && step.executionTimeMs > 0 && (
+            <p className="font-mono">Time: {formatMs(step.executionTimeMs)}</p>
           )}
         </div>
       </TooltipContent>
@@ -119,10 +107,7 @@ function Arrow() {
         className="stroke-primary/40 flow-line-animated"
         strokeWidth="2"
       />
-      <polygon
-        points="28,5 38,10 28,15"
-        className="fill-primary/40"
-      />
+      <polygon points="28,5 38,10 28,15" className="fill-primary/40" />
     </svg>
   );
 }
@@ -133,7 +118,12 @@ function ForkArrows({ count }: { count: number }) {
   const spacing = count > 1 ? (height - 20) / (count - 1) : 0;
 
   return (
-    <svg width="50" height={height} viewBox={`0 0 50 ${height}`} className="shrink-0">
+    <svg
+      width="50"
+      height={height}
+      viewBox={`0 0 50 ${height}`}
+      className="shrink-0"
+    >
       {Array.from({ length: count }).map((_, i) => {
         const y = count > 1 ? 10 + i * spacing : mid;
         return (
@@ -161,7 +151,12 @@ function JoinArrows({ count }: { count: number }) {
   const spacing = count > 1 ? (height - 20) / (count - 1) : 0;
 
   return (
-    <svg width="50" height={height} viewBox={`0 0 50 ${height}`} className="shrink-0">
+    <svg
+      width="50"
+      height={height}
+      viewBox={`0 0 50 ${height}`}
+      className="shrink-0"
+    >
       {Array.from({ length: count }).map((_, i) => {
         const y = count > 1 ? 10 + i * spacing : mid;
         return (
@@ -182,31 +177,8 @@ function JoinArrows({ count }: { count: number }) {
   );
 }
 
-export function SystemsFlow({ events }: SystemsFlowProps) {
-  // Build per-system stats
-  const systemMap = new Map<string, SystemNode>();
-
-  for (const event of events) {
-    if (!systemMap.has(event.targetSystem)) {
-      systemMap.set(event.targetSystem, {
-        name: event.targetSystem,
-        eventCount: 0,
-        successCount: 0,
-        failureCount: 0,
-        inProgressCount: 0,
-        totalTimeMs: 0,
-      });
-    }
-
-    const node = systemMap.get(event.targetSystem)!;
-    node.eventCount++;
-    if (event.eventStatus === "SUCCESS") node.successCount++;
-    else if (event.eventStatus === "FAILURE") node.failureCount++;
-    else if (event.eventStatus === "IN_PROGRESS") node.inProgressCount++;
-    if (event.executionTimeMs) node.totalTimeMs += event.executionTimeMs;
-  }
-
-  const flow = buildSystemFlow(events);
+export function SystemsFlow({ events, retryInfo }: SystemsFlowProps) {
+  const flow = buildStepFlow(events);
 
   if (flow.length === 0) return null;
 
@@ -219,40 +191,56 @@ export function SystemsFlow({ events }: SystemsFlowProps) {
         <h3 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground">
           System Journey
         </h3>
+        {retryInfo && (
+          <span className="text-xs text-muted-foreground italic">
+            (across all attempts)
+          </span>
+        )}
       </div>
 
-      <div className="flex items-center justify-start gap-0 overflow-x-auto pb-2">
+      <div className="flex items-center justify-start gap-0 overflow-x-auto pt-4 pb-2">
         <TooltipProvider>
           {flow.map((node, index) => {
-            const isParallel = node.isParallel && node.systems.length > 1;
+            const isParallel =
+              node.type === "parallel" && node.steps.length > 1;
+            const isRetry = node.type === "retry" && node.steps.length > 1;
 
             return (
-              <div key={node.systems.join("-")} className="flex items-center">
+              <div key={index} className="flex items-center">
                 {/* Arrow before this node */}
                 {index > 0 && !isParallel && <Arrow />}
                 {index > 0 && isParallel && (
-                  <ForkArrows count={node.systems.length} />
+                  <ForkArrows count={node.steps.length} />
                 )}
 
                 {isParallel ? (
                   <div className="flex flex-col gap-2">
-                    {node.systems.map((sys) => {
-                      const sysNode = systemMap.get(sys);
-                      if (!sysNode) return null;
-                      return <SystemNodeCard key={sys} node={sysNode} />;
-                    })}
+                    {node.steps.map((step, stepIdx) => (
+                      <StepNodeCard key={stepIdx} step={step} />
+                    ))}
+                  </div>
+                ) : isRetry ? (
+                  <div className="relative mt-1">
+                    <div
+                      className="absolute -top-3 left-1/2 -translate-x-1/2 z-10 flex items-center gap-1
+                                    bg-amber-500/10 border border-amber-500/30 rounded-full px-2 py-0.5"
+                    >
+                      <RefreshCw className="h-2.5 w-2.5 text-amber-500" />
+                      <span className="text-[9px] font-semibold text-amber-600 dark:text-amber-400">
+                        {node.steps.length} attempts
+                      </span>
+                    </div>
+                    <div className="border border-dashed border-amber-500/40 rounded-lg p-1 pt-2">
+                      <StepNodeCard step={node.steps[node.steps.length - 1]} />
+                    </div>
                   </div>
                 ) : (
-                  (() => {
-                    const sysNode = systemMap.get(node.systems[0]);
-                    if (!sysNode) return null;
-                    return <SystemNodeCard node={sysNode} />;
-                  })()
+                  <StepNodeCard step={node.steps[0]} />
                 )}
 
                 {/* Join arrow after parallel group */}
                 {isParallel && index < flow.length - 1 && (
-                  <JoinArrows count={node.systems.length} />
+                  <JoinArrows count={node.steps.length} />
                 )}
               </div>
             );

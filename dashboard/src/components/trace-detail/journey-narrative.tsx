@@ -1,10 +1,11 @@
 import type { TraceDetail } from "@/data/queries";
-import { hasParallelExecution } from "@/lib/span-tree";
+import { hasParallelExecution, buildStepFlow, type RetryInfo } from "@/lib/span-tree";
 import { BookOpen } from "lucide-react";
 
 interface JourneyNarrativeProps {
   traceId: string;
   detail: TraceDetail;
+  retryInfo?: RetryInfo | null;
 }
 
 function formatProcessName(name: string): string {
@@ -46,14 +47,24 @@ function getKeyIdentifiers(detail: TraceDetail): string[] {
   return ids;
 }
 
-export function JourneyNarrative({ detail }: JourneyNarrativeProps) {
+export function JourneyNarrative({ detail, retryInfo }: JourneyNarrativeProps) {
   const processName = formatProcessName(detail.processName);
   const totalEvents = detail.events.length;
   const systemCount = detail.systemsInvolved.length;
   const hasFailures = (detail.statusCounts["FAILURE"] ?? 0) > 0;
-  const hasInProgress = (detail.statusCounts["IN_PROGRESS"] ?? 0) > 0;
   const failureCount = detail.statusCounts["FAILURE"] ?? 0;
   const isParallel = hasParallelExecution(detail.events);
+  const flow = buildStepFlow(detail.events);
+  const retryNodes = flow.filter((n) => n.type === "retry");
+  const stepRetriesResolved = retryNodes.length > 0 &&
+    retryNodes.every((n) => n.steps[n.steps.length - 1].eventStatus === "SUCCESS");
+
+  const hasProcessEnd = detail.events.some(
+    (e) => e.eventType === "PROCESS_END"
+  );
+  const processEndSuccess = detail.events.some(
+    (e) => e.eventType === "PROCESS_END" && e.eventStatus === "SUCCESS"
+  );
 
   // Build ordered system list by first appearance
   const orderedSystems: string[] = [];
@@ -68,15 +79,30 @@ export function JourneyNarrative({ detail }: JourneyNarrativeProps) {
   // Determine outcome text
   let outcomeText: string;
   let outcomeClass: string;
-  if (hasFailures) {
+  if (retryInfo) {
+    // Retry-aware narrative
+    if (retryInfo.overallStatus === "success") {
+      outcomeText = "failed on the first attempt, then retried and completed successfully";
+      outcomeClass = "text-green-600 dark:text-green-400";
+    } else if (retryInfo.overallStatus === "failure") {
+      outcomeText = `failed after ${retryInfo.attempts.length} attempts`;
+      outcomeClass = "text-red-600 dark:text-red-400";
+    } else {
+      outcomeText = `retry attempt ${retryInfo.attempts.length} is in progress`;
+      outcomeClass = "text-yellow-600 dark:text-yellow-400";
+    }
+  } else if (hasFailures) {
     outcomeText = `encountered ${failureCount} error${failureCount > 1 ? "s" : ""}`;
     outcomeClass = "text-red-600 dark:text-red-400";
-  } else if (hasInProgress) {
-    outcomeText = "is still in progress";
-    outcomeClass = "text-yellow-600 dark:text-yellow-400";
-  } else {
+  } else if (processEndSuccess) {
     outcomeText = "completed successfully";
     outcomeClass = "text-green-600 dark:text-green-400";
+  } else if (hasProcessEnd) {
+    outcomeText = "completed with issues";
+    outcomeClass = "text-yellow-600 dark:text-yellow-400";
+  } else {
+    outcomeText = "is still in progress";
+    outcomeClass = "text-yellow-600 dark:text-yellow-400";
   }
 
   // Build system traversal text
@@ -119,12 +145,30 @@ export function JourneyNarrative({ detail }: JourneyNarrativeProps) {
               <span className="font-medium text-primary">in parallel</span>.{" "}
             </span>
           )}
-          All{" "}
-          <span className="font-mono">{totalEvents}</span> steps{" "}
-          {hasFailures
-            ? `completed with ${failureCount} failure${failureCount > 1 ? "s" : ""}`
-            : "completed without errors"}
-          .
+          {!retryInfo && retryNodes.length > 0 && (
+            <span>
+              {retryNodes.length} step{retryNodes.length > 1 ? "s" : ""} required{" "}
+              <span className="font-medium text-amber-600 dark:text-amber-400">retries</span>
+              {stepRetriesResolved ? " and resolved successfully" : ""}.{" "}
+            </span>
+          )}
+          {retryInfo ? (
+            <>
+              Completed in{" "}
+              <span className="font-medium">{retryInfo.attempts.length} attempts</span>{" "}
+              with{" "}
+              <span className="font-mono">{totalEvents}</span> total events.
+            </>
+          ) : (
+            <>
+              All{" "}
+              <span className="font-mono">{totalEvents}</span> steps{" "}
+              {hasFailures
+                ? `completed with ${failureCount} failure${failureCount > 1 ? "s" : ""}`
+                : "completed without errors"}
+              .
+            </>
+          )}
         </p>
 
         {identifiers.length > 0 && (
@@ -141,9 +185,20 @@ export function JourneyNarrative({ detail }: JourneyNarrativeProps) {
         )}
 
         {errorEvents.length > 0 && (
-          <div className="mt-3 rounded-lg border border-red-200 dark:border-red-800 bg-red-50 dark:bg-red-950/50 px-3 py-2">
-            <p className="text-xs font-medium text-red-800 dark:text-red-200">
-              Error summary: {errorEvents.map((e) => e.errorMessage).join("; ")}
+          <div className={`mt-3 rounded-lg border px-3 py-2 ${
+            retryInfo?.overallStatus === "success" || stepRetriesResolved
+              ? "border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-950/50"
+              : "border-red-200 dark:border-red-800 bg-red-50 dark:bg-red-950/50"
+          }`}>
+            <p className={`text-xs font-medium ${
+              retryInfo?.overallStatus === "success" || stepRetriesResolved
+                ? "text-amber-800 dark:text-amber-200"
+                : "text-red-800 dark:text-red-200"
+            }`}>
+              {retryInfo?.overallStatus === "success" || stepRetriesResolved
+                ? "Errors from earlier attempt(s): "
+                : "Error summary: "}
+              {errorEvents.map((e) => e.errorMessage).join("; ")}
             </p>
           </div>
         )}

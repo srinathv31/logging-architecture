@@ -3,7 +3,7 @@ import type { ZodTypeProvider } from 'fastify-type-provider-zod';
 import {
   createEventRequestSchema,
   batchCreateEventRequestSchema,
-  createEventResponseSchema,
+  createEventUnionResponseSchema,
   batchCreateEventResponseSchema,
 } from '../../schemas/events';
 import * as eventLogService from '../../services/event-log.service';
@@ -19,19 +19,22 @@ export async function createEventRoutes(app: FastifyInstance) {
         tags: ['Events'],
         description: 'Create one or more event log entries',
         body: createEventRequestSchema,
-        response: { 201: createEventResponseSchema },
+        response: { 201: createEventUnionResponseSchema },
       },
     },
     async (request, reply) => {
       const { events } = request.body;
 
       if (Array.isArray(events)) {
-        const results = await Promise.all(events.map((e) => eventLogService.createEvent(e)));
-        const correlationId = events[0].correlation_id;
+        const { executionIds, errors } = await eventLogService.createEvents(events);
+        const correlationIds = [...new Set(events.map((e) => e.correlation_id))];
         return reply.status(201).send({
-          success: true,
-          execution_ids: results.map((r) => r.executionId),
-          correlation_id: correlationId,
+          success: errors.length === 0,
+          total_received: events.length,
+          total_inserted: executionIds.length,
+          execution_ids: executionIds,
+          correlation_ids: correlationIds,
+          errors: errors.length > 0 ? errors : undefined,
         });
       }
 

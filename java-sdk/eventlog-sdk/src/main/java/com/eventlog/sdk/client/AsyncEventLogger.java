@@ -1,6 +1,7 @@
 package com.eventlog.sdk.client;
 
 import com.eventlog.sdk.exception.EventLogException;
+import com.eventlog.sdk.model.ApiResponses;
 import com.eventlog.sdk.model.EventLogEntry;
 import com.fasterxml.jackson.databind.DeserializationFeature;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -13,6 +14,7 @@ import java.io.*;
 import java.nio.file.*;
 import java.time.Instant;
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 import java.util.concurrent.*;
@@ -57,7 +59,12 @@ public class AsyncEventLogger implements AutoCloseable {
 
     private static final Logger log = LoggerFactory.getLogger(AsyncEventLogger.class);
 
+    private static final EventLossCallback DEFAULT_LOSS_CALLBACK = (event, reason) ->
+            log.warn("Event lost ({}): correlationId={}, processName={}",
+                    reason, event.getCorrelationId(), event.getProcessName());
+
     private final EventLogClient client;
+    private final EventLossCallback eventLossCallback;
     private final BlockingQueue<QueuedEvent> queue;
     private final ExecutorService senderExecutor;
     private final ScheduledExecutorService retryExecutor;
@@ -73,6 +80,9 @@ public class AsyncEventLogger implements AutoCloseable {
     private final int maxRetries;
     private final long baseRetryDelayMs;
     private final long maxRetryDelayMs;
+    private final int batchSize;
+    private final long maxBatchWaitMs;
+    private final int senderThreads;
     private final Path spilloverPath;
     private final boolean spilloverEnabled;
     private final BlockingQueue<QueuedEvent> spilloverQueue;
@@ -90,7 +100,7 @@ public class AsyncEventLogger implements AutoCloseable {
 
     // Shutdown handling
     private final AtomicBoolean shutdownRequested = new AtomicBoolean(false);
-    private final CountDownLatch shutdownLatch = new CountDownLatch(1);
+    private final CountDownLatch shutdownLatch;
     private Thread shutdownHook;
 
     private AsyncEventLogger(Builder builder) {
@@ -99,12 +109,17 @@ public class AsyncEventLogger implements AutoCloseable {
 
     protected AsyncEventLogger(Builder builder, boolean startBackground) {
         this.client = builder.client;
+        this.eventLossCallback = builder.eventLossCallback != null ? builder.eventLossCallback : DEFAULT_LOSS_CALLBACK;
         this.queue = new LinkedBlockingQueue<>(builder.queueCapacity);
         this.maxRetries = builder.maxRetries;
         this.baseRetryDelayMs = builder.baseRetryDelayMs;
         this.maxRetryDelayMs = builder.maxRetryDelayMs;
         this.circuitBreakerThreshold = builder.circuitBreakerThreshold;
         this.circuitBreakerResetMs = builder.circuitBreakerResetMs;
+        this.batchSize = builder.batchSize;
+        this.maxBatchWaitMs = builder.maxBatchWaitMs;
+        this.senderThreads = builder.senderThreads;
+        this.shutdownLatch = new CountDownLatch(builder.senderThreads);
         this.spilloverPath = builder.spilloverPath;
         this.spilloverEnabled = builder.spilloverPath != null;
         if (this.spilloverEnabled) {
@@ -134,18 +149,31 @@ public class AsyncEventLogger implements AutoCloseable {
                 .disable(SerializationFeature.WRITE_DATES_AS_TIMESTAMPS)
                 .configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false);
 
-        // Start sender thread
+        // Start sender thread(s)
         this.senderExecutor = builder.senderExecutor != null
                 ? builder.senderExecutor
-                : Executors.newSingleThreadExecutor(builder.virtualThreads
-                    ? Thread.ofVirtual().name("eventlog-sender").factory()
-                    : r -> {
-                        Thread t = new Thread(r, "eventlog-sender");
-                        t.setDaemon(true);
-                        return t;
-                    });
+                : (this.senderThreads > 1
+                    ? Executors.newFixedThreadPool(this.senderThreads, builder.virtualThreads
+                        ? Thread.ofVirtual().name("eventlog-sender-", 0).factory()
+                        : new ThreadFactory() {
+                            private final AtomicInteger idx = new AtomicInteger(0);
+                            @Override public Thread newThread(Runnable r) {
+                                Thread t = new Thread(r, "eventlog-sender-" + idx.getAndIncrement());
+                                t.setDaemon(true);
+                                return t;
+                            }
+                        })
+                    : Executors.newSingleThreadExecutor(builder.virtualThreads
+                        ? Thread.ofVirtual().name("eventlog-sender").factory()
+                        : r -> {
+                            Thread t = new Thread(r, "eventlog-sender");
+                            t.setDaemon(true);
+                            return t;
+                        }));
         if (startBackground) {
-            senderExecutor.submit(this::senderLoop);
+            for (int i = 0; i < this.senderThreads; i++) {
+                senderExecutor.submit(this::senderLoop);
+            }
         }
         
         // Start retry scheduler
@@ -198,7 +226,7 @@ public class AsyncEventLogger implements AutoCloseable {
      */
     public boolean log(EventLogEntry event) {
         if (shutdownRequested.get()) {
-            log.warn("Cannot log event - shutdown in progress");
+            notifyEventLoss(event, "shutdown_in_progress");
             return false;
         }
         
@@ -214,8 +242,7 @@ public class AsyncEventLogger implements AutoCloseable {
             return enqueueSpillover(queued);
         }
 
-        log.warn("Event queue full, dropping event: correlationId={}, processName={}",
-                event.getCorrelationId(), event.getProcessName());
+        notifyEventLoss(event, "queue_full");
         eventsFailed.incrementAndGet();
         return false;
     }
@@ -303,39 +330,45 @@ public class AsyncEventLogger implements AutoCloseable {
 
     private void senderLoop() {
         log.debug("Event sender loop started");
-        
+        List<QueuedEvent> batch = new ArrayList<>(batchSize);
+
         while (!shutdownRequested.get() || !queue.isEmpty()) {
             try {
-                // Wait for event with timeout (allows checking shutdown flag)
-                QueuedEvent queued = queue.poll(100, TimeUnit.MILLISECONDS);
-                
-                if (queued == null) {
-                    continue;
+                batch.clear();
+                queue.drainTo(batch, batchSize);
+
+                if (batch.isEmpty()) {
+                    QueuedEvent first = queue.poll(maxBatchWaitMs, TimeUnit.MILLISECONDS);
+                    if (first == null) {
+                        continue;
+                    }
+                    batch.add(first);
+                    if (batchSize > 1) {
+                        queue.drainTo(batch, batchSize - 1);
+                    }
                 }
-                
-                // Check circuit breaker
+
+                // Check circuit breaker for the batch
                 if (isCircuitOpen()) {
                     if (shouldResetCircuit()) {
                         resetCircuit();
                     } else {
-                        // Re-queue with delay or spill
-                        handleCircuitOpen(queued);
+                        for (QueuedEvent q : batch) {
+                            handleCircuitOpen(q);
+                        }
                         continue;
                     }
                 }
-                
-                // Try to send
-                try {
-                    client.createEvent(queued.event);
-                    onSuccess();
-                    eventsSent.incrementAndGet();
-                    
-                    log.trace("Event sent: correlationId={}", queued.event.getCorrelationId());
-                    
-                } catch (EventLogException e) {
-                    onFailure(queued, e);
+
+                // Send
+                if (batch.size() == 1 || batchSize == 1) {
+                    for (QueuedEvent q : batch) {
+                        sendSingle(q);
+                    }
+                } else {
+                    sendBatch(batch);
                 }
-                
+
             } catch (InterruptedException e) {
                 Thread.currentThread().interrupt();
                 log.debug("Sender loop interrupted");
@@ -344,9 +377,56 @@ public class AsyncEventLogger implements AutoCloseable {
                 log.error("Unexpected error in sender loop", e);
             }
         }
-        
+
         log.debug("Event sender loop stopped");
         shutdownLatch.countDown();
+    }
+
+    private void sendSingle(QueuedEvent queued) {
+        try {
+            client.createEvent(queued.event);
+            onSuccess();
+            eventsSent.incrementAndGet();
+            log.trace("Event sent: correlationId={}", queued.event.getCorrelationId());
+        } catch (EventLogException e) {
+            onFailure(queued, e);
+        }
+    }
+
+    private void sendBatch(List<QueuedEvent> batch) {
+        try {
+            List<EventLogEntry> events = new ArrayList<>(batch.size());
+            for (QueuedEvent q : batch) {
+                events.add(q.event);
+            }
+            ApiResponses.BatchCreateEventResponse response = client.createEvents(events);
+            onSuccess();
+
+            List<ApiResponses.BatchError> errors = response.getErrors();
+            if (errors == null || errors.isEmpty()) {
+                eventsSent.addAndGet(batch.size());
+                log.trace("Batch of {} events sent", batch.size());
+            } else {
+                // Partial failure — retry only the failed items
+                Set<Integer> failedIndices = new HashSet<>();
+                for (ApiResponses.BatchError err : errors) {
+                    failedIndices.add(err.getIndex());
+                }
+                int succeeded = batch.size() - failedIndices.size();
+                eventsSent.addAndGet(succeeded);
+                for (int i = 0; i < batch.size(); i++) {
+                    if (failedIndices.contains(i)) {
+                        onFailure(batch.get(i),
+                                new EventLogException("Batch partial failure", 0, errors.toString()));
+                    }
+                }
+            }
+        } catch (EventLogException e) {
+            // Full failure — retry each individually
+            for (QueuedEvent q : batch) {
+                onFailure(q, e);
+            }
+        }
     }
 
     private void onSuccess() {
@@ -376,6 +456,7 @@ public class AsyncEventLogger implements AutoCloseable {
         if (spilloverEnabled) {
             enqueueSpillover(queued);
         } else {
+            notifyEventLoss(queued.event, "retries_exhausted");
             eventsFailed.incrementAndGet();
         }
     }
@@ -393,6 +474,7 @@ public class AsyncEventLogger implements AutoCloseable {
                 if (spilloverEnabled) {
                     enqueueSpillover(retry);
                 } else {
+                    notifyEventLoss(retry.event, "retry_requeue_failed");
                     eventsFailed.incrementAndGet();
                 }
             }, delay, TimeUnit.MILLISECONDS);
@@ -401,6 +483,7 @@ public class AsyncEventLogger implements AutoCloseable {
             if (spilloverEnabled) {
                 enqueueSpillover(retry);
             } else {
+                notifyEventLoss(retry.event, "retry_executor_rejected");
                 eventsFailed.incrementAndGet();
             }
         }
@@ -460,8 +543,7 @@ public class AsyncEventLogger implements AutoCloseable {
 
         boolean queuedForSpillover = spilloverQueue.offer(queued);
         if (!queuedForSpillover) {
-            log.error("Spillover queue full, dropping event: correlationId={}, processName={}",
-                    queued.event.getCorrelationId(), queued.event.getProcessName());
+            notifyEventLoss(queued.event, "spillover_queue_full");
             eventsFailed.incrementAndGet();
         }
         return queuedForSpillover;
@@ -507,6 +589,14 @@ public class AsyncEventLogger implements AutoCloseable {
         return spilloverObjectMapper.writeValueAsString(event);
     }
 
+    private void notifyEventLoss(EventLogEntry event, String reason) {
+        try {
+            eventLossCallback.onEventLoss(event, reason);
+        } catch (Exception e) {
+            log.warn("EventLossCallback threw for reason={}: {}", reason, e.getMessage());
+        }
+    }
+
     // ========================================================================
     // Internal - Shutdown
     // ========================================================================
@@ -546,6 +636,7 @@ public class AsyncEventLogger implements AutoCloseable {
             if (spilloverEnabled) {
                 enqueueSpillover(pending);
             } else {
+                notifyEventLoss(pending.event, "shutdown_pending_retry");
                 eventsFailed.incrementAndGet();
             }
         }
@@ -640,6 +731,10 @@ public class AsyncEventLogger implements AutoCloseable {
         private ExecutorService senderExecutor;
         private ScheduledExecutorService retryExecutor;
         private ExecutorService spilloverExecutor;
+        private EventLossCallback eventLossCallback;
+        private int batchSize = 50;
+        private long maxBatchWaitMs = 100;
+        private int senderThreads = 1;
 
         /**
          * Set the EventLogClient (required)
@@ -747,9 +842,52 @@ public class AsyncEventLogger implements AutoCloseable {
             return this;
         }
 
+        /**
+         * Set a callback invoked whenever an event is dropped.
+         * Defaults to a SLF4J WARN logger if not set.
+         */
+        public Builder onEventLoss(EventLossCallback callback) {
+            this.eventLossCallback = callback;
+            return this;
+        }
+
+        /**
+         * Set the maximum number of events to send in a single batch (default: 50).
+         * Set to 1 to disable batching.
+         */
+        public Builder batchSize(int batchSize) {
+            this.batchSize = batchSize;
+            return this;
+        }
+
+        /**
+         * Set the maximum time to wait for a batch to fill before sending (default: 100ms)
+         */
+        public Builder maxBatchWaitMs(long maxBatchWaitMs) {
+            this.maxBatchWaitMs = maxBatchWaitMs;
+            return this;
+        }
+
+        /**
+         * Set the number of sender threads (default: 1)
+         */
+        public Builder senderThreads(int senderThreads) {
+            this.senderThreads = senderThreads;
+            return this;
+        }
+
         public AsyncEventLogger build() {
             if (client == null) {
                 throw new IllegalStateException("client is required");
+            }
+            if (batchSize < 1) {
+                throw new IllegalArgumentException("batchSize must be >= 1, got: " + batchSize);
+            }
+            if (senderThreads < 1) {
+                throw new IllegalArgumentException("senderThreads must be >= 1, got: " + senderThreads);
+            }
+            if (maxBatchWaitMs < 0) {
+                throw new IllegalArgumentException("maxBatchWaitMs must be >= 0, got: " + maxBatchWaitMs);
             }
             return new AsyncEventLogger(this);
         }

@@ -54,6 +54,14 @@ public class GlobalExceptionHandler {
         return problem;
     }
 
+    @ExceptionHandler(KennelVendorTimeoutException.class)
+    public ProblemDetail handleKennelVendorTimeout(KennelVendorTimeoutException ex) {
+        logError("KENNEL_VENDOR_TIMEOUT", ex.getMessage(), "Kennel vendor communication");
+        ProblemDetail problem = ProblemDetail.forStatusAndDetail(HttpStatus.GATEWAY_TIMEOUT, ex.getMessage());
+        problem.setTitle("Kennel Vendor Timeout");
+        return problem;
+    }
+
     @ExceptionHandler(PaymentFailedException.class)
     public ProblemDetail handlePaymentFailed(PaymentFailedException ex) {
         logError("PAYMENT_FAILED", ex.getMessage(), "Payment processing");

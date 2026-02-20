@@ -2,12 +2,14 @@ package com.eventlog.sdk.autoconfigure;
 
 import com.eventlog.sdk.client.AsyncEventLogger;
 import com.eventlog.sdk.client.EventLogClient;
+import com.eventlog.sdk.client.EventLossCallback;
 import com.eventlog.sdk.client.OAuthTokenProvider;
 import com.eventlog.sdk.client.TokenProvider;
 import com.eventlog.sdk.client.transport.EventLogTransport;
 import com.eventlog.sdk.autoconfigure.logging.LogEventAspect;
 import com.eventlog.sdk.autoconfigure.transport.RestClientTransport;
 import com.eventlog.sdk.autoconfigure.transport.WebClientTransport;
+import com.eventlog.sdk.autoconfigure.web.EventLogMdcFilter;
 import com.eventlog.sdk.template.EventLogTemplate;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.aspectj.lang.annotation.Aspect;
@@ -19,6 +21,8 @@ import org.springframework.boot.autoconfigure.condition.ConditionalOnClass;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnBean;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnExpression;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnWebApplication;
+import org.springframework.boot.web.servlet.FilterRegistrationBean;
 import org.springframework.context.annotation.Conditional;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
@@ -213,6 +217,7 @@ public class EventLogAutoConfiguration {
             EventLogProperties properties,
             ObjectProvider<ThreadPoolTaskExecutor> taskExecutorProvider,
             ObjectProvider<TaskScheduler> taskSchedulerProvider,
+            ObjectProvider<EventLossCallback> eventLossCallbackProvider,
             ApplicationContext applicationContext) {
         EventLogProperties.Async async = properties.getAsync();
         long baseRetryDelayMs = resolveLong(
@@ -253,6 +258,15 @@ public class EventLogAutoConfiguration {
             builder.spilloverPath(async.getSpilloverPath());
         }
 
+        EventLossCallback lossCallback = eventLossCallbackProvider.getIfUnique();
+        if (lossCallback != null) {
+            builder.onEventLoss(lossCallback);
+        }
+
+        builder.batchSize(async.getBatchSize())
+                .senderThreads(async.getSenderThreads())
+                .maxBatchWaitMs(async.getMaxBatchWaitMs());
+
         return builder.build();
     }
 
@@ -285,6 +299,23 @@ public class EventLogAutoConfiguration {
                 .targetSystem(resolved.targetSystem)
                 .originatingSystem(resolved.originatingSystem)
                 .build();
+    }
+
+    @Bean
+    @ConditionalOnWebApplication(type = ConditionalOnWebApplication.Type.SERVLET)
+    @ConditionalOnMissingBean(EventLogMdcFilter.class)
+    @ConditionalOnProperty(prefix = "eventlog.mdc-filter", name = "enabled",
+                           havingValue = "true", matchIfMissing = true)
+    public FilterRegistrationBean<EventLogMdcFilter> eventLogMdcFilter(EventLogProperties properties) {
+        EventLogProperties.MdcFilter cfg = properties.getMdcFilter();
+        EventLogMdcFilter filter = new EventLogMdcFilter(
+                cfg.getCorrelationHeader(),
+                cfg.getTraceHeader(),
+                cfg.getSpanHeader());
+        FilterRegistrationBean<EventLogMdcFilter> registration = new FilterRegistrationBean<>(filter);
+        registration.setUrlPatterns(cfg.getUrlPatterns());
+        registration.setOrder(cfg.getOrder());
+        return registration;
     }
 
     private ResolvedExecutors resolveAsyncExecutors(

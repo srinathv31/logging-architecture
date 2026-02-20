@@ -4,6 +4,7 @@ import com.example.petresort.model.*;
 import com.example.petresort.service.BookingService;
 import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -39,9 +40,17 @@ public class BookingController {
     }
 
     @PostMapping("/{id}/check-in")
-    public BookingResponse checkIn(@PathVariable String id,
-                                   @RequestBody(required = false) CheckInRequest request) {
+    public ResponseEntity<BookingResponse> checkIn(@PathVariable String id,
+                                                    @RequestBody(required = false) CheckInRequest request) {
         Booking booking = bookingService.checkIn(id, request);
+        HttpStatus status = booking.getStatus() == BookingStatus.AWAITING_APPROVAL
+                ? HttpStatus.ACCEPTED : HttpStatus.OK;
+        return ResponseEntity.status(status).body(BookingResponse.from(booking));
+    }
+
+    @PostMapping("/{id}/approve-check-in")
+    public BookingResponse approveCheckIn(@PathVariable String id) {
+        Booking booking = bookingService.approveCheckIn(id);
         return BookingResponse.from(booking);
     }
 

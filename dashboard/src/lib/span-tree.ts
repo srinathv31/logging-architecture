@@ -1,5 +1,142 @@
 import type { TraceEvent } from "@/data/queries";
 
+export interface Attempt {
+  attemptNumber: number;
+  rootSpanId: string | null;
+  events: TraceEvent[];
+  status: "success" | "failure" | "in_progress";
+}
+
+export interface RetryInfo {
+  attempts: Attempt[];
+  finalAttempt: Attempt;
+  overallStatus: "success" | "failure" | "in_progress";
+}
+
+/**
+ * Detects retry attempts within a trace.
+ * Multiple PROCESS_START events with the same processName indicate retries.
+ * Returns null for non-retry traces (0 or 1 PROCESS_START).
+ */
+export function detectAttempts(events: TraceEvent[]): RetryInfo | null {
+  if (events.length === 0) return null;
+
+  // Find all PROCESS_START events — use the most common processName to avoid
+  // matching sub-processes that happen to also have PROCESS_START
+  const processStarts = events
+    .filter((e) => e.eventType === "PROCESS_START")
+    .sort(
+      (a, b) =>
+        new Date(a.eventTimestamp).getTime() -
+        new Date(b.eventTimestamp).getTime()
+    );
+
+  if (processStarts.length <= 1) return null;
+
+  // Count processName occurrences among PROCESS_START events to find the primary process
+  const nameCounts = new Map<string, number>();
+  for (const ps of processStarts) {
+    nameCounts.set(ps.processName, (nameCounts.get(ps.processName) ?? 0) + 1);
+  }
+  let primaryProcessName = processStarts[0].processName;
+  let maxCount = 0;
+  for (const [name, count] of nameCounts) {
+    if (count > maxCount) {
+      maxCount = count;
+      primaryProcessName = name;
+    }
+  }
+
+  // Filter to only PROCESS_START events matching the primary process
+  const retryStarts = processStarts.filter(
+    (e) => e.processName === primaryProcessName
+  );
+
+  if (retryStarts.length <= 1) return null;
+
+  // Build attempts: assign events to attempts based on parentSpanId matching
+  const attempts: Attempt[] = retryStarts.map((ps, index) => ({
+    attemptNumber: index + 1,
+    rootSpanId: ps.spanId,
+    events: [ps], // start with the PROCESS_START event itself
+    status: "in_progress" as const,
+  }));
+
+  // Create a lookup from rootSpanId -> attempt index
+  const spanToAttempt = new Map<string, number>();
+  for (let i = 0; i < attempts.length; i++) {
+    const spanId = attempts[i].rootSpanId;
+    if (spanId) {
+      spanToAttempt.set(spanId, i);
+    }
+  }
+
+  // Assign remaining events
+  const assignedIds = new Set(retryStarts.map((e) => e.eventLogId));
+  const unassigned: TraceEvent[] = [];
+
+  for (const event of events) {
+    if (assignedIds.has(event.eventLogId)) continue;
+
+    // Try parentSpanId match
+    if (event.parentSpanId && spanToAttempt.has(event.parentSpanId)) {
+      attempts[spanToAttempt.get(event.parentSpanId)!].events.push(event);
+    } else {
+      unassigned.push(event);
+    }
+  }
+
+  // Fallback: assign orphan events to closest preceding attempt by timestamp
+  for (const event of unassigned) {
+    const eventTime = new Date(event.eventTimestamp).getTime();
+    let bestAttemptIndex = 0;
+    for (let i = retryStarts.length - 1; i >= 0; i--) {
+      if (new Date(retryStarts[i].eventTimestamp).getTime() <= eventTime) {
+        bestAttemptIndex = i;
+        break;
+      }
+    }
+    attempts[bestAttemptIndex].events.push(event);
+  }
+
+  // Sort events within each attempt by timestamp
+  for (const attempt of attempts) {
+    attempt.events.sort(
+      (a, b) =>
+        new Date(a.eventTimestamp).getTime() -
+        new Date(b.eventTimestamp).getTime()
+    );
+  }
+
+  // Determine per-attempt status
+  for (const attempt of attempts) {
+    const hasProcessEnd = attempt.events.some(
+      (e) =>
+        e.eventType === "PROCESS_END" &&
+        e.eventStatus === "SUCCESS" &&
+        e.processName === primaryProcessName
+    );
+    const hasFailure = attempt.events.some(
+      (e) => e.eventStatus === "FAILURE"
+    );
+
+    if (hasProcessEnd) {
+      attempt.status = "success";
+    } else if (hasFailure) {
+      attempt.status = "failure";
+    }
+    // else remains "in_progress"
+  }
+
+  const finalAttempt = attempts[attempts.length - 1];
+
+  return {
+    attempts,
+    finalAttempt,
+    overallStatus: finalAttempt.status,
+  };
+}
+
 export interface EnrichedEvent {
   event: TraceEvent;
   isParallelGroup: boolean;
@@ -8,7 +145,7 @@ export interface EnrichedEvent {
 }
 
 export interface TimelineEntry {
-  type: "sequential" | "parallel";
+  type: "sequential" | "parallel" | "retry";
   events: TraceEvent[];
 }
 
@@ -38,11 +175,21 @@ export function buildSpanTree(events: TraceEvent[]): TimelineEntry[] {
     }
   }
 
-  // Identify which groups are actually parallel (more than 1 event)
+  // Identify which groups are parallel vs retry (more than 1 event with different spanIds)
   const parallelGroupKeys = new Set<string>();
+  const retryGroupKeys = new Set<string>();
   for (const [key, group] of groups) {
     if (group.length > 1) {
-      parallelGroupKeys.add(key);
+      const uniqueSpanIds = new Set(group.map((e) => e.spanId).filter(Boolean));
+      if (uniqueSpanIds.size > 1) {
+        // Same stepName → retry; different stepNames → parallel
+        const uniqueStepNames = new Set(group.map((e) => e.stepName).filter(Boolean));
+        if (uniqueStepNames.size <= 1) {
+          retryGroupKeys.add(key);
+        } else {
+          parallelGroupKeys.add(key);
+        }
+      }
     }
   }
 
@@ -58,7 +205,13 @@ export function buildSpanTree(events: TraceEvent[]): TimelineEntry[] {
         ? `${event.parentSpanId}:${event.stepSequence}`
         : null;
 
-    if (key && parallelGroupKeys.has(key)) {
+    if (key && retryGroupKeys.has(key)) {
+      // This is a step-level retry group — sort by timestamp for attempt ordering
+      const group = groups.get(key)!;
+      group.sort((a, b) => new Date(a.eventTimestamp).getTime() - new Date(b.eventTimestamp).getTime());
+      for (const e of group) processedIds.add(e.eventLogId);
+      timeline.push({ type: "retry", events: group });
+    } else if (key && parallelGroupKeys.has(key)) {
       // This is part of a parallel group — emit the entire group
       const group = groups.get(key)!;
       for (const e of group) processedIds.add(e.eventLogId);
@@ -87,6 +240,37 @@ export function hasParallelExecution(events: TraceEvent[]): boolean {
 export interface FlowNode {
   systems: string[];
   isParallel: boolean;
+}
+
+export interface StepFlowNode {
+  type: "sequential" | "parallel" | "retry";
+  steps: {
+    stepName: string | null;
+    stepSequence: number | null;
+    eventType: string;
+    eventStatus: string;
+    processName: string;
+    targetSystem: string;
+    executionTimeMs: number | null;
+  }[];
+}
+
+export function buildStepFlow(events: TraceEvent[]): StepFlowNode[] {
+  const timeline = buildSpanTree(events);
+  return timeline.map((entry) => {
+    return {
+      type: entry.type,
+      steps: entry.events.map((e) => ({
+        stepName: e.stepName,
+        stepSequence: e.stepSequence,
+        eventType: e.eventType,
+        eventStatus: e.eventStatus,
+        processName: e.processName,
+        targetSystem: e.targetSystem,
+        executionTimeMs: e.executionTimeMs,
+      })),
+    };
+  });
 }
 
 export function buildSystemFlow(events: TraceEvent[]): FlowNode[] {

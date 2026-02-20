@@ -37,9 +37,10 @@ interface StepCardProps {
   timeDiff?: string;
   compact?: boolean;
   hideTimelineIndicator?: boolean;
+  label?: string;
 }
 
-export function StepCard({ event, index, timeDiff, compact, hideTimelineIndicator }: StepCardProps) {
+export function StepCard({ event, index, timeDiff, compact, hideTimelineIndicator, label }: StepCardProps) {
   const StatusIcon = STATUS_ICONS[event.eventStatus];
   const EventIcon = EVENT_TYPE_ICONS[event.eventType];
   const isInProgress = event.eventStatus === "IN_PROGRESS";
@@ -135,6 +136,13 @@ export function StepCard({ event, index, timeDiff, compact, hideTimelineIndicato
             <h3 className="font-semibold text-base mb-1.5 break-words group-hover:text-primary transition-colors">
               {event.stepName ?? event.processName}
             </h3>
+
+            {/* Optional label (e.g., "Attempt 1") */}
+            {label && (
+              <p className="text-xs font-medium text-amber-600 dark:text-amber-400 mb-1.5">
+                {label}
+              </p>
+            )}
 
             {/* Summary */}
             <p className="text-sm text-muted-foreground mb-3 line-clamp-2">

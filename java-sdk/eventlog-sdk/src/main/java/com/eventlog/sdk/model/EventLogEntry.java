@@ -444,6 +444,9 @@ public class EventLogEntry {
             if (eventTimestamp == null) {
                 eventTimestamp = Instant.now();
             }
+            if (spanId == null || spanId.isBlank()) {
+                spanId = java.util.UUID.randomUUID().toString().replace("-", "").substring(0, 16);
+            }
             validate();
             return new EventLogEntry(this);
         }

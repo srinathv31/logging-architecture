@@ -1,0 +1,968 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Migration Wins | Next.js Modernization</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;500;600;700&family=Outfit:wght@300;400;500;600;700;800;900&display=swap');
+
+  :root {
+    --bg-deep: #06080c;
+    --bg-surface: #0c1017;
+    --bg-elevated: #121820;
+    --bg-card: #161d27;
+    --border-subtle: rgba(255,255,255,0.06);
+    --border-medium: rgba(255,255,255,0.1);
+    --text-primary: #e8ecf1;
+    --text-secondary: #8a95a5;
+    --text-muted: #4d5a6b;
+    --accent-green: #00e59b;
+    --accent-green-dim: rgba(0,229,155,0.12);
+    --accent-green-glow: rgba(0,229,155,0.25);
+    --accent-red: #ff4d6a;
+    --accent-red-dim: rgba(255,77,106,0.1);
+    --accent-cyan: #00d4ff;
+    --accent-cyan-dim: rgba(0,212,255,0.1);
+    --accent-amber: #ffb840;
+    --accent-amber-dim: rgba(255,184,64,0.1);
+    --radius: 12px;
+    --radius-sm: 8px;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  html {
+    scroll-behavior: smooth;
+    scrollbar-width: thin;
+    scrollbar-color: var(--text-muted) transparent;
+  }
+
+  body {
+    font-family: 'Outfit', sans-serif;
+    background: var(--bg-deep);
+    color: var(--text-primary);
+    line-height: 1.6;
+    overflow-x: hidden;
+  }
+
+  .mono { font-family: 'JetBrains Mono', monospace; }
+
+  /* ── Grain overlay ── */
+  body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    opacity: 0.025;
+    background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)'/%3E%3C/svg%3E");
+    pointer-events: none;
+    z-index: 9999;
+  }
+
+  /* ── Hero ── */
+  .hero {
+    position: relative;
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    text-align: center;
+    padding: 4rem 2rem;
+    overflow: hidden;
+  }
+
+  .hero::before {
+    content: '';
+    position: absolute;
+    top: -40%;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 800px;
+    height: 800px;
+    background: radial-gradient(circle, var(--accent-green-glow) 0%, transparent 70%);
+    opacity: 0.3;
+    pointer-events: none;
+    animation: pulse-glow 6s ease-in-out infinite;
+  }
+
+  @keyframes pulse-glow {
+    0%, 100% { opacity: 0.2; transform: translateX(-50%) scale(1); }
+    50% { opacity: 0.35; transform: translateX(-50%) scale(1.1); }
+  }
+
+  .hero-eyebrow {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.75rem;
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+    color: var(--accent-green);
+    margin-bottom: 2rem;
+    opacity: 0;
+    animation: fade-up 0.8s ease forwards 0.2s;
+  }
+
+  .hero-title {
+    font-size: clamp(2.8rem, 7vw, 5.5rem);
+    font-weight: 900;
+    line-height: 1.05;
+    letter-spacing: -0.03em;
+    margin-bottom: 1.5rem;
+    opacity: 0;
+    animation: fade-up 0.8s ease forwards 0.4s;
+  }
+
+  .hero-title .highlight {
+    background: linear-gradient(135deg, var(--accent-green), var(--accent-cyan));
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+  }
+
+  .hero-subtitle {
+    font-size: 1.2rem;
+    color: var(--text-secondary);
+    max-width: 600px;
+    font-weight: 300;
+    opacity: 0;
+    animation: fade-up 0.8s ease forwards 0.6s;
+  }
+
+  .hero-badges {
+    display: flex;
+    gap: 1rem;
+    margin-top: 3rem;
+    flex-wrap: wrap;
+    justify-content: center;
+    opacity: 0;
+    animation: fade-up 0.8s ease forwards 0.8s;
+  }
+
+  .hero-badge {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.8rem;
+    padding: 0.5rem 1.2rem;
+    border-radius: 100px;
+    border: 1px solid var(--border-medium);
+    background: var(--bg-elevated);
+    color: var(--text-secondary);
+  }
+
+  .hero-badge .dot {
+    display: inline-block;
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    margin-right: 0.5rem;
+    vertical-align: middle;
+  }
+
+  .hero-badge .dot.green { background: var(--accent-green); box-shadow: 0 0 8px var(--accent-green); }
+  .hero-badge .dot.cyan { background: var(--accent-cyan); box-shadow: 0 0 8px var(--accent-cyan); }
+  .hero-badge .dot.amber { background: var(--accent-amber); box-shadow: 0 0 8px var(--accent-amber); }
+
+  .scroll-cue {
+    position: absolute;
+    bottom: 2rem;
+    left: 50%;
+    transform: translateX(-50%);
+    opacity: 0;
+    animation: fade-up 0.8s ease forwards 1s, bob 2s ease-in-out infinite 1.8s;
+  }
+
+  .scroll-cue svg { width: 24px; height: 24px; stroke: var(--text-muted); }
+
+  @keyframes bob {
+    0%, 100% { transform: translateX(-50%) translateY(0); }
+    50% { transform: translateX(-50%) translateY(8px); }
+  }
+
+  @keyframes fade-up {
+    from { opacity: 0; transform: translateY(20px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+
+  /* ── Section layout ── */
+  section {
+    padding: 6rem 2rem;
+    max-width: 1200px;
+    margin: 0 auto;
+  }
+
+  .section-label {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.7rem;
+    letter-spacing: 0.25em;
+    text-transform: uppercase;
+    color: var(--accent-green);
+    margin-bottom: 1rem;
+  }
+
+  .section-title {
+    font-size: clamp(1.8rem, 4vw, 2.8rem);
+    font-weight: 800;
+    letter-spacing: -0.02em;
+    margin-bottom: 1rem;
+  }
+
+  .section-desc {
+    color: var(--text-secondary);
+    max-width: 650px;
+    font-weight: 300;
+    margin-bottom: 3rem;
+    font-size: 1.05rem;
+  }
+
+  /* ── Metrics strip ── */
+  .metrics-strip {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    gap: 1px;
+    background: var(--border-subtle);
+    border-radius: var(--radius);
+    overflow: hidden;
+    margin-bottom: 6rem;
+    border: 1px solid var(--border-subtle);
+  }
+
+  .metric-cell {
+    background: var(--bg-surface);
+    padding: 2.5rem 2rem;
+    text-align: center;
+    transition: background 0.3s;
+  }
+
+  .metric-cell:hover { background: var(--bg-elevated); }
+
+  .metric-value {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 2.8rem;
+    font-weight: 700;
+    line-height: 1;
+    margin-bottom: 0.5rem;
+  }
+
+  .metric-value.green { color: var(--accent-green); }
+  .metric-value.cyan { color: var(--accent-cyan); }
+  .metric-value.amber { color: var(--accent-amber); }
+
+  .metric-label {
+    font-size: 0.85rem;
+    color: var(--text-secondary);
+    font-weight: 400;
+  }
+
+  /* ── Before / After cards ── */
+  .comparison-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 2rem;
+    margin-bottom: 4rem;
+  }
+
+  @media (max-width: 768px) {
+    .comparison-grid { grid-template-columns: 1fr; }
+  }
+
+  .compare-card {
+    border-radius: var(--radius);
+    overflow: hidden;
+    border: 1px solid var(--border-subtle);
+  }
+
+  .compare-card.before { background: var(--bg-surface); }
+  .compare-card.after { background: var(--bg-surface); border-color: var(--accent-green-dim); }
+
+  .compare-header {
+    padding: 1.2rem 1.5rem;
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    border-bottom: 1px solid var(--border-subtle);
+  }
+
+  .compare-card.before .compare-header {
+    background: var(--accent-red-dim);
+  }
+
+  .compare-card.after .compare-header {
+    background: var(--accent-green-dim);
+  }
+
+  .compare-tag {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.65rem;
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+    padding: 0.25rem 0.75rem;
+    border-radius: 100px;
+    font-weight: 600;
+  }
+
+  .compare-card.before .compare-tag {
+    background: rgba(255,77,106,0.15);
+    color: var(--accent-red);
+  }
+
+  .compare-card.after .compare-tag {
+    background: rgba(0,229,155,0.15);
+    color: var(--accent-green);
+  }
+
+  .compare-heading {
+    font-weight: 600;
+    font-size: 0.95rem;
+  }
+
+  .compare-body {
+    padding: 1.5rem;
+  }
+
+  .compare-body pre {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.78rem;
+    line-height: 1.8;
+    color: var(--text-secondary);
+    overflow-x: auto;
+    white-space: pre;
+  }
+
+  .compare-body pre .comment { color: var(--text-muted); }
+  .compare-body pre .keyword { color: var(--accent-cyan); }
+  .compare-body pre .string { color: var(--accent-green); }
+  .compare-body pre .fn { color: var(--accent-amber); }
+  .compare-body pre .bad { color: var(--accent-red); opacity: 0.8; }
+
+  /* ── Wins list ── */
+  .wins-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+    gap: 1.25rem;
+    margin-bottom: 4rem;
+  }
+
+  .win-card {
+    background: var(--bg-surface);
+    border: 1px solid var(--border-subtle);
+    border-radius: var(--radius);
+    padding: 1.75rem;
+    transition: border-color 0.3s, transform 0.3s;
+    position: relative;
+    overflow: hidden;
+  }
+
+  .win-card::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 2px;
+  }
+
+  .win-card:nth-child(1)::before { background: var(--accent-green); }
+  .win-card:nth-child(2)::before { background: var(--accent-cyan); }
+  .win-card:nth-child(3)::before { background: var(--accent-amber); }
+  .win-card:nth-child(4)::before { background: var(--accent-green); }
+  .win-card:nth-child(5)::before { background: var(--accent-cyan); }
+  .win-card:nth-child(6)::before { background: var(--accent-amber); }
+
+  .win-card:hover {
+    border-color: var(--border-medium);
+    transform: translateY(-2px);
+  }
+
+  .win-icon {
+    width: 40px;
+    height: 40px;
+    border-radius: var(--radius-sm);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin-bottom: 1.25rem;
+    font-size: 1.1rem;
+  }
+
+  .win-icon.green { background: var(--accent-green-dim); color: var(--accent-green); }
+  .win-icon.cyan { background: var(--accent-cyan-dim); color: var(--accent-cyan); }
+  .win-icon.amber { background: var(--accent-amber-dim); color: var(--accent-amber); }
+
+  .win-title {
+    font-weight: 700;
+    font-size: 1rem;
+    margin-bottom: 0.5rem;
+  }
+
+  .win-desc {
+    font-size: 0.88rem;
+    color: var(--text-secondary);
+    font-weight: 300;
+    line-height: 1.6;
+  }
+
+  /* ── Migration comparison table ── */
+  .migration-table-wrap {
+    background: var(--bg-surface);
+    border: 1px solid var(--border-subtle);
+    border-radius: var(--radius);
+    overflow: hidden;
+    margin-bottom: 4rem;
+  }
+
+  .migration-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.9rem;
+  }
+
+  .migration-table th {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.7rem;
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+    color: var(--text-muted);
+    padding: 1.25rem 1.5rem;
+    text-align: left;
+    border-bottom: 1px solid var(--border-subtle);
+    background: var(--bg-elevated);
+    font-weight: 500;
+  }
+
+  .migration-table td {
+    padding: 1rem 1.5rem;
+    border-bottom: 1px solid var(--border-subtle);
+    vertical-align: top;
+  }
+
+  .migration-table tr:last-child td { border-bottom: none; }
+
+  .migration-table tr:hover td { background: var(--bg-elevated); }
+
+  .migration-table .label-cell {
+    color: var(--text-secondary);
+    font-weight: 500;
+    white-space: nowrap;
+  }
+
+  .migration-table .old {
+    color: var(--text-muted);
+    text-decoration: line-through;
+    text-decoration-color: rgba(255,77,106,0.4);
+  }
+
+  .migration-table .new {
+    color: var(--accent-green);
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.85rem;
+  }
+
+  /* ── Timeline ── */
+  .timeline {
+    position: relative;
+    padding-left: 3rem;
+  }
+
+  .timeline::before {
+    content: '';
+    position: absolute;
+    left: 7px;
+    top: 8px;
+    bottom: 8px;
+    width: 1px;
+    background: linear-gradient(to bottom, var(--accent-green), var(--accent-cyan), var(--accent-amber));
+    opacity: 0.4;
+  }
+
+  .timeline-item {
+    position: relative;
+    padding-bottom: 3rem;
+  }
+
+  .timeline-item:last-child { padding-bottom: 0; }
+
+  .timeline-dot {
+    position: absolute;
+    left: -2.55rem;
+    top: 6px;
+    width: 15px;
+    height: 15px;
+    border-radius: 50%;
+    border: 2px solid;
+    background: var(--bg-deep);
+  }
+
+  .timeline-item:nth-child(1) .timeline-dot { border-color: var(--accent-green); box-shadow: 0 0 10px var(--accent-green-glow); }
+  .timeline-item:nth-child(2) .timeline-dot { border-color: var(--accent-cyan); box-shadow: 0 0 10px rgba(0,212,255,0.25); }
+  .timeline-item:nth-child(3) .timeline-dot { border-color: var(--accent-amber); box-shadow: 0 0 10px rgba(255,184,64,0.25); }
+  .timeline-item:nth-child(4) .timeline-dot { border-color: var(--accent-green); box-shadow: 0 0 10px var(--accent-green-glow); }
+
+  .timeline-title {
+    font-weight: 700;
+    font-size: 1.05rem;
+    margin-bottom: 0.35rem;
+  }
+
+  .timeline-detail {
+    color: var(--text-secondary);
+    font-size: 0.9rem;
+    font-weight: 300;
+    line-height: 1.7;
+  }
+
+  .timeline-tech {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.72rem;
+    padding: 0.2rem 0.6rem;
+    border-radius: 4px;
+    background: var(--bg-elevated);
+    border: 1px solid var(--border-subtle);
+    color: var(--text-secondary);
+    margin-top: 0.5rem;
+    margin-right: 0.4rem;
+  }
+
+  /* ── Footer ── */
+  .footer {
+    text-align: center;
+    padding: 4rem 2rem;
+    color: var(--text-muted);
+    font-size: 0.8rem;
+    border-top: 1px solid var(--border-subtle);
+  }
+
+  .footer .stamp {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.7rem;
+    letter-spacing: 0.1em;
+  }
+
+  /* ── Divider ── */
+  .divider {
+    height: 1px;
+    background: linear-gradient(to right, transparent, var(--border-medium), transparent);
+    margin: 2rem 0;
+  }
+
+  /* ── Scroll reveal ── */
+  .reveal {
+    opacity: 0;
+    transform: translateY(30px);
+    transition: opacity 0.7s ease, transform 0.7s ease;
+  }
+
+  .reveal.visible {
+    opacity: 1;
+    transform: translateY(0);
+  }
+</style>
+</head>
+<body>
+
+<!-- ═══════════════ HERO ═══════════════ -->
+<div class="hero">
+  <div class="hero-eyebrow">Engineering Modernization Report</div>
+  <h1 class="hero-title">
+    Migration <span class="highlight">Wins</span>
+  </h1>
+  <p class="hero-subtitle">
+    Server.js to TypeScript. Jest to Vitest. A full-stack modernization of our Next.js dashboard and Fastify API infrastructure.
+  </p>
+  <div class="hero-badges">
+    <span class="hero-badge"><span class="dot green"></span>server.ts migration</span>
+    <span class="hero-badge"><span class="dot cyan"></span>Vitest adoption</span>
+    <span class="hero-badge"><span class="dot amber"></span>CI/CD pipeline fixes</span>
+  </div>
+  <div class="scroll-cue">
+    <svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <polyline points="6 9 12 15 18 9"></polyline>
+    </svg>
+  </div>
+</div>
+
+<!-- ═══════════════ METRICS ═══════════════ -->
+<section>
+  <div class="reveal">
+    <div class="section-label">Impact at a Glance</div>
+    <h2 class="section-title">Key Metrics</h2>
+  </div>
+
+  <div class="metrics-strip reveal">
+    <div class="metric-cell">
+      <div class="metric-value green" data-count="100">0</div>
+      <div class="metric-label">% TypeScript coverage</div>
+    </div>
+    <div class="metric-cell">
+      <div class="metric-value cyan">~10x</div>
+      <div class="metric-label">Faster test startup</div>
+    </div>
+    <div class="metric-cell">
+      <div class="metric-value amber">0</div>
+      <div class="metric-label">Runtime self-fetch calls</div>
+    </div>
+    <div class="metric-cell">
+      <div class="metric-value green">Native</div>
+      <div class="metric-label">ESM support in CI</div>
+    </div>
+  </div>
+</section>
+
+<!-- ═══════════════ SERVER.TS MIGRATION ═══════════════ -->
+<section>
+  <div class="reveal">
+    <div class="section-label">Migration 01</div>
+    <h2 class="section-title">server.js &rarr; server.ts</h2>
+    <p class="section-desc">
+      Converted the custom Next.js server entry point to TypeScript, enabling direct module imports and eliminating runtime HTTP calls to the app's own API routes.
+    </p>
+  </div>
+
+  <div class="comparison-grid reveal">
+    <div class="compare-card before">
+      <div class="compare-header">
+        <span class="compare-tag">Before</span>
+        <span class="compare-heading">server.js</span>
+      </div>
+      <div class="compare-body">
+<pre><span class="keyword">const</span> { createServer } = <span class="fn">require</span>(<span class="string">"http"</span>);
+<span class="keyword">const</span> next = <span class="fn">require</span>(<span class="string">"next"</span>);
+
+<span class="keyword">const</span> app = <span class="fn">next</span>({ dev: <span class="keyword">false</span> });
+<span class="keyword">const</span> handle = app.<span class="fn">getRequestHandler</span>();
+
+app.<span class="fn">prepare</span>().then(() => {
+  <span class="fn">createServer</span>(handle).<span class="fn">listen</span>(8080, () => {
+    <span class="comment">// HTTP call to own API to init jobs</span>
+    <span class="bad">fetch</span>(<span class="bad">"http://localhost:8080/jobs/init"</span>);
+  });
+});</pre>
+      </div>
+    </div>
+    <div class="compare-card after">
+      <div class="compare-header">
+        <span class="compare-tag">After</span>
+        <span class="compare-heading">server.ts</span>
+      </div>
+      <div class="compare-body">
+<pre><span class="keyword">import</span> { createServer } <span class="keyword">from</span> <span class="string">"http"</span>;
+<span class="keyword">import</span> next <span class="keyword">from</span> <span class="string">"next"</span>;
+<span class="keyword">import</span> { <span class="fn">initCronJobs</span> } <span class="keyword">from</span> <span class="string">"./src/services/jobs"</span>;
+
+<span class="keyword">const</span> app = <span class="fn">next</span>({ dev: <span class="keyword">false</span> });
+<span class="keyword">const</span> handle = app.<span class="fn">getRequestHandler</span>();
+
+app.<span class="fn">prepare</span>().then(() => {
+  <span class="fn">createServer</span>(handle).<span class="fn">listen</span>(8080, <span class="string">"0.0.0.0"</span>, () => {
+    <span class="comment">// Direct import &mdash; type-safe, no HTTP overhead</span>
+    <span class="fn">initCronJobs</span>();
+  });
+});</pre>
+      </div>
+    </div>
+  </div>
+
+  <div class="wins-grid reveal">
+    <div class="win-card">
+      <div class="win-icon green">TS</div>
+      <div class="win-title">Full Type Safety</div>
+      <div class="win-desc">Server entry point now has compile-time checks. No more implicit <code>any</code> from require() calls or untyped function signatures.</div>
+    </div>
+    <div class="win-card">
+      <div class="win-icon cyan">&rarr;</div>
+      <div class="win-title">Direct Imports</div>
+      <div class="win-desc">Cron job initialization via direct function import instead of <code>fetch("/jobs/init")</code>. Eliminated latent race conditions and self-call fragility.</div>
+    </div>
+    <div class="win-card">
+      <div class="win-icon amber">&curren;</div>
+      <div class="win-title">Unified Language</div>
+      <div class="win-desc">100% of the project is now TypeScript. No JavaScript escape hatches. Consistent tooling, linting, and IDE experience across every file.</div>
+    </div>
+  </div>
+
+  <div class="migration-table-wrap reveal">
+    <table class="migration-table">
+      <thead>
+        <tr>
+          <th>Config</th>
+          <th>Before</th>
+          <th>After</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td class="label-cell">Entry Point</td>
+          <td class="old">server.js</td>
+          <td class="new">server.ts &rarr; dist/server.js</td>
+        </tr>
+        <tr>
+          <td class="label-cell">Build</td>
+          <td class="old">next build</td>
+          <td class="new">next build && tsc --project tsconfig.server.json</td>
+        </tr>
+        <tr>
+          <td class="label-cell">Start</td>
+          <td class="old">node server.js</td>
+          <td class="new">node dist/server.js</td>
+        </tr>
+        <tr>
+          <td class="label-cell">Module Resolution</td>
+          <td class="old">require() / CommonJS</td>
+          <td class="new">ESM imports, moduleResolution: "node"</td>
+        </tr>
+        <tr>
+          <td class="label-cell">Path Aliases</td>
+          <td class="old">N/A</td>
+          <td class="new">Relative imports (tsc doesn't rewrite @/)</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<section>
+  <div class="divider"></div>
+</section>
+
+<!-- ═══════════════ VITEST MIGRATION ═══════════════ -->
+<section>
+  <div class="reveal">
+    <div class="section-label">Migration 02</div>
+    <h2 class="section-title">Jest &rarr; Vitest</h2>
+    <p class="section-desc">
+      Replaced Jest with Vitest for native ESM support, faster execution, and seamless compatibility with our Vite-powered toolchain and SonarQube reporting.
+    </p>
+  </div>
+
+  <div class="comparison-grid reveal">
+    <div class="compare-card before">
+      <div class="compare-header">
+        <span class="compare-tag">Before</span>
+        <span class="compare-heading">Jest</span>
+      </div>
+      <div class="compare-body">
+<pre><span class="comment">// jest.config.js</span>
+module.exports = {
+  transform: {
+    <span class="string">"^.+\\.tsx?$"</span>: <span class="string">"ts-jest"</span>  <span class="comment">// extra transform step</span>
+  },
+  moduleNameMapper: {
+    <span class="string">"^@/(.*)"</span>: <span class="string">"&lt;rootDir&gt;/src/$1"</span> <span class="comment">// manual alias</span>
+  },
+  <span class="bad">testEnvironment</span>: <span class="bad">"node"</span>,
+  <span class="comment">// ESM? Good luck.</span>
+  <span class="bad">// ERR_REQUIRE_ESM in CI</span>
+  <span class="bad">// transformIgnorePatterns headaches</span>
+};</pre>
+      </div>
+    </div>
+    <div class="compare-card after">
+      <div class="compare-header">
+        <span class="compare-tag">After</span>
+        <span class="compare-heading">Vitest</span>
+      </div>
+      <div class="compare-body">
+<pre><span class="comment">// vitest.config.ts</span>
+<span class="keyword">import</span> { <span class="fn">defineConfig</span> } <span class="keyword">from</span> <span class="string">"vitest/config"</span>;
+<span class="keyword">import</span> <span class="fn">tsconfigPaths</span> <span class="keyword">from</span> <span class="string">"vite-tsconfig-paths"</span>;
+
+<span class="keyword">export default</span> <span class="fn">defineConfig</span>({
+  plugins: [<span class="fn">tsconfigPaths</span>()],
+  test: {
+    globals: <span class="keyword">true</span>,
+    environment: <span class="string">"node"</span>,
+    <span class="comment">// Native ESM. Native TypeScript. Just works.</span>
+    coverage: { provider: <span class="string">"v8"</span> },
+    reporters: [<span class="string">"default"</span>, <span class="string">"vitest-sonar-reporter"</span>],
+  },
+});</pre>
+      </div>
+    </div>
+  </div>
+
+  <div class="wins-grid reveal">
+    <div class="win-card">
+      <div class="win-icon green">ES</div>
+      <div class="win-title">Native ESM</div>
+      <div class="win-desc">No more <code>ERR_REQUIRE_ESM</code> in CI. No <code>transformIgnorePatterns</code> whack-a-mole. Vitest runs ESM natively via Vite's module pipeline.</div>
+    </div>
+    <div class="win-card">
+      <div class="win-icon cyan">&lt;1s</div>
+      <div class="win-title">Instant Test Startup</div>
+      <div class="win-desc">Vite's on-demand transform means near-instant startup vs. Jest's upfront compilation phase. HMR-powered watch mode for rapid iteration.</div>
+    </div>
+    <div class="win-card">
+      <div class="win-icon amber">v8</div>
+      <div class="win-title">Built-in V8 Coverage</div>
+      <div class="win-desc">Native V8 coverage provider. No separate <code>istanbul</code> or <code>babel-plugin-istanbul</code> setup. LCOV output works with SonarQube out of the box.</div>
+    </div>
+    <div class="win-card">
+      <div class="win-icon green">@/</div>
+      <div class="win-title">Path Alias Support</div>
+      <div class="win-desc"><code>vite-tsconfig-paths</code> plugin reads your tsconfig paths natively. No manual <code>moduleNameMapper</code> duplication.</div>
+    </div>
+    <div class="win-card">
+      <div class="win-icon cyan">CI</div>
+      <div class="win-title">CI Pipeline Compatibility</div>
+      <div class="win-desc">Consistent behavior between local dev and GitHub Actions CI. Fixed <code>"type": "module"</code> in package.json for cross-environment ESM support.</div>
+    </div>
+    <div class="win-card">
+      <div class="win-icon amber">SQ</div>
+      <div class="win-title">SonarQube Integration</div>
+      <div class="win-desc"><code>vitest-sonar-reporter</code> generates compatible test-results.xml. LCOV coverage feeds directly into SonarQube quality gates.</div>
+    </div>
+  </div>
+
+  <div class="migration-table-wrap reveal">
+    <table class="migration-table">
+      <thead>
+        <tr>
+          <th>Aspect</th>
+          <th>Jest</th>
+          <th>Vitest</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td class="label-cell">ESM Support</td>
+          <td class="old">Experimental, fragile</td>
+          <td class="new">Native, first-class</td>
+        </tr>
+        <tr>
+          <td class="label-cell">TypeScript</td>
+          <td class="old">Requires ts-jest transform</td>
+          <td class="new">Native via Vite pipeline</td>
+        </tr>
+        <tr>
+          <td class="label-cell">Config Format</td>
+          <td class="old">jest.config.js (CJS)</td>
+          <td class="new">vitest.config.ts (native TS)</td>
+        </tr>
+        <tr>
+          <td class="label-cell">Path Aliases</td>
+          <td class="old">Manual moduleNameMapper</td>
+          <td class="new">Auto via vite-tsconfig-paths</td>
+        </tr>
+        <tr>
+          <td class="label-cell">Coverage</td>
+          <td class="old">istanbul / babel plugin</td>
+          <td class="new">Built-in V8 provider</td>
+        </tr>
+        <tr>
+          <td class="label-cell">Watch Mode</td>
+          <td class="old">Full re-run</td>
+          <td class="new">HMR-powered, instant feedback</td>
+        </tr>
+        <tr>
+          <td class="label-cell">CI Reporting</td>
+          <td class="old">jest-sonar-reporter</td>
+          <td class="new">vitest-sonar-reporter + junit</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<section>
+  <div class="divider"></div>
+</section>
+
+<!-- ═══════════════ TIMELINE ═══════════════ -->
+<section>
+  <div class="reveal">
+    <div class="section-label">Execution</div>
+    <h2 class="section-title">What We Shipped</h2>
+    <p class="section-desc">
+      A sequence of targeted changes that modernized our stack without disrupting active development.
+    </p>
+  </div>
+
+  <div class="timeline reveal">
+    <div class="timeline-item">
+      <div class="timeline-dot"></div>
+      <div class="timeline-title">Fixed Fastify API Deployment on Azure</div>
+      <div class="timeline-detail">
+        Diagnosed server binding to <code>127.0.0.1</code> instead of <code>0.0.0.0</code>. Added <code>HOST=0.0.0.0</code> to Terraform app settings. Health checks started passing, API reachable in DEV.
+      </div>
+      <span class="timeline-tech">Fastify</span>
+      <span class="timeline-tech">Terraform</span>
+      <span class="timeline-tech">Azure App Service</span>
+    </div>
+    <div class="timeline-item">
+      <div class="timeline-dot"></div>
+      <div class="timeline-title">Migrated server.js to server.ts</div>
+      <div class="timeline-detail">
+        Created <code>tsconfig.server.json</code> with <code>moduleResolution: "node"</code>. Replaced path aliases with relative imports. Updated build script to compile server separately via <code>tsc</code>.
+      </div>
+      <span class="timeline-tech">TypeScript</span>
+      <span class="timeline-tech">Next.js</span>
+      <span class="timeline-tech">tsc</span>
+    </div>
+    <div class="timeline-item">
+      <div class="timeline-dot"></div>
+      <div class="timeline-title">Fixed Vitest in CI Pipeline</div>
+      <div class="timeline-detail">
+        Resolved <code>ERR_REQUIRE_ESM</code> by adding <code>"type": "module"</code> to <code>package.json</code>. Tests now pass consistently across local dev and GitHub Actions CI.
+      </div>
+      <span class="timeline-tech">Vitest</span>
+      <span class="timeline-tech">GitHub Actions</span>
+      <span class="timeline-tech">ESM</span>
+    </div>
+    <div class="timeline-item">
+      <div class="timeline-dot"></div>
+      <div class="timeline-title">SonarQube + Coverage Integration</div>
+      <div class="timeline-detail">
+        Configured <code>vitest-sonar-reporter</code> and V8 coverage to output LCOV and JUnit XML in the format SonarQube quality gates expect.
+      </div>
+      <span class="timeline-tech">SonarQube</span>
+      <span class="timeline-tech">V8 Coverage</span>
+      <span class="timeline-tech">LCOV</span>
+    </div>
+  </div>
+</section>
+
+<!-- ═══════════════ FOOTER ═══════════════ -->
+<div class="footer">
+  <p class="stamp">GENERATED 2026-02-10 &middot; NEXT.JS + FASTIFY MODERNIZATION</p>
+</div>
+
+<script>
+// Scroll reveal
+const observer = new IntersectionObserver((entries) => {
+  entries.forEach(entry => {
+    if (entry.isIntersecting) {
+      entry.target.classList.add('visible');
+    }
+  });
+}, { threshold: 0.1, rootMargin: '0px 0px -50px 0px' });
+
+document.querySelectorAll('.reveal').forEach(el => observer.observe(el));
+
+// Animate counter
+function animateCounter(el, target) {
+  const duration = 1500;
+  const start = performance.now();
+  function update(now) {
+    const progress = Math.min((now - start) / duration, 1);
+    const eased = 1 - Math.pow(1 - progress, 3);
+    el.textContent = Math.round(eased * target) + '%';
+    if (progress < 1) requestAnimationFrame(update);
+  }
+  requestAnimationFrame(update);
+}
+
+const counterObserver = new IntersectionObserver((entries) => {
+  entries.forEach(entry => {
+    if (entry.isIntersecting && entry.target.dataset.count) {
+      animateCounter(entry.target, parseInt(entry.target.dataset.count));
+      counterObserver.unobserve(entry.target);
+    }
+  });
+}, { threshold: 0.5 });
+
+document.querySelectorAll('[data-count]').forEach(el => counterObserver.observe(el));
+</script>
+
+</body>
+</html>

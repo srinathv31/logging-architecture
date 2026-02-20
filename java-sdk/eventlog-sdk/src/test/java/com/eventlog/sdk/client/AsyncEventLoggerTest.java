@@ -17,6 +17,7 @@ import java.time.Duration;
 import java.util.List;
 import java.util.stream.Stream;
 import java.util.concurrent.*;
+import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.BooleanSupplier;
 import java.util.function.Function;
@@ -614,11 +615,300 @@ class AsyncEventLoggerTest {
         logger.shutdown();
     }
 
+    // ========================================================================
+    // EventLossCallback tests
+    // ========================================================================
+
+    @Test
+    void callbackInvokedWhenQueueFull() throws Exception {
+        CountDownLatch senderStarted = new CountDownLatch(1);
+        CountDownLatch unblockSender = new CountDownLatch(1);
+        EventLogClient client = clientWithTransport(request -> {
+            senderStarted.countDown();
+            try { unblockSender.await(2, TimeUnit.SECONDS); } catch (InterruptedException e) { Thread.currentThread().interrupt(); }
+            return new EventLogResponse(200, SUCCESS_BODY);
+        });
+
+        AtomicInteger callbackCount = new AtomicInteger(0);
+        ConcurrentLinkedQueue<String> reasons = new ConcurrentLinkedQueue<>();
+        EventLossCallback callback = (event, reason) -> {
+            callbackCount.incrementAndGet();
+            reasons.add(reason);
+        };
+
+        AsyncEventLogger logger = AsyncEventLogger.builder()
+                .client(client)
+                .queueCapacity(1)
+                .maxRetries(0)
+                .registerShutdownHook(false)
+                .onEventLoss(callback)
+                .senderExecutor(Executors.newSingleThreadExecutor())
+                .retryExecutor(Executors.newSingleThreadScheduledExecutor())
+                .build();
+
+        assertTrue(logger.log(minimalEvent()));
+        assertTrue(senderStarted.await(1, TimeUnit.SECONDS));
+        assertTrue(logger.log(minimalEvent()));
+        assertFalse(logger.log(minimalEvent()));
+
+        assertTrue(callbackCount.get() >= 1, "Callback should be invoked on queue full");
+        assertTrue(reasons.contains("queue_full"));
+
+        unblockSender.countDown();
+        logger.shutdown();
+    }
+
+    @Test
+    void callbackInvokedAfterShutdown() throws Exception {
+        EventLogClient client = clientWithTransport(
+                request -> new EventLogResponse(200, SUCCESS_BODY));
+
+        AtomicInteger callbackCount = new AtomicInteger(0);
+        ConcurrentLinkedQueue<String> reasons = new ConcurrentLinkedQueue<>();
+        EventLossCallback callback = (event, reason) -> {
+            callbackCount.incrementAndGet();
+            reasons.add(reason);
+        };
+
+        AsyncEventLogger logger = AsyncEventLogger.builder()
+                .client(client)
+                .maxRetries(0)
+                .registerShutdownHook(false)
+                .onEventLoss(callback)
+                .senderExecutor(Executors.newSingleThreadExecutor())
+                .retryExecutor(Executors.newSingleThreadScheduledExecutor())
+                .build();
+
+        logger.shutdown();
+        assertFalse(logger.log(minimalEvent()));
+
+        assertEquals(1, callbackCount.get());
+        assertTrue(reasons.contains("shutdown_in_progress"));
+    }
+
+    @Test
+    void throwingCallbackDoesNotPropagate() throws Exception {
+        EventLogClient client = clientWithTransport(
+                request -> new EventLogResponse(200, SUCCESS_BODY));
+
+        EventLossCallback throwingCallback = (event, reason) -> {
+            throw new RuntimeException("callback exploded");
+        };
+
+        AsyncEventLogger logger = AsyncEventLogger.builder()
+                .client(client)
+                .maxRetries(0)
+                .registerShutdownHook(false)
+                .onEventLoss(throwingCallback)
+                .senderExecutor(Executors.newSingleThreadExecutor())
+                .retryExecutor(Executors.newSingleThreadScheduledExecutor())
+                .build();
+
+        logger.shutdown();
+        assertDoesNotThrow(() -> {
+            boolean result = logger.log(minimalEvent());
+            assertFalse(result, "log() should return false after shutdown");
+        });
+    }
+
+    @Test
+    void defaultCallbackDoesNotThrow() throws Exception {
+        CountDownLatch senderStarted = new CountDownLatch(1);
+        CountDownLatch unblockSender = new CountDownLatch(1);
+        EventLogClient client = clientWithTransport(request -> {
+            senderStarted.countDown();
+            try { unblockSender.await(2, TimeUnit.SECONDS); } catch (InterruptedException e) { Thread.currentThread().interrupt(); }
+            return new EventLogResponse(200, SUCCESS_BODY);
+        });
+
+        // No custom callback — default SLF4J logger should not throw
+        AsyncEventLogger logger = AsyncEventLogger.builder()
+                .client(client)
+                .queueCapacity(1)
+                .maxRetries(0)
+                .registerShutdownHook(false)
+                .senderExecutor(Executors.newSingleThreadExecutor())
+                .retryExecutor(Executors.newSingleThreadScheduledExecutor())
+                .build();
+
+        assertTrue(logger.log(minimalEvent()));
+        assertTrue(senderStarted.await(1, TimeUnit.SECONDS));
+        assertTrue(logger.log(minimalEvent()));
+        assertDoesNotThrow(() -> logger.log(minimalEvent()));
+
+        unblockSender.countDown();
+        logger.shutdown();
+    }
+
+    // ========================================================================
+    // Batch sender tests
+    // ========================================================================
+
+    private static final String BATCH_SUCCESS_BODY =
+            "{\"success\":true,\"total_received\":5,\"total_inserted\":5,\"execution_ids\":[\"id1\",\"id2\",\"id3\",\"id4\",\"id5\"],\"errors\":[]}";
+
+    @Test
+    void batchSizeOneSendsIndividually() throws Exception {
+        AtomicInteger singleCalls = new AtomicInteger(0);
+        AtomicInteger batchCalls = new AtomicInteger(0);
+        EventLogClient client = clientWithTransport(request -> {
+            if (request.getUri().getPath().contains("/batch")) {
+                batchCalls.incrementAndGet();
+            } else {
+                singleCalls.incrementAndGet();
+            }
+            return new EventLogResponse(200, SUCCESS_BODY);
+        });
+
+        AsyncEventLogger logger = AsyncEventLogger.builder()
+                .client(client)
+                .batchSize(1)
+                .maxRetries(0)
+                .registerShutdownHook(false)
+                .senderExecutor(Executors.newSingleThreadExecutor())
+                .retryExecutor(Executors.newSingleThreadScheduledExecutor())
+                .build();
+
+        logger.log(minimalEvent());
+        logger.log(minimalEvent());
+
+        boolean sent = waitUntil(() -> logger.getMetrics().eventsSent >= 2, Duration.ofSeconds(2));
+        assertTrue(sent, "Events should be sent");
+        assertTrue(singleCalls.get() >= 2, "Should use createEvent (single), not batch");
+        assertEquals(0, batchCalls.get(), "Should not call batch endpoint");
+
+        logger.shutdown();
+    }
+
+    @Test
+    void batchSendMultipleEvents() throws Exception {
+        CountDownLatch senderStarted = new CountDownLatch(1);
+        CountDownLatch unblockSender = new CountDownLatch(1);
+        AtomicInteger batchCalls = new AtomicInteger(0);
+        AtomicInteger singleCalls = new AtomicInteger(0);
+
+        EventLogClient client = clientWithTransport(request -> {
+            if (senderStarted.getCount() > 0) {
+                senderStarted.countDown();
+                try { unblockSender.await(2, TimeUnit.SECONDS); } catch (InterruptedException e) { Thread.currentThread().interrupt(); }
+                return new EventLogResponse(200, SUCCESS_BODY);
+            }
+            if (request.getUri().getPath().contains("/batch")) {
+                batchCalls.incrementAndGet();
+                return new EventLogResponse(200, BATCH_SUCCESS_BODY);
+            }
+            singleCalls.incrementAndGet();
+            return new EventLogResponse(200, SUCCESS_BODY);
+        });
+
+        AsyncEventLogger logger = AsyncEventLogger.builder()
+                .client(client)
+                .batchSize(5)
+                .maxRetries(0)
+                .registerShutdownHook(false)
+                .senderExecutor(Executors.newSingleThreadExecutor())
+                .retryExecutor(Executors.newSingleThreadScheduledExecutor())
+                .build();
+
+        // First event: queued, sender picks it up and blocks
+        assertTrue(logger.log(minimalEvent()));
+        assertTrue(senderStarted.await(1, TimeUnit.SECONDS));
+
+        // Queue 5 events while sender is blocked
+        for (int i = 0; i < 5; i++) {
+            assertTrue(logger.log(minimalEvent()));
+        }
+
+        // Unblock sender — the queued 5 events should be drained as a batch
+        unblockSender.countDown();
+
+        boolean sent = waitUntil(() -> logger.getMetrics().eventsSent >= 6, Duration.ofSeconds(2));
+        assertTrue(sent, "All events should be sent");
+        assertTrue(batchCalls.get() >= 1, "Should have used batch endpoint for multi-event drain");
+
+        logger.shutdown();
+    }
+
+    @Test
+    void entireBatchFailureRetriesAll() throws Exception {
+        AtomicInteger callCount = new AtomicInteger(0);
+        CountDownLatch senderStarted = new CountDownLatch(1);
+        CountDownLatch unblockSender = new CountDownLatch(1);
+
+        EventLogClient client = clientWithTransport(request -> {
+            int count = callCount.incrementAndGet();
+            // First call blocks to accumulate events in queue
+            if (count == 1) {
+                senderStarted.countDown();
+                try { unblockSender.await(2, TimeUnit.SECONDS); } catch (InterruptedException e) { Thread.currentThread().interrupt(); }
+                return new EventLogResponse(200, SUCCESS_BODY);
+            }
+            // Second call (the batch) fails
+            if (count == 2) {
+                return new EventLogResponse(500, ERROR_BODY);
+            }
+            // Subsequent retries succeed
+            return new EventLogResponse(200, SUCCESS_BODY);
+        });
+
+        AsyncEventLogger logger = AsyncEventLogger.builder()
+                .client(client)
+                .batchSize(3)
+                .maxRetries(1)
+                .baseRetryDelayMs(50)
+                .circuitBreakerThreshold(100)
+                .registerShutdownHook(false)
+                .senderExecutor(Executors.newSingleThreadExecutor())
+                .retryExecutor(Executors.newSingleThreadScheduledExecutor())
+                .build();
+
+        // First event blocks sender
+        logger.log(minimalEvent());
+        assertTrue(senderStarted.await(1, TimeUnit.SECONDS));
+
+        // Queue 3 more events
+        logger.log(minimalEvent());
+        logger.log(minimalEvent());
+        logger.log(minimalEvent());
+
+        unblockSender.countDown();
+
+        // All should eventually be sent via retries
+        boolean allSent = waitUntil(() -> logger.getMetrics().eventsSent >= 4, Duration.ofSeconds(5));
+        assertTrue(allSent, "All events should eventually be sent after batch failure + retry");
+
+        logger.shutdown();
+    }
+
     @Test
     void builderThrowsWhenClientIsNull() {
         IllegalStateException ex = assertThrows(IllegalStateException.class,
                 () -> AsyncEventLogger.builder().build());
         assertTrue(ex.getMessage().contains("client"), "Should mention 'client' in error message");
+    }
+
+    @Test
+    void builderRejectsBatchSizeZero() {
+        EventLogClient client = clientWithTransport(
+                request -> new EventLogResponse(200, SUCCESS_BODY));
+        assertThrows(IllegalArgumentException.class, () ->
+                AsyncEventLogger.builder().client(client).batchSize(0).build());
+    }
+
+    @Test
+    void builderRejectsSenderThreadsZero() {
+        EventLogClient client = clientWithTransport(
+                request -> new EventLogResponse(200, SUCCESS_BODY));
+        assertThrows(IllegalArgumentException.class, () ->
+                AsyncEventLogger.builder().client(client).senderThreads(0).build());
+    }
+
+    @Test
+    void builderRejectsNegativeMaxBatchWaitMs() {
+        EventLogClient client = clientWithTransport(
+                request -> new EventLogResponse(200, SUCCESS_BODY));
+        assertThrows(IllegalArgumentException.class, () ->
+                AsyncEventLogger.builder().client(client).maxBatchWaitMs(-1).build());
     }
 
     // ========================================================================

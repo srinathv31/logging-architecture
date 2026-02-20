@@ -363,7 +363,7 @@ class LogEventAspectTest {
     // --- MDC spanId / parentSpanId / batchId ---
 
     @Test
-    void mdcSpanIdUsedWhenPresent() {
+    void mdcSpanIdPromotedToParentSpanId() {
         contextRunner.run(context -> {
             TestService service = context.getBean(TestService.class);
             AsyncEventLogger logger = context.getBean(AsyncEventLogger.class);
@@ -374,7 +374,10 @@ class LogEventAspectTest {
             ArgumentCaptor<EventLogEntry> captor = ArgumentCaptor.forClass(EventLogEntry.class);
             verify(logger, timeout(500)).log(captor.capture());
 
-            assertThat(captor.getValue().getSpanId()).isEqualTo("span-abc-123");
+            // MDC spanId becomes parentSpanId; spanId is auto-generated per invocation
+            assertThat(captor.getValue().getSpanId()).isNotEqualTo("span-abc-123");
+            assertThat(captor.getValue().getSpanId()).isNotBlank();
+            assertThat(captor.getValue().getParentSpanId()).isEqualTo("span-abc-123");
         });
     }
 
@@ -427,7 +430,9 @@ class LogEventAspectTest {
             EventLogEntry entry = captor.getValue();
             assertThat(entry.getCorrelationId()).isEqualTo("hyphen-corr");
             assertThat(entry.getTraceId()).isEqualTo("hyphen-trace");
-            assertThat(entry.getSpanId()).isEqualTo("hyphen-span");
+            // MDC span-id becomes parentSpanId; spanId is auto-generated
+            assertThat(entry.getSpanId()).isNotBlank();
+            assertThat(entry.getParentSpanId()).isEqualTo("hyphen-span");
         });
     }
 
@@ -456,7 +461,7 @@ class LogEventAspectTest {
         env.setProperty("eventlog.target-system", "MY_TARGET");
         env.setProperty("eventlog.originating-system", "MY_ORIGIN");
         EventLogProperties props = new EventLogProperties(
-                true, "http://test", null, null, null, null, null, null, null, null, null);
+                true, "http://test", null, null, null, null, null, null, null, null, null, null);
         AsyncEventLogger logger = mock(AsyncEventLogger.class);
 
         LogEventAspect aspect = LogEventAspect.from(env, props, logger);
@@ -468,7 +473,7 @@ class LogEventAspectTest {
         MockEnvironment env = new MockEnvironment();
         env.setProperty("eventlog.originating-system", "FALLBACK_ORIGIN");
         EventLogProperties props = new EventLogProperties(
-                true, "http://test", null, null, null, null, null, null, null, null, null);
+                true, "http://test", null, null, null, null, null, null, null, null, null, null);
         AsyncEventLogger logger = mock(AsyncEventLogger.class);
 
         LogEventAspect aspect = LogEventAspect.from(env, props, logger);
@@ -482,7 +487,7 @@ class LogEventAspectTest {
         MockEnvironment env = new MockEnvironment();
         env.setProperty("spring.application.name", "test-app");
         EventLogProperties props = new EventLogProperties(
-                true, "http://test", null, null, null, null, null, null, null, null, null);
+                true, "http://test", null, null, null, null, null, null, null, null, null, null);
         AsyncEventLogger logger = mock(AsyncEventLogger.class);
 
         LogEventAspect aspect = LogEventAspect.from(env, props, logger);

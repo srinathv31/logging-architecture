@@ -10,12 +10,15 @@ import {
 import { z } from 'zod';
 import { createEventLogDbRecord } from '../../fixtures/events';
 import { getEventsByTraceResponseSchema } from '../../../src/schemas/events';
+import { eventLogPaginationQuerySchema } from '../../../src/schemas/common';
 
 // Mock function for getByTrace
-let mockGetByTrace: (traceId: string) => Promise<{
+let mockGetByTrace: (traceId: string, pagination: { page: number; pageSize: number }) => Promise<{
   events: unknown[];
   systemsInvolved: string[];
   totalDurationMs: number | null;
+  totalCount: number;
+  hasMore: boolean;
 }>;
 
 function buildTestApp() {
@@ -35,18 +38,25 @@ function buildTestApp() {
       {
         schema: {
           params: z.object({ traceId: z.string().min(1) }),
+          querystring: eventLogPaginationQuerySchema,
           response: { 200: getEventsByTraceResponseSchema },
         },
       },
       async (request, reply) => {
         const { traceId } = request.params;
-        const { events, systemsInvolved, totalDurationMs } = await mockGetByTrace(traceId);
+        const { page, page_size } = request.query;
+        const { events, systemsInvolved, totalDurationMs, totalCount, hasMore } =
+          await mockGetByTrace(traceId, { page, pageSize: page_size });
 
         return reply.send({
           trace_id: traceId,
           events,
           systems_involved: systemsInvolved,
           total_duration_ms: totalDurationMs,
+          total_count: totalCount,
+          page,
+          page_size,
+          has_more: hasMore,
         });
       }
     );
@@ -72,6 +82,8 @@ describe('GET /v1/events/trace/:traceId', () => {
       events: [],
       systemsInvolved: [],
       totalDurationMs: null,
+      totalCount: 0,
+      hasMore: false,
     });
   });
 
@@ -86,6 +98,8 @@ describe('GET /v1/events/trace/:traceId', () => {
         events: mockEvents,
         systemsInvolved: ['system-a', 'system-b'],
         totalDurationMs: 5000,
+        totalCount: 2,
+        hasMore: false,
       });
 
       const response = await app.inject({
@@ -99,6 +113,10 @@ describe('GET /v1/events/trace/:traceId', () => {
       expect(body.events).toHaveLength(2);
       expect(body.systems_involved).toEqual(['system-a', 'system-b']);
       expect(body.total_duration_ms).toBe(5000);
+      expect(body.total_count).toBe(2);
+      expect(body.page).toBe(1);
+      expect(body.page_size).toBe(200);
+      expect(body.has_more).toBe(false);
     });
 
     it('should return null duration when no events exist', async () => {
@@ -106,6 +124,8 @@ describe('GET /v1/events/trace/:traceId', () => {
         events: [],
         systemsInvolved: [],
         totalDurationMs: null,
+        totalCount: 0,
+        hasMore: false,
       });
 
       const response = await app.inject({
@@ -125,6 +145,8 @@ describe('GET /v1/events/trace/:traceId', () => {
         events: [createEventLogDbRecord()],
         systemsInvolved: ['system-a', 'system-b', 'system-a'],
         totalDurationMs: 1000,
+        totalCount: 1,
+        hasMore: false,
       });
 
       const response = await app.inject({
@@ -143,6 +165,8 @@ describe('GET /v1/events/trace/:traceId', () => {
         events: [createEventLogDbRecord()],
         systemsInvolved: ['system-a'],
         totalDurationMs: 0,
+        totalCount: 1,
+        hasMore: false,
       });
 
       const response = await app.inject({
@@ -154,6 +178,30 @@ describe('GET /v1/events/trace/:traceId', () => {
       const body = response.json();
       expect(body.events).toHaveLength(1);
       expect(body.total_duration_ms).toBe(0);
+    });
+  });
+
+  describe('pagination', () => {
+    it('should accept page and page_size query params', async () => {
+      mockGetByTrace = async (_id, pagination) => ({
+        events: [createEventLogDbRecord()],
+        systemsInvolved: ['system-a'],
+        totalDurationMs: 100,
+        totalCount: 10,
+        hasMore: true,
+      });
+
+      const response = await app.inject({
+        method: 'GET',
+        url: '/v1/events/trace/trace-123?page=2&page_size=5',
+      });
+
+      expect(response.statusCode).toBe(200);
+      const body = response.json();
+      expect(body.page).toBe(2);
+      expect(body.page_size).toBe(5);
+      expect(body.total_count).toBe(10);
+      expect(body.has_more).toBe(true);
     });
   });
 

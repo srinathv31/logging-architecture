@@ -11,7 +11,7 @@ import { createEventFixture } from '../../fixtures/events';
 import {
   createEventRequestSchema,
   batchCreateEventRequestSchema,
-  createEventResponseSchema,
+  createEventUnionResponseSchema,
   batchCreateEventResponseSchema,
 } from '../../../src/schemas/events';
 
@@ -44,19 +44,22 @@ function buildTestApp() {
           tags: ['Events'],
           description: 'Create one or more event log entries',
           body: createEventRequestSchema,
-          response: { 201: createEventResponseSchema },
+          response: { 201: createEventUnionResponseSchema },
         },
       },
       async (request, reply) => {
         const { events } = request.body;
 
         if (Array.isArray(events)) {
-          const results = await Promise.all(events.map((e) => mockCreateEvent(e)));
-          const correlationId = events[0].correlation_id;
+          const { executionIds, errors } = await mockCreateEvents(events);
+          const correlationIds = [...new Set(events.map((e: { correlation_id: string }) => e.correlation_id))];
           return reply.status(201).send({
-            success: true,
-            execution_ids: results.map((r) => r.executionId),
-            correlation_id: correlationId,
+            success: errors.length === 0,
+            total_received: events.length,
+            total_inserted: executionIds.length,
+            execution_ids: executionIds,
+            correlation_ids: correlationIds,
+            errors: errors.length > 0 ? errors : undefined,
           });
         }
 
@@ -181,14 +184,10 @@ describe('POST /v1/events', () => {
         createEventFixture({ step_sequence: 2 }),
       ];
 
-      let callCount = 0;
-      mockCreateEvent = async () => {
-        callCount++;
-        return {
-          executionId: `exec-${callCount}`,
-          correlationId: events[0].correlation_id,
-        };
-      };
+      mockCreateEvents = async () => ({
+        executionIds: ['exec-1', 'exec-2'],
+        errors: [],
+      });
 
       const response = await app.inject({
         method: 'POST',
@@ -197,11 +196,60 @@ describe('POST /v1/events', () => {
       });
 
       expect(response.statusCode).toBe(201);
-      expect(response.json()).toEqual({
-        success: true,
-        execution_ids: ['exec-1', 'exec-2'],
-        correlation_id: events[0].correlation_id,
+      const body = response.json();
+      expect(body.success).toBe(true);
+      expect(body.total_received).toBe(2);
+      expect(body.total_inserted).toBe(2);
+      expect(body.execution_ids).toEqual(['exec-1', 'exec-2']);
+      expect(body.correlation_ids).toEqual([events[0].correlation_id]);
+    });
+
+    it('should return multiple correlation_ids when events have different ones', async () => {
+      const events = [
+        createEventFixture({ correlation_id: 'corr-A' }),
+        createEventFixture({ correlation_id: 'corr-B' }),
+        createEventFixture({ correlation_id: 'corr-A' }),
+      ];
+
+      mockCreateEvents = async () => ({
+        executionIds: ['exec-1', 'exec-2', 'exec-3'],
+        errors: [],
       });
+
+      const response = await app.inject({
+        method: 'POST',
+        url: '/v1/events',
+        payload: { events },
+      });
+
+      expect(response.statusCode).toBe(201);
+      const body = response.json();
+      expect(body.correlation_ids).toEqual(['corr-A', 'corr-B']);
+    });
+
+    it('should report partial failures with errors array', async () => {
+      const events = [
+        createEventFixture({ step_sequence: 1 }),
+        createEventFixture({ step_sequence: 2 }),
+      ];
+
+      mockCreateEvents = async () => ({
+        executionIds: ['exec-1'],
+        errors: [{ index: 1, error: 'Duplicate key' }],
+      });
+
+      const response = await app.inject({
+        method: 'POST',
+        url: '/v1/events',
+        payload: { events },
+      });
+
+      expect(response.statusCode).toBe(201);
+      const body = response.json();
+      expect(body.success).toBe(false);
+      expect(body.total_received).toBe(2);
+      expect(body.total_inserted).toBe(1);
+      expect(body.errors).toEqual([{ index: 1, error: 'Duplicate key' }]);
     });
   });
 

@@ -105,6 +105,20 @@ export const createEventResponseSchema = z.object({
   correlation_id: z.string(),
 });
 
+export const createEventArrayResponseSchema = z.object({
+  success: z.boolean(),
+  total_received: z.number().int(),
+  total_inserted: z.number().int(),
+  execution_ids: z.array(z.string()),
+  correlation_ids: z.array(z.string()),
+  errors: z.array(z.object({ index: z.number().int(), error: z.string() })).optional(),
+});
+
+export const createEventUnionResponseSchema = z.union([
+  createEventResponseSchema,
+  createEventArrayResponseSchema,
+]);
+
 export const batchCreateEventResponseSchema = z.object({
   success: z.boolean(),
   total_received: z.number().int(),
@@ -134,6 +148,10 @@ export const getEventsByTraceResponseSchema = z.object({
   events: z.array(eventLogResponseSchema),
   systems_involved: z.array(z.string()),
   total_duration_ms: z.number().nullable(),
+  total_count: z.number().int(),
+  page: z.number().int(),
+  page_size: z.number().int(),
+  has_more: z.boolean(),
 });
 
 export const getEventsByCorrelationResponseSchema = z.object({
@@ -141,6 +159,10 @@ export const getEventsByCorrelationResponseSchema = z.object({
   account_id: z.string().nullable(),
   events: z.array(eventLogResponseSchema),
   is_linked: z.boolean(),
+  total_count: z.number().int(),
+  page: z.number().int(),
+  page_size: z.number().int(),
+  has_more: z.boolean(),
 });
 
 export const accountSummaryResponseSchema = z.object({

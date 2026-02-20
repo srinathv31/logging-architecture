@@ -3,6 +3,7 @@ package com.eventlog.sdk.autoconfigure;
 import com.eventlog.sdk.autoconfigure.logging.LogEventAspect;
 import com.eventlog.sdk.client.AsyncEventLogger;
 import com.eventlog.sdk.client.EventLogClient;
+import com.eventlog.sdk.client.EventLossCallback;
 import com.eventlog.sdk.client.OAuthTokenProvider;
 import com.eventlog.sdk.client.TokenProvider;
 import com.eventlog.sdk.client.transport.EventLogTransport;
@@ -115,8 +116,9 @@ public class EventLogRefreshAutoConfiguration extends EventLogAutoConfiguration 
             EventLogProperties properties,
             ObjectProvider<ThreadPoolTaskExecutor> taskExecutorProvider,
             ObjectProvider<TaskScheduler> taskSchedulerProvider,
+            ObjectProvider<EventLossCallback> eventLossCallbackProvider,
             ApplicationContext applicationContext) {
-        return super.asyncEventLogger(client, properties, taskExecutorProvider, taskSchedulerProvider, applicationContext);
+        return super.asyncEventLogger(client, properties, taskExecutorProvider, taskSchedulerProvider, eventLossCallbackProvider, applicationContext);
     }
 
     @Bean
