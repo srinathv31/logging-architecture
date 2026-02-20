@@ -117,7 +117,6 @@ public class RoomServiceService {
                 "ORDER_FULFILLED");
 
         // Step 4: PROCESS_END
-        processLogger.withTargetSystem("PET_RESORT");
         processLogger.withHttpStatusCode(201);
         int duration = (int) (System.currentTimeMillis() - start);
         processLogger.processEnd(4, EventStatus.SUCCESS,

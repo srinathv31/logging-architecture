@@ -14,7 +14,7 @@ class EventLogPropertiesTest {
     @Test
     void defaultValuesWhenAllNulls() {
         EventLogProperties props = new EventLogProperties(
-                null, null, null, null, null, null, null, null, null, null, null);
+                null, null, null, null, null, null, null, null, null, null, null, null);
         assertThat(props.isEnabled()).isFalse();
         assertThat(props.getConnectTimeout()).isEqualTo(Duration.ofSeconds(10));
         assertThat(props.getRequestTimeout()).isEqualTo(Duration.ofSeconds(30));
@@ -33,7 +33,7 @@ class EventLogPropertiesTest {
     @Test
     void enabledFalseWhenNull() {
         EventLogProperties props = new EventLogProperties(
-                null, null, null, null, null, null, null, null, null, null, null);
+                null, null, null, null, null, null, null, null, null, null, null, null);
         assertThat(props.isEnabled()).isFalse();
     }
 
@@ -49,7 +49,7 @@ class EventLogPropertiesTest {
         Duration rt = Duration.ofSeconds(15);
         Duration rd = Duration.ofMillis(200);
         EventLogProperties props = new EventLogProperties(
-                true, "http://api.test", "my-app", ct, rt, 5, rd, "my-key", "jdk", null, null);
+                true, "http://api.test", "my-app", ct, rt, 5, rd, "my-key", "jdk", null, null, null);
         assertThat(props.isEnabled()).isTrue();
         assertThat(props.getBaseUrl()).isEqualTo("http://api.test");
         assertThat(props.getApplicationId()).isEqualTo("my-app");
@@ -97,7 +97,7 @@ class EventLogPropertiesTest {
     void oauthValidWhenDisabled() {
         EventLogProperties props = new EventLogProperties(
                 false, null, null, null, null, null, null, null, null,
-                new EventLogProperties.OAuth("http://token", "id", null, null, null, null, null), null);
+                new EventLogProperties.OAuth("http://token", "id", null, null, null, null, null), null, null);
         assertThat(props.isOAuthValid()).isTrue();
     }
 
@@ -111,7 +111,7 @@ class EventLogPropertiesTest {
     void oauthInvalidWithOnlyTokenUrl() {
         EventLogProperties props = new EventLogProperties(
                 true, "http://localhost", null, null, null, null, null, null, null,
-                new EventLogProperties.OAuth("http://token", null, null, null, null, null, null), null);
+                new EventLogProperties.OAuth("http://token", null, null, null, null, null, null), null, null);
         assertThat(props.isOAuthValid()).isFalse();
     }
 
@@ -119,7 +119,7 @@ class EventLogPropertiesTest {
     void oauthInvalidWithOnlyClientId() {
         EventLogProperties props = new EventLogProperties(
                 true, "http://localhost", null, null, null, null, null, null, null,
-                new EventLogProperties.OAuth(null, "client-id", null, null, null, null, null), null);
+                new EventLogProperties.OAuth(null, "client-id", null, null, null, null, null), null, null);
         assertThat(props.isOAuthValid()).isFalse();
     }
 
@@ -127,49 +127,49 @@ class EventLogPropertiesTest {
     void oauthValidWhenAllFieldsSet() {
         EventLogProperties props = new EventLogProperties(
                 true, "http://localhost", null, null, null, null, null, null, null,
-                new EventLogProperties.OAuth("http://token", "id", "secret", "scope", null, null, null), null);
+                new EventLogProperties.OAuth("http://token", "id", "secret", "scope", null, null, null), null, null);
         assertThat(props.isOAuthValid()).isTrue();
     }
 
     @Test
     void transportValidForWebclient() {
         EventLogProperties props = new EventLogProperties(
-                true, "http://localhost", null, null, null, null, null, null, "webclient", null, null);
+                true, "http://localhost", null, null, null, null, null, null, "webclient", null, null, null);
         assertThat(props.isTransportValid()).isTrue();
     }
 
     @Test
     void transportValidForRestclient() {
         EventLogProperties props = new EventLogProperties(
-                true, "http://localhost", null, null, null, null, null, null, "restclient", null, null);
+                true, "http://localhost", null, null, null, null, null, null, "restclient", null, null, null);
         assertThat(props.isTransportValid()).isTrue();
     }
 
     @Test
     void transportValidForJdk() {
         EventLogProperties props = new EventLogProperties(
-                true, "http://localhost", null, null, null, null, null, null, "jdk", null, null);
+                true, "http://localhost", null, null, null, null, null, null, "jdk", null, null, null);
         assertThat(props.isTransportValid()).isTrue();
     }
 
     @Test
     void transportInvalidForUnknownValue() {
         EventLogProperties props = new EventLogProperties(
-                true, "http://localhost", null, null, null, null, null, null, "grpc", null, null);
+                true, "http://localhost", null, null, null, null, null, null, "grpc", null, null, null);
         assertThat(props.isTransportValid()).isFalse();
     }
 
     @Test
     void transportValidWhenNull() {
         EventLogProperties props = new EventLogProperties(
-                true, "http://localhost", null, null, null, null, null, null, null, null, null);
+                true, "http://localhost", null, null, null, null, null, null, null, null, null, null);
         assertThat(props.isTransportValid()).isTrue();
     }
 
     @Test
     void transportValidWhenBlank() {
         EventLogProperties props = new EventLogProperties(
-                true, "http://localhost", null, null, null, null, null, null, "  ", null, null);
+                true, "http://localhost", null, null, null, null, null, null, "  ", null, null, null);
         assertThat(props.isTransportValid()).isTrue();
     }
 
@@ -178,21 +178,21 @@ class EventLogPropertiesTest {
     @Test
     void normalizeTransportLowerCases() {
         EventLogProperties props = new EventLogProperties(
-                true, "http://localhost", null, null, null, null, null, null, "JDK", null, null);
+                true, "http://localhost", null, null, null, null, null, null, "JDK", null, null, null);
         assertThat(props.getTransport()).isEqualTo("jdk");
     }
 
     @Test
     void normalizeTransportTrims() {
         EventLogProperties props = new EventLogProperties(
-                true, "http://localhost", null, null, null, null, null, null, " restclient ", null, null);
+                true, "http://localhost", null, null, null, null, null, null, " restclient ", null, null, null);
         assertThat(props.getTransport()).isEqualTo("restclient");
     }
 
     @Test
     void normalizeTransportReturnsNullForBlank() {
         EventLogProperties props = new EventLogProperties(
-                true, "http://localhost", null, null, null, null, null, null, "  ", null, null);
+                true, "http://localhost", null, null, null, null, null, null, "  ", null, null, null);
         assertThat(props.getTransport()).isNull();
     }
 
@@ -239,7 +239,7 @@ class EventLogPropertiesTest {
     @Test
     void asyncDefaultValues() {
         EventLogProperties.Async async = new EventLogProperties.Async(
-                null, null, null, null, null, null, null, null, null, null);
+                null, null, null, null, null, null, null, null, null, null, null, null, null);
         assertThat(async.isEnabled()).isTrue();
         assertThat(async.getQueueCapacity()).isEqualTo(10_000);
         assertThat(async.getMaxRetries()).isEqualTo(3);
@@ -253,7 +253,7 @@ class EventLogPropertiesTest {
     void asyncCustomValues() {
         Path spillover = Path.of("/tmp/spill");
         EventLogProperties.Async async = new EventLogProperties.Async(
-                true, 5000, 5, 2000L, 60000L, 10, 60000L, spillover, true, "myExecutor");
+                true, 5000, 5, 2000L, 60000L, 10, 60000L, spillover, true, "myExecutor", null, null, null);
         assertThat(async.isEnabled()).isTrue();
         assertThat(async.getQueueCapacity()).isEqualTo(5000);
         assertThat(async.getMaxRetries()).isEqualTo(5);
@@ -269,35 +269,35 @@ class EventLogPropertiesTest {
     @Test
     void asyncEnabledDefaultsToTrue() {
         EventLogProperties.Async async = new EventLogProperties.Async(
-                null, null, null, null, null, null, null, null, null, null);
+                null, null, null, null, null, null, null, null, null, null, null, null, null);
         assertThat(async.isEnabled()).isTrue();
     }
 
     @Test
     void asyncEnabledFalseWhenSetFalse() {
         EventLogProperties.Async async = new EventLogProperties.Async(
-                false, null, null, null, null, null, null, null, null, null);
+                false, null, null, null, null, null, null, null, null, null, null, null, null);
         assertThat(async.isEnabled()).isFalse();
     }
 
     @Test
     void asyncVirtualThreadsDefaultsToFalse() {
         EventLogProperties.Async async = new EventLogProperties.Async(
-                null, null, null, null, null, null, null, null, null, null);
+                null, null, null, null, null, null, null, null, null, null, null, null, null);
         assertThat(async.isVirtualThreads()).isFalse();
     }
 
     @Test
     void asyncExecutorTrimmed() {
         EventLogProperties.Async async = new EventLogProperties.Async(
-                null, null, null, null, null, null, null, null, null, " myBean ");
+                null, null, null, null, null, null, null, null, null, " myBean ", null, null, null);
         assertThat(async.getExecutor()).isEqualTo("myBean");
     }
 
     @Test
     void asyncExecutorNullWhenBlank() {
         EventLogProperties.Async async = new EventLogProperties.Async(
-                null, null, null, null, null, null, null, null, null, "  ");
+                null, null, null, null, null, null, null, null, null, "  ", null, null, null);
         assertThat(async.getExecutor()).isNull();
     }
 
@@ -305,7 +305,7 @@ class EventLogPropertiesTest {
     void asyncSpilloverPathPreserved() {
         Path path = Path.of("/var/log/spillover");
         EventLogProperties.Async async = new EventLogProperties.Async(
-                null, null, null, null, null, null, null, path, null, null);
+                null, null, null, null, null, null, null, path, null, null, null, null, null);
         assertThat(async.getSpilloverPath()).isEqualTo(path);
     }
 
@@ -313,6 +313,6 @@ class EventLogPropertiesTest {
 
     private static EventLogProperties createProps(boolean enabled, String baseUrl) {
         return new EventLogProperties(
-                enabled, baseUrl, null, null, null, null, null, null, null, null, null);
+                enabled, baseUrl, null, null, null, null, null, null, null, null, null, null);
     }
 }

@@ -28,8 +28,8 @@ export function registerErrorHandler(app: FastifyInstance) {
       });
     }
 
-    // PostgreSQL unique violation
-    if ('code' in error && (error as { code?: string }).code === '23505') {
+    // MSSQL unique constraint / unique index violation
+    if ('number' in error && ((error as { number?: number }).number === 2627 || (error as { number?: number }).number === 2601)) {
       return reply.status(409).send({
         error: 'Conflict',
         message: 'A resource with the given unique constraint already exists.',

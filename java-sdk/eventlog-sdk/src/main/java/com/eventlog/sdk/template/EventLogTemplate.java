@@ -7,7 +7,9 @@ import com.eventlog.sdk.model.EventType;
 import com.eventlog.sdk.model.HttpMethod;
 import org.slf4j.MDC;
 
+import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.UUID;
@@ -287,7 +289,9 @@ public final class EventLogTemplate {
         private String lastStepSpanId;
         private String batchId;
         private String applicationIdOverride;
-        private String targetSystemOverride;
+        private String defaultTargetSystemOverride;
+        private String pendingTargetSystem;
+        private List<String> pendingSpanLinks;
         private String originatingSystemOverride;
         private final Map<String, String> identifiers = new HashMap<>();
         private final Map<String, Object> metadata = new HashMap<>();
@@ -332,7 +336,25 @@ public final class EventLogTemplate {
         }
 
         public ProcessLogger withTargetSystem(String targetSystem) {
-            this.targetSystemOverride = targetSystem;
+            this.pendingTargetSystem = targetSystem;
+            return this;
+        }
+
+        public ProcessLogger withDefaultTargetSystem(String targetSystem) {
+            this.defaultTargetSystemOverride = targetSystem;
+            return this;
+        }
+
+        public ProcessLogger withSpanLinks(List<String> spanLinks) {
+            this.pendingSpanLinks = spanLinks != null ? new ArrayList<>(spanLinks) : null;
+            return this;
+        }
+
+        public ProcessLogger addSpanLink(String spanLink) {
+            if (this.pendingSpanLinks == null) {
+                this.pendingSpanLinks = new ArrayList<>();
+            }
+            this.pendingSpanLinks.add(spanLink);
             return this;
         }
 
@@ -411,7 +433,7 @@ public final class EventLogTemplate {
                     .summary(summary)
                     .result(result);
             applyProcessContext(builder, true);
-            return eventLog.log(builder.build());
+            return emitAndClear(builder);
         }
 
         public boolean logStep(
@@ -427,7 +449,7 @@ public final class EventLogTemplate {
                     .summary(summary)
                     .result(result);
             applyProcessContext(builder, false);
-            return eventLog.log(builder.build());
+            return emitAndClear(builder);
         }
 
         /**
@@ -453,7 +475,7 @@ public final class EventLogTemplate {
             } else {
                 applyProcessContext(builder, false);
             }
-            return eventLog.log(builder.build());
+            return emitAndClear(builder);
         }
 
         public boolean logStep(
@@ -479,7 +501,7 @@ public final class EventLogTemplate {
                 builder.executionTimeMs(totalDurationMs);
             }
             applyProcessContext(builder, false);
-            return eventLog.log(builder.build());
+            return emitAndClear(builder);
         }
 
         public boolean processEnd(
@@ -497,7 +519,7 @@ public final class EventLogTemplate {
                     .summary(summary)
                     .result(result);
             applyProcessContext(builder, false);
-            return eventLog.log(builder.build());
+            return emitAndClear(builder);
         }
 
         public boolean error(String errorCode, String errorMessage) {
@@ -508,10 +530,16 @@ public final class EventLogTemplate {
             return error(errorCode, errorMessage, summary, "FAILED");
         }
 
+        private String resolveTargetSystem() {
+            if (hasText(pendingTargetSystem)) return pendingTargetSystem;
+            if (hasText(defaultTargetSystemOverride)) return defaultTargetSystemOverride;
+            return targetSystem;
+        }
+
         private EventLogEntry.Builder baseBuilder(EventType eventType) {
             EventLogEntry.Builder builder = EventLogEntry.builder()
                     .applicationId(hasText(applicationIdOverride) ? applicationIdOverride : applicationId)
-                    .targetSystem(hasText(targetSystemOverride) ? targetSystemOverride : targetSystem)
+                    .targetSystem(resolveTargetSystem())
                     .originatingSystem(hasText(originatingSystemOverride) ? originatingSystemOverride : originatingSystem)
                     .processName(processName)
                     .eventType(eventType);
@@ -525,6 +553,9 @@ public final class EventLogTemplate {
             }
             if (!metadata.isEmpty()) {
                 builder.metadata(new HashMap<>(metadata));
+            }
+            if (pendingSpanLinks != null && !pendingSpanLinks.isEmpty()) {
+                builder.spanLinks(new ArrayList<>(pendingSpanLinks));
             }
             return builder;
         }
@@ -542,6 +573,15 @@ public final class EventLogTemplate {
             }
             this.lastStepSpanId = eventSpanId;
             applyContext(builder, correlationId, traceId, eventSpanId, eventParentSpanId, batchId);
+        }
+
+        private boolean emitAndClear(EventLogEntry.Builder builder) {
+            try {
+                return eventLog.log(builder.build());
+            } finally {
+                pendingTargetSystem = null;
+                pendingSpanLinks = null;
+            }
         }
     }
 }

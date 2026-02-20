@@ -11,6 +11,8 @@ import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 import org.slf4j.MDC;
 
+import java.util.List;
+
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.*;
 
@@ -213,7 +215,7 @@ class EventLogTemplateTest {
                 .withCorrelationId("corr")
                 .withTraceId("trace")
                 .withApplicationId("override-app")
-                .withTargetSystem("override-target")
+                .withDefaultTargetSystem("override-target")
                 .withOriginatingSystem("override-origin");
 
         proc.processStart("start", "INIT");
@@ -404,5 +406,120 @@ class EventLogTemplateTest {
                         .applicationId("app")
                         .targetSystem("sys")
                         .build());
+    }
+
+    // ========================================================================
+    // Per-step targetSystem tests
+    // ========================================================================
+
+    @Test
+    void withTargetSystemClearsAfterEmit() {
+        EventLogTemplate template = createTemplate();
+        EventLogTemplate.ProcessLogger proc = template.forProcess("PROC")
+                .withCorrelationId("corr").withTraceId("trace");
+
+        proc.withTargetSystem("one-shot-target")
+                .logStep(1, "Step1", EventStatus.SUCCESS, "s1", "OK");
+
+        proc.logStep(2, "Step2", EventStatus.SUCCESS, "s2", "OK");
+
+        ArgumentCaptor<EventLogEntry> captor = ArgumentCaptor.forClass(EventLogEntry.class);
+        verify(mockLogger, times(2)).log(captor.capture());
+
+        assertEquals("one-shot-target", captor.getAllValues().get(0).getTargetSystem());
+        assertEquals("target-sys", captor.getAllValues().get(1).getTargetSystem(),
+                "Should revert to template default after one-shot");
+    }
+
+    @Test
+    void withDefaultTargetSystemPersists() {
+        EventLogTemplate template = createTemplate();
+        EventLogTemplate.ProcessLogger proc = template.forProcess("PROC")
+                .withCorrelationId("corr").withTraceId("trace")
+                .withDefaultTargetSystem("sticky-target");
+
+        proc.logStep(1, "Step1", EventStatus.SUCCESS, "s1", "OK");
+        proc.logStep(2, "Step2", EventStatus.SUCCESS, "s2", "OK");
+
+        ArgumentCaptor<EventLogEntry> captor = ArgumentCaptor.forClass(EventLogEntry.class);
+        verify(mockLogger, times(2)).log(captor.capture());
+
+        assertEquals("sticky-target", captor.getAllValues().get(0).getTargetSystem());
+        assertEquals("sticky-target", captor.getAllValues().get(1).getTargetSystem(),
+                "Default target system should persist across emits");
+    }
+
+    @Test
+    void perStepTargetOverridesDefault() {
+        EventLogTemplate template = createTemplate();
+        EventLogTemplate.ProcessLogger proc = template.forProcess("PROC")
+                .withCorrelationId("corr").withTraceId("trace")
+                .withDefaultTargetSystem("sticky-target");
+
+        proc.withTargetSystem("one-shot")
+                .logStep(1, "Step1", EventStatus.SUCCESS, "s1", "OK");
+
+        proc.logStep(2, "Step2", EventStatus.SUCCESS, "s2", "OK");
+
+        ArgumentCaptor<EventLogEntry> captor = ArgumentCaptor.forClass(EventLogEntry.class);
+        verify(mockLogger, times(2)).log(captor.capture());
+
+        assertEquals("one-shot", captor.getAllValues().get(0).getTargetSystem(),
+                "Per-step should override default");
+        assertEquals("sticky-target", captor.getAllValues().get(1).getTargetSystem(),
+                "Should revert to sticky default after one-shot");
+    }
+
+    // ========================================================================
+    // spanLinks tests
+    // ========================================================================
+
+    @Test
+    void processLoggerSpanLinksSetOnEvent() {
+        EventLogTemplate template = createTemplate();
+        EventLogTemplate.ProcessLogger proc = template.forProcess("PROC")
+                .withCorrelationId("corr").withTraceId("trace");
+
+        proc.withSpanLinks(List.of("a", "b"))
+                .logStep(1, "Step1", EventStatus.SUCCESS, "s1", "OK");
+
+        ArgumentCaptor<EventLogEntry> captor = ArgumentCaptor.forClass(EventLogEntry.class);
+        verify(mockLogger).log(captor.capture());
+
+        assertEquals(List.of("a", "b"), captor.getValue().getSpanLinks());
+    }
+
+    @Test
+    void spanLinksClearedAfterEmit() {
+        EventLogTemplate template = createTemplate();
+        EventLogTemplate.ProcessLogger proc = template.forProcess("PROC")
+                .withCorrelationId("corr").withTraceId("trace");
+
+        proc.withSpanLinks(List.of("link1"))
+                .logStep(1, "Step1", EventStatus.SUCCESS, "s1", "OK");
+
+        proc.logStep(2, "Step2", EventStatus.SUCCESS, "s2", "OK");
+
+        ArgumentCaptor<EventLogEntry> captor = ArgumentCaptor.forClass(EventLogEntry.class);
+        verify(mockLogger, times(2)).log(captor.capture());
+
+        assertEquals(List.of("link1"), captor.getAllValues().get(0).getSpanLinks());
+        assertNull(captor.getAllValues().get(1).getSpanLinks(),
+                "spanLinks should be null on next emit after one-shot");
+    }
+
+    @Test
+    void addSpanLinkAccumulates() {
+        EventLogTemplate template = createTemplate();
+        EventLogTemplate.ProcessLogger proc = template.forProcess("PROC")
+                .withCorrelationId("corr").withTraceId("trace");
+
+        proc.addSpanLink("x").addSpanLink("y").addSpanLink("z")
+                .logStep(1, "Step1", EventStatus.SUCCESS, "s1", "OK");
+
+        ArgumentCaptor<EventLogEntry> captor = ArgumentCaptor.forClass(EventLogEntry.class);
+        verify(mockLogger).log(captor.capture());
+
+        assertEquals(List.of("x", "y", "z"), captor.getValue().getSpanLinks());
     }
 }

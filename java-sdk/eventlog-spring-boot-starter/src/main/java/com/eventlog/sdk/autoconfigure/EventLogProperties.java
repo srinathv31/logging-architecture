@@ -7,6 +7,7 @@ import org.springframework.validation.annotation.Validated;
 
 import java.nio.file.Path;
 import java.time.Duration;
+import java.util.List;
 import java.util.Locale;
 
 @ConfigurationProperties(prefix = "eventlog")
@@ -34,6 +35,9 @@ public class EventLogProperties {
     @NestedConfigurationProperty
     private final Async async;
 
+    @NestedConfigurationProperty
+    private final MdcFilter mdcFilter;
+
     public EventLogProperties(
             Boolean enabled,
             String baseUrl,
@@ -45,7 +49,8 @@ public class EventLogProperties {
             String apiKey,
             String transport,
             OAuth oauth,
-            Async async) {
+            Async async,
+            MdcFilter mdcFilter) {
         this.enabled = enabled != null && enabled;
         this.baseUrl = baseUrl;
         this.applicationId = applicationId;
@@ -56,7 +61,8 @@ public class EventLogProperties {
         this.apiKey = apiKey;
         this.transport = normalizeTransport(transport);
         this.oauth = oauth != null ? oauth : new OAuth(null, null, null, null, null, null, null);
-        this.async = async != null ? async : new Async(null, null, null, null, null, null, null, null, null, null);
+        this.async = async != null ? async : new Async(null, null, null, null, null, null, null, null, null, null, null, null, null);
+        this.mdcFilter = mdcFilter != null ? mdcFilter : new MdcFilter(null, null, null, null, null, null);
     }
 
     public boolean isEnabled() {
@@ -101,6 +107,10 @@ public class EventLogProperties {
 
     public Async getAsync() {
         return async;
+    }
+
+    public MdcFilter getMdcFilter() {
+        return mdcFilter;
     }
 
     @AssertTrue(message = "eventlog.base-url is required when eventlog.enabled=true")
@@ -206,6 +216,9 @@ public class EventLogProperties {
         private final Path spilloverPath;
         private final boolean virtualThreads;
         private final String executor;
+        private final int batchSize;
+        private final int senderThreads;
+        private final long maxBatchWaitMs;
 
         public Async(
                 Boolean enabled,
@@ -217,7 +230,10 @@ public class EventLogProperties {
                 Long circuitBreakerResetMs,
                 Path spilloverPath,
                 Boolean virtualThreads,
-                String executor) {
+                String executor,
+                Integer batchSize,
+                Integer senderThreads,
+                Long maxBatchWaitMs) {
             this.enabled = enabled == null || enabled;
             this.queueCapacity = queueCapacity != null ? queueCapacity : DEFAULT_QUEUE_CAPACITY;
             this.maxRetries = maxRetries != null ? maxRetries : DEFAULT_MAX_RETRIES;
@@ -228,6 +244,9 @@ public class EventLogProperties {
             this.spilloverPath = spilloverPath;
             this.virtualThreads = virtualThreads != null && virtualThreads;
             this.executor = hasText(executor) ? executor.trim() : null;
+            this.batchSize = batchSize != null ? batchSize : 50;
+            this.senderThreads = senderThreads != null ? senderThreads : 1;
+            this.maxBatchWaitMs = maxBatchWaitMs != null ? maxBatchWaitMs : 100;
         }
 
         public boolean isEnabled() {
@@ -268,6 +287,66 @@ public class EventLogProperties {
 
         public String getExecutor() {
             return executor;
+        }
+
+        public int getBatchSize() {
+            return batchSize;
+        }
+
+        public int getSenderThreads() {
+            return senderThreads;
+        }
+
+        public long getMaxBatchWaitMs() {
+            return maxBatchWaitMs;
+        }
+    }
+
+    public static class MdcFilter {
+        private final boolean enabled;
+        private final List<String> urlPatterns;
+        private final int order;
+        private final String correlationHeader;
+        private final String traceHeader;
+        private final String spanHeader;
+
+        public MdcFilter(
+                Boolean enabled,
+                List<String> urlPatterns,
+                Integer order,
+                String correlationHeader,
+                String traceHeader,
+                String spanHeader) {
+            this.enabled = enabled == null || enabled;
+            this.urlPatterns = urlPatterns != null ? urlPatterns : List.of("/*");
+            this.order = order != null ? order : 1;
+            this.correlationHeader = hasText(correlationHeader) ? correlationHeader : "X-Correlation-Id";
+            this.traceHeader = hasText(traceHeader) ? traceHeader : "X-Trace-Id";
+            this.spanHeader = hasText(spanHeader) ? spanHeader : "X-Span-Id";
+        }
+
+        public boolean isEnabled() {
+            return enabled;
+        }
+
+        public List<String> getUrlPatterns() {
+            return urlPatterns;
+        }
+
+        public int getOrder() {
+            return order;
+        }
+
+        public String getCorrelationHeader() {
+            return correlationHeader;
+        }
+
+        public String getTraceHeader() {
+            return traceHeader;
+        }
+
+        public String getSpanHeader() {
+            return spanHeader;
         }
     }
 

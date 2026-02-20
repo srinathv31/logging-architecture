@@ -2,7 +2,6 @@ import "dotenv/config";
 import { z } from "zod";
 
 const envSchema = z.object({
-  DATABASE_URL: z.string().min(1),
   PORT: z.coerce.number().int().positive().default(3000),
   HOST: z.string().default("0.0.0.0"),
   NODE_ENV: z
@@ -22,6 +21,13 @@ const envSchema = z.object({
   // Azure AD MSI authentication
   MSI_ENDPOINT: z.string().optional(),
   MSI_SECRET: z.string().optional(),
+  // DB pool settings
+  DB_POOL_MAX: z.coerce.number().int().positive().optional().default(10),
+  DB_POOL_MIN: z.coerce.number().int().min(0).optional().default(0),
+  DB_IDLE_TIMEOUT_MS: z.coerce.number().int().positive().optional().default(30000),
+  DB_ACQUIRE_TIMEOUT_MS: z.coerce.number().int().positive().optional().default(15000),
+  DB_REQUEST_TIMEOUT_MS: z.coerce.number().int().positive().optional().default(30000),
+  DB_CONNECT_TIMEOUT_MS: z.coerce.number().int().positive().optional().default(30000),
 });
 
 export type Env = z.infer<typeof envSchema>;

@@ -42,7 +42,6 @@ export default defineConfig({
         'src/db/client.ts',       // DB connection (runtime)
         'src/db/logger.ts',       // DB logger
         'src/db/drivers/**',      // Driver-specific code
-        'src/db/schema/postgres/**', // Not using postgres
         'src/config/env.ts',      // Runtime env config
         'src/routes/**',          // Route handlers (mocked in tests)
         'src/types/api.ts',       // Type definitions only

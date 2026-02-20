@@ -461,7 +461,7 @@ class LogEventAspectTest {
         env.setProperty("eventlog.target-system", "MY_TARGET");
         env.setProperty("eventlog.originating-system", "MY_ORIGIN");
         EventLogProperties props = new EventLogProperties(
-                true, "http://test", null, null, null, null, null, null, null, null, null);
+                true, "http://test", null, null, null, null, null, null, null, null, null, null);
         AsyncEventLogger logger = mock(AsyncEventLogger.class);
 
         LogEventAspect aspect = LogEventAspect.from(env, props, logger);
@@ -473,7 +473,7 @@ class LogEventAspectTest {
         MockEnvironment env = new MockEnvironment();
         env.setProperty("eventlog.originating-system", "FALLBACK_ORIGIN");
         EventLogProperties props = new EventLogProperties(
-                true, "http://test", null, null, null, null, null, null, null, null, null);
+                true, "http://test", null, null, null, null, null, null, null, null, null, null);
         AsyncEventLogger logger = mock(AsyncEventLogger.class);
 
         LogEventAspect aspect = LogEventAspect.from(env, props, logger);
@@ -487,7 +487,7 @@ class LogEventAspectTest {
         MockEnvironment env = new MockEnvironment();
         env.setProperty("spring.application.name", "test-app");
         EventLogProperties props = new EventLogProperties(
-                true, "http://test", null, null, null, null, null, null, null, null, null);
+                true, "http://test", null, null, null, null, null, null, null, null, null, null);
         AsyncEventLogger logger = mock(AsyncEventLogger.class);
 
         LogEventAspect aspect = LogEventAspect.from(env, props, logger);

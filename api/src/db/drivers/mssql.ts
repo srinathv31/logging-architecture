@@ -65,16 +65,16 @@ async function getConfig(): Promise<mssql.config> {
   const baseConfig: mssql.config = {
     server: env.DB_SERVER,
     pool: {
-      max: 10,
-      min: 0,
-      idleTimeoutMillis: 30000,
-      acquireTimeoutMillis: 15000,
+      max: env.DB_POOL_MAX,
+      min: env.DB_POOL_MIN,
+      idleTimeoutMillis: env.DB_IDLE_TIMEOUT_MS,
+      acquireTimeoutMillis: env.DB_ACQUIRE_TIMEOUT_MS,
     },
     options: {
       database: env.DB_NAME,
       rowCollectionOnRequestCompletion: true,
-      requestTimeout: 30000,
-      connectTimeout: 30000,
+      requestTimeout: env.DB_REQUEST_TIMEOUT_MS,
+      connectTimeout: env.DB_CONNECT_TIMEOUT_MS,
     },
   };
 

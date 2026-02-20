@@ -74,7 +74,9 @@ public class PaymentService {
             if (parentSpanId != null && !parentSpanId.isBlank()) {
                 failBuilder.parentSpanId(parentSpanId);
             }
-            asyncEventLogger.log(failBuilder.build());
+            if (!asyncEventLogger.log(failBuilder.build())) {
+                log.warn("Event not queued: {} for booking {}", "Payment Declined", bookingId);
+            }
             throw new PaymentFailedException(bookingId,
                     "Card declined: ***" + EventLogUtils.maskLast4(cardLast4));
         }
@@ -111,8 +113,9 @@ public class PaymentService {
 
         EventLogEntry paymentEvent = paymentBuilder.build();
 
-        // Fire-and-forget via AsyncEventLogger
-        asyncEventLogger.log(paymentEvent);
+        if (!asyncEventLogger.log(paymentEvent)) {
+            log.warn("Event not queued: {} for booking {}", "Payment Processed", bookingId);
+        }
 
         // Demonstrate toBuilder() — copy and modify pattern (fresh spanId for audit)
         EventLogEntry.Builder auditBuilder = paymentEvent.toBuilder()
@@ -121,7 +124,9 @@ public class PaymentService {
                 .stepName("Audit Trail")
                 .summary("Payment audit record created")
                 .result("AUDIT_RECORDED");
-        asyncEventLogger.log(auditBuilder.build());
+        if (!asyncEventLogger.log(auditBuilder.build())) {
+            log.warn("Event not queued: {} for booking {}", "Payment Audit", bookingId);
+        }
 
         log.debug("Payment processed for booking {} — amount: {}, card: {}",
                 bookingId, amount, EventLogUtils.maskLast4(cardLast4));
