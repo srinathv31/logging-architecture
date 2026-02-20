@@ -19,6 +19,8 @@ eventlog:
     virtual-threads: true
   annotation:
     enabled: true
+  mdc-filter:
+    url-patterns: "/api/*"
 
 logging:
   level:

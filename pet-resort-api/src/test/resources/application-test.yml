@@ -1,0 +1,10 @@
+eventlog:
+  enabled: true
+  base-url: http://localhost:9999
+  application-id: pet-resort-api-test
+  target-system: PET_RESORT
+  originating-system: PET_RESORT
+  api-key: test-key
+  transport: jdk
+  async:
+    enabled: true

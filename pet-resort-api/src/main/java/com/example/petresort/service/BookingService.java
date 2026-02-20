@@ -5,7 +5,6 @@ import com.eventlog.sdk.client.AsyncEventLogger;
 import com.eventlog.sdk.client.EventLogClient;
 import com.eventlog.sdk.model.EventLogEntry;
 import com.eventlog.sdk.model.EventStatus;
-import com.eventlog.sdk.model.EventType;
 import com.eventlog.sdk.model.HttpMethod;
 import com.eventlog.sdk.template.EventLogTemplate;
 import com.eventlog.sdk.template.EventLogTemplate.ProcessLogger;
@@ -25,6 +24,7 @@ import org.springframework.stereotype.Service;
 import java.time.Instant;
 import java.util.Collection;
 import java.util.List;
+import java.util.concurrent.CompletableFuture;
 
 @Service
 public class BookingService {
@@ -61,13 +61,23 @@ public class BookingService {
 
     public Booking createBooking(CreateBookingRequest request) {
         long start = System.currentTimeMillis();
-        String correlationId = EventLogUtils.createCorrelationId("booking");
-        String traceId = EventLogUtils.createTraceId();
-        String spanId = EventLogUtils.createSpanId();
 
-        // Override MDC with booking-specific IDs
-        MDC.put("correlationId", correlationId);
-        MDC.put("traceId", traceId);
+        // Preserve inbound correlation/trace IDs from the starter's MDC filter.
+        // Only generate when missing (e.g., direct service call without HTTP layer).
+        String correlationId = MDC.get("correlationId");
+        if (correlationId == null || correlationId.isBlank()) {
+            correlationId = EventLogUtils.createCorrelationId("booking");
+            MDC.put("correlationId", correlationId);
+        }
+
+        String traceId = MDC.get("traceId");
+        if (traceId == null || traceId.isBlank()) {
+            traceId = EventLogUtils.createTraceId();
+            MDC.put("traceId", traceId);
+        }
+
+        String parentSpanId = MDC.get("spanId"); // inbound request span from MDC filter
+        String spanId = EventLogUtils.createSpanId(); // Always fresh per operation
 
         // Look up the pet to get owner info
         Pet pet = petStore.findById(request.petId())
@@ -81,6 +91,7 @@ public class BookingService {
                 .withCorrelationId(correlationId)
                 .withTraceId(traceId)
                 .withSpanId(spanId)
+                .withParentSpanId(parentSpanId)
                 .withEndpoint("/api/bookings")
                 .withHttpMethod(HttpMethod.POST)
                 .addIdentifier("pet_id", request.petId())
@@ -115,7 +126,6 @@ public class BookingService {
 
         try { Thread.sleep(50); } catch (InterruptedException e) { Thread.currentThread().interrupt(); }
 
-        processLogger.withTargetSystem("PET_RESORT");
         processLogger.logStep(1, "Validate Pet", EventStatus.SUCCESS,
                 "Pet " + pet.name() + " (ID: " + pet.petId() + ", " + pet.species() + " - " + pet.breed() + ") validated for booking",
                 "PET_VALID");
@@ -193,7 +203,6 @@ public class BookingService {
                 request.checkInDate(), request.checkOutDate());
         bookingStore.save(booking);
 
-        processLogger.withTargetSystem("PET_RESORT");
         processLogger.logStep(4, "Confirm Booking", EventStatus.SUCCESS,
                 "Booking " + bookingId + " confirmed for " + pet.name() + " — "
                         + request.checkInDate() + " to " + request.checkOutDate()
@@ -208,11 +217,14 @@ public class BookingService {
                         + " (" + pet.species() + ") booked with kennel retry, owner " + pet.ownerId(),
                 "BOOKING_CREATED", duration);
 
-        try {
-            eventLogClient.createCorrelationLink(correlationId, pet.ownerId());
-        } catch (Exception e) {
-            log.warn("Failed to create correlation link: {}", e.getMessage());
-        }
+        final String corrId = correlationId;
+        CompletableFuture.runAsync(() -> {
+            try {
+                eventLogClient.createCorrelationLink(corrId, pet.ownerId());
+            } catch (Exception e) {
+                log.warn("Failed to create correlation link: {}", e.getMessage());
+            }
+        });
 
         log.info("Booking {} created for pet {} (owner {}) with kennel retry",
                 bookingId, request.petId(), pet.ownerId());
@@ -225,6 +237,9 @@ public class BookingService {
     private Booking createBookingHappyPath(ProcessLogger processLogger, Pet pet, String bookingId,
                                             CreateBookingRequest request, String correlationId,
                                             String traceId, long start) {
+        // targetSystem auto-reverts to template default (PET_RESORT) after each step.
+        // Only set it when the step targets an external system.
+
         // Step 2a: Kennel Availability Check (parallel)
         processLogger.withTargetSystem("KENNEL_VENDOR");
         try { Thread.sleep(800); } catch (InterruptedException e) { Thread.currentThread().interrupt(); }
@@ -245,53 +260,39 @@ public class BookingService {
                 "VET_CLEARED");
         String vetSpanId = processLogger.getLastStepSpanId();
 
-        // Step 3: Confirm Booking with span_links referencing both parallel steps (fork-join)
+        // Step 3: Confirm Booking with span_links referencing both parallel steps (fork-join).
+        // This is the recommended pattern for joining parallel branches — withSpanLinks()
+        // links this step back to the kennel and vet steps that ran concurrently.
         Booking booking = new Booking(bookingId, request.petId(), pet.ownerId(),
                 request.checkInDate(), request.checkOutDate());
         bookingStore.save(booking);
 
-        // Use raw builder for span_links support (ProcessLogger doesn't expose spanLinks)
-        String confirmSpanId = EventLogUtils.createSpanId();
-        EventLogEntry confirmEvent = EventLogEntry.builder()
-                .correlationId(correlationId)
-                .traceId(traceId)
-                .spanId(confirmSpanId)
-                .parentSpanId(processLogger.getRootSpanId())
-                .applicationId("pet-resort-api")
-                .targetSystem("PET_RESORT")
-                .originatingSystem("PET_RESORT")
-                .processName("CREATE_BOOKING")
-                .accountId(pet.ownerId())
-                .stepSequence(3)
-                .stepName("Confirm Booking")
-                .eventType(EventType.STEP)
-                .eventStatus(EventStatus.SUCCESS)
-                .summary("Booking " + bookingId + " confirmed for " + pet.name() + " — "
-                        + request.checkInDate() + " to " + request.checkOutDate()
-                        + ", owner: " + pet.ownerId())
-                .result("BOOKING_CONFIRMED")
-                .spanLinks(List.of(kennelSpanId, vetSpanId))
-                .addIdentifier("pet_id", request.petId())
-                .addIdentifier("booking_id", bookingId)
-                .addIdentifier("owner_id", pet.ownerId())
-                .build();
-        asyncEventLogger.log(confirmEvent);
+        processLogger
+            .withSpanLinks(List.of(kennelSpanId, vetSpanId))
+            .addIdentifier("owner_id", pet.ownerId())
+            .logStep(3, "Confirm Booking", EventStatus.SUCCESS,
+                "Booking " + bookingId + " confirmed for " + pet.name() + " — "
+                    + request.checkInDate() + " to " + request.checkOutDate()
+                    + ", owner: " + pet.ownerId(),
+                "BOOKING_CONFIRMED");
 
         // Step 4: PROCESS_END
         int duration = (int) (System.currentTimeMillis() - start);
-        processLogger.withTargetSystem("PET_RESORT");
         processLogger.withHttpStatusCode(201);
         processLogger.processEnd(4, EventStatus.SUCCESS,
                 "Booking " + bookingId + " completed in " + duration + "ms — " + pet.name()
                         + " (" + pet.species() + ") booked successfully, owner " + pet.ownerId(),
                 "BOOKING_CREATED", duration);
 
-        // Create correlation link between this booking flow and the owner's account
-        try {
-            eventLogClient.createCorrelationLink(correlationId, pet.ownerId());
-        } catch (Exception e) {
-            log.warn("Failed to create correlation link: {}", e.getMessage());
-        }
+        // Create correlation link between this booking flow and the owner's account (async — off request thread)
+        final String corrId = correlationId;
+        CompletableFuture.runAsync(() -> {
+            try {
+                eventLogClient.createCorrelationLink(corrId, pet.ownerId());
+            } catch (Exception e) {
+                log.warn("Failed to create correlation link: {}", e.getMessage());
+            }
+        });
 
         log.info("Booking {} created for pet {} (owner {})", bookingId, request.petId(), pet.ownerId());
         return booking;
@@ -404,7 +405,6 @@ public class BookingService {
         processLogger.addMetadata("kennel_zone", assignment.zone());
 
         // Step 3: Record Check-In
-        processLogger.withTargetSystem("PET_RESORT");
         try { Thread.sleep(80); } catch (InterruptedException e) { Thread.currentThread().interrupt(); }
 
         booking.setStatus(BookingStatus.CHECKED_IN);
@@ -512,7 +512,6 @@ public class BookingService {
                 "KENNEL_ASSIGNED");
 
         // Step 5: Record Check-In
-        processLogger.withTargetSystem("PET_RESORT");
         try { Thread.sleep(80); } catch (InterruptedException e) { Thread.currentThread().interrupt(); }
         booking.setStatus(BookingStatus.CHECKED_IN);
         booking.setKennelNumber(assignment.kennelNumber());
@@ -539,9 +538,14 @@ public class BookingService {
 
     // ──────────────────────────────────────────────────────────────────────
     // Approach 2: EventLogUtils static factories + AsyncEventLogger.log()
+    // Shown for teams that need full control. Prefer Approach 1 (ProcessLogger) for most use cases.
     // ──────────────────────────────────────────────────────────────────────
 
     public Booking checkOut(String bookingId, CheckOutRequest request) {
+        // Event-loss safety nets:
+        // 1. ProcessLogger (Approach 1) handles internally via the SDK
+        // 2. Manual log() calls (Approach 2, this method) should check return value
+        // 3. EventLossCallback provides application-wide notification for any dropped events
         long start = System.currentTimeMillis();
         String correlationId = MDC.get("correlationId");
         String traceId = MDC.get("traceId");
@@ -567,7 +571,9 @@ public class BookingService {
                 .httpMethod(HttpMethod.POST)
                 .addIdentifier("booking_id", bookingId)
                 .build();
-        asyncEventLogger.log(startEvent);
+        if (!asyncEventLogger.log(startEvent)) {
+            log.warn("Event not queued: {} for booking {}", "Process Start", bookingId);
+        }
 
         // Step 1: Verify Check-In
         if (booking == null) {
@@ -581,7 +587,9 @@ public class BookingService {
                     .spanId(EventLogUtils.createSpanId())
                     .parentSpanId(rootSpanId)
                     .build();
-            asyncEventLogger.log(errorEvent);
+            if (!asyncEventLogger.log(errorEvent)) {
+                log.warn("Event not queued: {} for booking {}", "Booking Not Found", bookingId);
+            }
             throw new BookingNotFoundException(bookingId);
         }
 
@@ -597,7 +605,9 @@ public class BookingService {
                     .spanId(EventLogUtils.createSpanId())
                     .parentSpanId(rootSpanId)
                     .build();
-            asyncEventLogger.log(errorEvent);
+            if (!asyncEventLogger.log(errorEvent)) {
+                log.warn("Event not queued: {} for booking {}", "Not Checked In", bookingId);
+            }
             throw new BookingConflictException(bookingId, "NOT_CHECKED_IN",
                     "Booking must be CHECKED_IN to check out, was: " + booking.getStatus());
         }
@@ -617,7 +627,9 @@ public class BookingService {
                 .addIdentifier("pet_id", booking.getPetId())
                 .addIdentifier("owner_id", booking.getOwnerId())
                 .build();
-        asyncEventLogger.log(verifyEvent);
+        if (!asyncEventLogger.log(verifyEvent)) {
+            log.warn("Event not queued: {} for booking {}", "Verify Check-In", bookingId);
+        }
 
         // Step 2a: Process Payment (STRIPE) — parallel with invoice
         String paymentSpanId = EventLogUtils.createSpanId();
@@ -650,7 +662,9 @@ public class BookingService {
                     .addIdentifier("card_number_last4", EventLogUtils.maskLast4(request.cardNumberLast4()))
                     .addMetadata("amount", request.paymentAmount().toString())
                     .build();
-            asyncEventLogger.log(paymentStep);
+            if (!asyncEventLogger.log(paymentStep)) {
+                log.warn("Event not queued: {} for booking {}", "Process Payment", bookingId);
+            }
         } catch (com.example.petresort.exception.PaymentFailedException e) {
             // Payment failed — log FAILURE step, ERROR, PROCESS_END, then rethrow
             int failDuration = (int) (System.currentTimeMillis() - start);
@@ -670,7 +684,9 @@ public class BookingService {
                     .errorMessage(e.getMessage())
                     .addIdentifier("booking_id", bookingId)
                     .build();
-            asyncEventLogger.log(paymentFailStep);
+            if (!asyncEventLogger.log(paymentFailStep)) {
+                log.warn("Event not queued: {} for booking {}", "Payment Failed Step", bookingId);
+            }
 
             EventLogEntry errorEvent = EventLogUtils.error(
                             correlationId, traceId, "CHECK_OUT_PET",
@@ -684,7 +700,9 @@ public class BookingService {
                     .accountId(booking.getOwnerId())
                     .addIdentifier("booking_id", bookingId)
                     .build();
-            asyncEventLogger.log(errorEvent);
+            if (!asyncEventLogger.log(errorEvent)) {
+                log.warn("Event not queued: {} for booking {}", "Payment Error", bookingId);
+            }
 
             EventLogEntry failEnd = EventLogUtils.processEnd(
                             correlationId, traceId, "CHECK_OUT_PET",
@@ -700,7 +718,9 @@ public class BookingService {
                     .httpStatusCode(422)
                     .addIdentifier("booking_id", bookingId)
                     .build();
-            asyncEventLogger.log(failEnd);
+            if (!asyncEventLogger.log(failEnd)) {
+                log.warn("Event not queued: {} for booking {}", "Payment Declined End", bookingId);
+            }
 
             throw e;
         }
@@ -722,9 +742,13 @@ public class BookingService {
                 .accountId(booking.getOwnerId())
                 .addIdentifier("booking_id", bookingId)
                 .build();
-        asyncEventLogger.log(invoiceStep);
+        if (!asyncEventLogger.log(invoiceStep)) {
+            log.warn("Event not queued: {} for booking {}", "Generate Invoice", bookingId);
+        }
 
         // Step 3: Release Kennel — with span_links referencing payment and invoice (fork-join)
+        // span_links via manual builder (Approach 2). For the recommended fluent pattern,
+        // see createBookingHappyPath which uses processLogger.withSpanLinks() (Approach 1).
         booking.setStatus(BookingStatus.CHECKED_OUT);
         booking.setTotalAmount(request.paymentAmount());
         booking.setCheckedOutAt(Instant.now());
@@ -746,7 +770,9 @@ public class BookingService {
                 .spanLinks(List.of(paymentSpanId, invoiceSpanId))
                 .addIdentifier("booking_id", bookingId)
                 .build();
-        asyncEventLogger.log(releaseEvent);
+        if (!asyncEventLogger.log(releaseEvent)) {
+            log.warn("Event not queued: {} for booking {}", "Release Kennel", bookingId);
+        }
 
         // Step 4: PROCESS_END
         int duration = (int) (System.currentTimeMillis() - start);
@@ -765,7 +791,9 @@ public class BookingService {
                 .httpStatusCode(200)
                 .addIdentifier("booking_id", bookingId)
                 .build();
-        asyncEventLogger.log(endEvent);
+        if (!asyncEventLogger.log(endEvent)) {
+            log.warn("Event not queued: {} for booking {}", "Process End", bookingId);
+        }
 
         log.info("Booking {} checked out — total: {}", bookingId, request.paymentAmount());
         return booking;
