@@ -10,28 +10,40 @@ import {
   min,
   max,
   inArray,
-  getTableColumns,
+  getColumns,
   type SQL,
 } from "drizzle-orm";
 import { getDb } from "../db/client";
 import { eventLogs, correlationLinks } from "../db/schema/index";
 import type { EventLogEntry } from "../types/api";
-import { extractTotalCount } from "../utils/pagination";
 import { chunkArray } from "../utils/array";
 import { formatFullTextQuery } from "../utils/search";
 import { env } from "../config/env";
 
 const BATCH_CHUNK_SIZE = 100;
 
-async function fallbackCount(
+async function getTotalCountFromPaginatedRows(
   db: Awaited<ReturnType<typeof getDb>>,
   where: SQL | undefined,
-): Promise<number> {
-  const [result] = await db
-    .select({ count: sql<number>`count(*)`.mapWith(Number) })
+  rows: Array<{ _totalCount: number }>,
+  offset: number,
+) {
+  if (rows.length > 0) {
+    return rows[0]._totalCount;
+  }
+
+  if (offset === 0) {
+    return 0;
+  }
+
+  const [countRow] = await db
+    .select({
+      count: sql<number>`cast(count(*) as int)`,
+    })
     .from(eventLogs)
     .where(where);
-  return result?.count ?? 0;
+
+  return countRow?.count ?? 0;
 }
 
 function entryToInsert(entry: EventLogEntry) {
@@ -231,11 +243,10 @@ export async function getByAccount(
   const where = and(...conditions);
   const offset = (filters.page - 1) * filters.pageSize;
 
-  const allColumns = getTableColumns(eventLogs);
   const rows = await db
     .select({
-      ...allColumns,
-      totalCount: sql<number>`count(*) over()`.mapWith(Number),
+      ...getColumns(eventLogs),
+      _totalCount: sql<number>`cast(count(*) over() as int)`,
     })
     .from(eventLogs)
     .where(where)
@@ -243,11 +254,9 @@ export async function getByAccount(
     .offset(offset)
     .fetch(filters.pageSize);
 
-  const { rows: events, totalCount: extractedCount } = extractTotalCount(rows);
-  const totalCount = (events.length === 0 && offset > 0)
-    ? await fallbackCount(db, where)
-    : extractedCount;
+  const totalCount = await getTotalCountFromPaginatedRows(db, where, rows, offset);
   const hasMore = offset + filters.pageSize < totalCount;
+  const events = rows.map(({ _totalCount, ...event }) => event);
 
   return { events, totalCount, hasMore };
 }
@@ -257,17 +266,16 @@ export async function getByCorrelation(
   pagination: { page: number; pageSize: number } = { page: 1, pageSize: 200 },
 ) {
   const db = await getDb();
+  const offset = (pagination.page - 1) * pagination.pageSize;
   const where = and(
     eq(eventLogs.correlationId, correlationId),
     eq(eventLogs.isDeleted, false),
   );
-  const offset = (pagination.page - 1) * pagination.pageSize;
 
-  const allColumns = getTableColumns(eventLogs);
   const rows = await db
     .select({
-      ...allColumns,
-      totalCount: sql<number>`count(*) over()`.mapWith(Number),
+      ...getColumns(eventLogs),
+      _totalCount: sql<number>`cast(count(*) over() as int)`,
     })
     .from(eventLogs)
     .where(where)
@@ -275,11 +283,9 @@ export async function getByCorrelation(
     .offset(offset)
     .fetch(pagination.pageSize);
 
-  const { rows: events, totalCount: extractedCount } = extractTotalCount(rows);
-  const totalCount = (events.length === 0 && offset > 0)
-    ? await fallbackCount(db, where)
-    : extractedCount;
+  const totalCount = await getTotalCountFromPaginatedRows(db, where, rows, offset);
   const hasMore = offset + pagination.pageSize < totalCount;
+  const events = rows.map(({ _totalCount, ...event }) => event);
 
   const link = await db
     .select()
@@ -320,11 +326,11 @@ export async function getByTrace(
 
   // Paginated data query with count(*) over()
   const offset = (pagination.page - 1) * pagination.pageSize;
-  const allColumns = getTableColumns(eventLogs);
+
   const rows = await db
     .select({
-      ...allColumns,
-      totalCount: sql<number>`count(*) over()`.mapWith(Number),
+      ...getColumns(eventLogs),
+      _totalCount: sql<number>`cast(count(*) over() as int)`,
     })
     .from(eventLogs)
     .where(where)
@@ -332,11 +338,9 @@ export async function getByTrace(
     .offset(offset)
     .fetch(pagination.pageSize);
 
-  const { rows: events, totalCount: extractedCount } = extractTotalCount(rows);
-  const totalCount = (events.length === 0 && offset > 0)
-    ? await fallbackCount(db, where)
-    : extractedCount;
+  const totalCount = await getTotalCountFromPaginatedRows(db, where, rows, offset);
   const hasMore = offset + pagination.pageSize < totalCount;
+  const events = rows.map(({ _totalCount, ...event }) => event);
 
   return { events, systemsInvolved, totalDurationMs, totalCount, hasMore };
 }
@@ -375,11 +379,10 @@ export async function searchText(filters: {
   const where = and(...conditions);
   const offset = (filters.page - 1) * filters.pageSize;
 
-  const allColumns = getTableColumns(eventLogs);
   const rows = await db
     .select({
-      ...allColumns,
-      totalCount: sql<number>`count(*) over()`.mapWith(Number),
+      ...getColumns(eventLogs),
+      _totalCount: sql<number>`cast(count(*) over() as int)`,
     })
     .from(eventLogs)
     .where(where)
@@ -387,10 +390,8 @@ export async function searchText(filters: {
     .offset(offset)
     .fetch(filters.pageSize);
 
-  const { rows: events, totalCount: extractedCount } = extractTotalCount(rows);
-  const totalCount = (events.length === 0 && offset > 0)
-    ? await fallbackCount(db, where)
-    : extractedCount;
+  const totalCount = await getTotalCountFromPaginatedRows(db, where, rows, offset);
+  const events = rows.map(({ _totalCount, ...event }) => event);
 
   return { events, totalCount };
 }
@@ -532,12 +533,11 @@ export async function getByBatch(
     .from(eventLogs)
     .where(batchWhere);
 
-  // Get paginated events with count(*) over()
-  const allColumns = getTableColumns(eventLogs);
+  // Get paginated events with total count via window function
   const rows = await db
     .select({
-      ...allColumns,
-      totalCount: sql<number>`count(*) over()`.mapWith(Number),
+      ...getColumns(eventLogs),
+      _totalCount: sql<number>`cast(count(*) over() as int)`,
     })
     .from(eventLogs)
     .where(where)
@@ -545,11 +545,9 @@ export async function getByBatch(
     .offset(offset)
     .fetch(filters.pageSize);
 
-  const { rows: events, totalCount: extractedCount } = extractTotalCount(rows);
-  const totalCount = (events.length === 0 && offset > 0)
-    ? await fallbackCount(db, where)
-    : extractedCount;
+  const totalCount = await getTotalCountFromPaginatedRows(db, where, rows, offset);
   const hasMore = offset + filters.pageSize < totalCount;
+  const events = rows.map(({ _totalCount, ...event }) => event);
 
   return {
     events,

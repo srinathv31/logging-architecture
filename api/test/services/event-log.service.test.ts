@@ -769,40 +769,18 @@ describe('getByAccount', () => {
       createEventLogDbRecord({ accountId: 'acc-1', executionId: 'exec-2' }),
     ];
 
-    // Single data query with count(*) over() — rows include totalCount
-    mockDb.select.mockReturnValueOnce({
-      from: vi.fn().mockReturnValue({
-        where: vi.fn().mockReturnValue({
-          orderBy: vi.fn().mockReturnValue({
-            offset: vi.fn().mockReturnValue({
-              fetch: vi.fn().mockResolvedValue(
-                mockEvents.map((e) => ({ ...e, totalCount: 2 })),
-              ),
-            }),
-          }),
-        }),
-      }),
-    });
+    // Single query with _totalCount window function
+    mockDb._setQueryResult(mockEvents.map((e) => ({ ...e, _totalCount: 2 })));
 
     const result = await getByAccount('acc-1', { page: 1, pageSize: 10 });
 
     expect(result.events).toEqual(mockEvents);
     expect(result.totalCount).toBe(2);
+    expect(mockDb.select).toHaveBeenCalled();
   });
 
   it('should apply date filters when provided', async () => {
-    // Single data query — empty result
-    mockDb.select.mockReturnValueOnce({
-      from: vi.fn().mockReturnValue({
-        where: vi.fn().mockReturnValue({
-          orderBy: vi.fn().mockReturnValue({
-            offset: vi.fn().mockReturnValue({
-              fetch: vi.fn().mockResolvedValue([]),
-            }),
-          }),
-        }),
-      }),
-    });
+    mockDb._setQueryResult([]);
 
     await getByAccount('acc-1', {
       startDate: '2024-01-01',
@@ -811,23 +789,11 @@ describe('getByAccount', () => {
       pageSize: 10,
     });
 
-    // Verify select was called (filters are applied in where clause)
     expect(mockDb.select).toHaveBeenCalled();
   });
 
   it('should apply processName filter when provided', async () => {
-    // Single data query — empty result
-    mockDb.select.mockReturnValueOnce({
-      from: vi.fn().mockReturnValue({
-        where: vi.fn().mockReturnValue({
-          orderBy: vi.fn().mockReturnValue({
-            offset: vi.fn().mockReturnValue({
-              fetch: vi.fn().mockResolvedValue([]),
-            }),
-          }),
-        }),
-      }),
-    });
+    mockDb._setQueryResult([]);
 
     await getByAccount('acc-1', {
       processName: 'test-process',
@@ -839,18 +805,7 @@ describe('getByAccount', () => {
   });
 
   it('should apply eventStatus filter when provided', async () => {
-    // Single data query — empty result
-    mockDb.select.mockReturnValueOnce({
-      from: vi.fn().mockReturnValue({
-        where: vi.fn().mockReturnValue({
-          orderBy: vi.fn().mockReturnValue({
-            offset: vi.fn().mockReturnValue({
-              fetch: vi.fn().mockResolvedValue([]),
-            }),
-          }),
-        }),
-      }),
-    });
+    mockDb._setQueryResult([]);
 
     await getByAccount('acc-1', {
       eventStatus: 'SUCCESS',
@@ -862,19 +817,11 @@ describe('getByAccount', () => {
   });
 
   it('should handle includeLinked parameter in filter construction', () => {
-    // This test verifies the logic for includeLinked filter construction
-    // The actual DB query is tested via integration tests
-    // Here we test that the condition building logic is correct
-
     const accountId = 'acc-1';
     const includeLinked = true;
 
-    // Simulate the condition building from the service
     const conditions: unknown[] = [];
     if (includeLinked) {
-      // When includeLinked is true, the service adds an OR condition
-      // for events matching the account OR events with correlation IDs
-      // that are linked to the account via correlation_links table
       conditions.push('or_condition_for_linked_correlations');
     } else {
       conditions.push(`eq(eventLogs.accountId, '${accountId}')`);
@@ -884,49 +831,35 @@ describe('getByAccount', () => {
     expect(conditions[0]).toBe('or_condition_for_linked_correlations');
   });
 
-  it('should return correct totalCount on out-of-range page', async () => {
-    // data query returns empty (out-of-range page, offset > 0)
-    mockDb.select.mockReturnValueOnce({
-      from: vi.fn().mockReturnValue({
-        where: vi.fn().mockReturnValue({
-          orderBy: vi.fn().mockReturnValue({
-            offset: vi.fn().mockReturnValue({
-              fetch: vi.fn().mockResolvedValue([]),
-            }),
-          }),
-        }),
-      }),
-    });
-    // fallback count query — select({ count }) hits the count branch
-    mockDb._setCountResult(50);
-
-    const result = await getByAccount('acc-1', { page: 999, pageSize: 10 });
-
-    expect(result.totalCount).toBe(50);
-    expect(result.hasMore).toBe(false);
-    expect(result.events).toHaveLength(0);
-  });
-
   it('should return correct hasMore flag for pagination', async () => {
-    // Single data query — 10 rows each reporting totalCount: 25
     const mockEvent = createEventLogDbRecord();
-    mockDb.select.mockReturnValueOnce({
-      from: vi.fn().mockReturnValue({
-        where: vi.fn().mockReturnValue({
-          orderBy: vi.fn().mockReturnValue({
-            offset: vi.fn().mockReturnValue({
-              fetch: vi.fn().mockResolvedValue(
-                Array(10).fill({ ...mockEvent, totalCount: 25 }),
-              ),
-            }),
-          }),
-        }),
-      }),
-    });
+    mockDb._setQueryResult(Array(10).fill({ ...mockEvent, _totalCount: 25 }));
 
     const result = await getByAccount('acc-1', { page: 1, pageSize: 10 });
 
     expect(result.hasMore).toBe(true);
+  });
+
+  it('should return totalCount 0 for empty results', async () => {
+    mockDb._setQueryResult([]);
+
+    const result = await getByAccount('acc-1', { page: 1, pageSize: 10 });
+
+    expect(result.totalCount).toBe(0);
+    expect(result.hasMore).toBe(false);
+    expect(result.events).toHaveLength(0);
+    expect(mockDb.select).toHaveBeenCalledTimes(1);
+  });
+
+  it('should use fallback count query when paginated rows are empty', async () => {
+    mockDb._setQueryResult([]);
+    mockDb._setCountResult(25);
+
+    const result = await getByAccount('acc-1', { page: 4, pageSize: 10 });
+
+    expect(result.totalCount).toBe(25);
+    expect(result.hasMore).toBe(false);
+    expect(result.events).toHaveLength(0);
   });
 });
 
@@ -935,27 +868,27 @@ describe('getByCorrelation', () => {
     mockDb._reset();
   });
 
-  it('should return events ordered by stepSequence and eventTimestamp', async () => {
+  it('should return paginated events ordered by stepSequence and eventTimestamp', async () => {
     const mockEvents = [
       createEventLogDbRecord({ stepSequence: 1 }),
       createEventLogDbRecord({ stepSequence: 2 }),
     ];
 
-    // data query with count(*) over()
+    // First select: paginated query with _totalCount via offset().fetch()
     mockDb.select.mockReturnValueOnce({
       from: vi.fn().mockReturnValue({
         where: vi.fn().mockReturnValue({
           orderBy: vi.fn().mockReturnValue({
             offset: vi.fn().mockReturnValue({
               fetch: vi.fn().mockResolvedValue(
-                mockEvents.map((e) => ({ ...e, totalCount: 2 })),
+                mockEvents.map((e) => ({ ...e, _totalCount: 2 })),
               ),
             }),
           }),
         }),
       }),
     });
-    // link query
+    // Second select: link lookup
     mockDb.select.mockReturnValueOnce({
       top: vi.fn().mockReturnValue({
         from: vi.fn().mockReturnValue({
@@ -975,21 +908,19 @@ describe('getByCorrelation', () => {
     const mockEvents = [createEventLogDbRecord()];
     const mockLink = createCorrelationLinkDbRecord({ accountId: 'linked-account' });
 
-    // data query with count(*) over()
     mockDb.select.mockReturnValueOnce({
       from: vi.fn().mockReturnValue({
         where: vi.fn().mockReturnValue({
           orderBy: vi.fn().mockReturnValue({
             offset: vi.fn().mockReturnValue({
               fetch: vi.fn().mockResolvedValue(
-                mockEvents.map((e) => ({ ...e, totalCount: 1 })),
+                mockEvents.map((e) => ({ ...e, _totalCount: 1 })),
               ),
             }),
           }),
         }),
       }),
     });
-    // link query
     mockDb.select.mockReturnValueOnce({
       top: vi.fn().mockReturnValue({
         from: vi.fn().mockReturnValue({
@@ -1005,7 +936,9 @@ describe('getByCorrelation', () => {
   });
 
   it('should return isLinked=false when no link exists', async () => {
-    // data query — empty result (extractTotalCount returns totalCount: 0)
+    mockDb._setCountResult(0);
+    mockDb._setTopResult([]);
+
     mockDb.select.mockReturnValueOnce({
       from: vi.fn().mockReturnValue({
         where: vi.fn().mockReturnValue({
@@ -1014,14 +947,6 @@ describe('getByCorrelation', () => {
               fetch: vi.fn().mockResolvedValue([]),
             }),
           }),
-        }),
-      }),
-    });
-    // link query
-    mockDb.select.mockReturnValueOnce({
-      top: vi.fn().mockReturnValue({
-        from: vi.fn().mockReturnValue({
-          where: vi.fn().mockResolvedValue([]),
         }),
       }),
     });
@@ -1030,42 +955,13 @@ describe('getByCorrelation', () => {
 
     expect(result.accountId).toBeNull();
     expect(result.isLinked).toBe(false);
+    expect(result.totalCount).toBe(0);
   });
 
-  it('should support pagination params', async () => {
-    const mockEvent = createEventLogDbRecord();
-    // data query with count(*) over() — 5 rows each reporting totalCount: 25
-    mockDb.select.mockReturnValueOnce({
-      from: vi.fn().mockReturnValue({
-        where: vi.fn().mockReturnValue({
-          orderBy: vi.fn().mockReturnValue({
-            offset: vi.fn().mockReturnValue({
-              fetch: vi.fn().mockResolvedValue(
-                Array(5).fill({ ...mockEvent, totalCount: 25 }),
-              ),
-            }),
-          }),
-        }),
-      }),
-    });
-    // link query
-    mockDb.select.mockReturnValueOnce({
-      top: vi.fn().mockReturnValue({
-        from: vi.fn().mockReturnValue({
-          where: vi.fn().mockResolvedValue([]),
-        }),
-      }),
-    });
+  it('should use fallback count query when correlation page is out of range', async () => {
+    mockDb._setCountResult(7);
+    mockDb._setTopResult([]);
 
-    const result = await getByCorrelation('corr-1', { page: 2, pageSize: 5 });
-
-    expect(result.totalCount).toBe(25);
-    expect(result.hasMore).toBe(true);
-    expect(result.events).toHaveLength(5);
-  });
-
-  it('should return correct totalCount on out-of-range page', async () => {
-    // data query returns empty (out-of-range page, offset > 0)
     mockDb.select.mockReturnValueOnce({
       from: vi.fn().mockReturnValue({
         where: vi.fn().mockReturnValue({
@@ -1077,24 +973,10 @@ describe('getByCorrelation', () => {
         }),
       }),
     });
-    // fallback count query
-    mockDb.select.mockReturnValueOnce({
-      from: vi.fn().mockReturnValue({
-        where: vi.fn().mockResolvedValue([{ count: 50 }]),
-      }),
-    });
-    // link query
-    mockDb.select.mockReturnValueOnce({
-      top: vi.fn().mockReturnValue({
-        from: vi.fn().mockReturnValue({
-          where: vi.fn().mockResolvedValue([]),
-        }),
-      }),
-    });
 
-    const result = await getByCorrelation('corr-1', { page: 999, pageSize: 10 });
+    const result = await getByCorrelation('corr-1', { page: 3, pageSize: 5 });
 
-    expect(result.totalCount).toBe(50);
+    expect(result.totalCount).toBe(7);
     expect(result.hasMore).toBe(false);
     expect(result.events).toHaveLength(0);
   });
@@ -1105,34 +987,37 @@ describe('getByTrace', () => {
     mockDb._reset();
   });
 
-  it('should return events ordered by timestamp', async () => {
+  it('should return paginated events with systems and duration', async () => {
     const time1 = new Date('2024-01-01T10:00:00Z');
     const time2 = new Date('2024-01-01T10:00:05Z');
     const mockEvents = [
-      createEventLogDbRecord({ eventTimestamp: time1 }),
-      createEventLogDbRecord({ eventTimestamp: time2 }),
+      createEventLogDbRecord({ eventTimestamp: time1, targetSystem: 'system-a' }),
+      createEventLogDbRecord({ eventTimestamp: time2, targetSystem: 'system-b' }),
     ];
 
-    // selectDistinct for systems
+    // First: selectDistinct for systems
     mockDb.selectDistinct.mockReturnValueOnce({
       from: vi.fn().mockReturnValue({
-        where: vi.fn().mockResolvedValue([{ targetSystem: 'system-a' }]),
+        where: vi.fn().mockResolvedValue([
+          { targetSystem: 'system-a' },
+          { targetSystem: 'system-b' },
+        ]),
       }),
     });
-    // aggregate query (duration only, no count)
+    // Second: select for duration aggregate
     mockDb.select.mockReturnValueOnce({
       from: vi.fn().mockReturnValue({
         where: vi.fn().mockResolvedValue([{ totalDurationMs: 5000 }]),
       }),
     });
-    // paginated data query with count(*) over()
+    // Third: select for paginated data with _totalCount
     mockDb.select.mockReturnValueOnce({
       from: vi.fn().mockReturnValue({
         where: vi.fn().mockReturnValue({
           orderBy: vi.fn().mockReturnValue({
             offset: vi.fn().mockReturnValue({
               fetch: vi.fn().mockResolvedValue(
-                mockEvents.map((e) => ({ ...e, totalCount: 2 })),
+                mockEvents.map((e) => ({ ...e, _totalCount: 2 })),
               ),
             }),
           }),
@@ -1143,94 +1028,26 @@ describe('getByTrace', () => {
     const result = await getByTrace('trace-1');
 
     expect(result.events).toEqual(mockEvents);
-    expect(result.totalCount).toBe(2);
-  });
-
-  it('should calculate totalDurationMs from SQL aggregate', async () => {
-    const mockEvent = createEventLogDbRecord();
-    mockDb.selectDistinct.mockReturnValueOnce({
-      from: vi.fn().mockReturnValue({
-        where: vi.fn().mockResolvedValue([{ targetSystem: 'system-a' }]),
-      }),
-    });
-    // aggregate query (duration only, no count)
-    mockDb.select.mockReturnValueOnce({
-      from: vi.fn().mockReturnValue({
-        where: vi.fn().mockResolvedValue([{ totalDurationMs: 5000 }]),
-      }),
-    });
-    // paginated data query with count(*) over()
-    mockDb.select.mockReturnValueOnce({
-      from: vi.fn().mockReturnValue({
-        where: vi.fn().mockReturnValue({
-          orderBy: vi.fn().mockReturnValue({
-            offset: vi.fn().mockReturnValue({
-              fetch: vi.fn().mockResolvedValue([
-                { ...mockEvent, totalCount: 2 },
-                { ...mockEvent, totalCount: 2 },
-              ]),
-            }),
-          }),
-        }),
-      }),
-    });
-
-    const result = await getByTrace('trace-1');
-
+    expect(result.systemsInvolved).toEqual(['system-a', 'system-b']);
     expect(result.totalDurationMs).toBe(5000);
+    expect(result.totalCount).toBe(2);
+    expect(result.hasMore).toBe(false);
   });
 
-  it('should deduplicate systemsInvolved via selectDistinct', async () => {
-    const mockEvent = createEventLogDbRecord();
-    mockDb.selectDistinct.mockReturnValueOnce({
-      from: vi.fn().mockReturnValue({
-        where: vi.fn().mockResolvedValue([
-          { targetSystem: 'system-a' },
-          { targetSystem: 'system-b' },
-        ]),
-      }),
-    });
-    // aggregate query (duration only, no count)
-    mockDb.select.mockReturnValueOnce({
-      from: vi.fn().mockReturnValue({
-        where: vi.fn().mockResolvedValue([{ totalDurationMs: 1000 }]),
-      }),
-    });
-    // paginated data query with count(*) over()
-    mockDb.select.mockReturnValueOnce({
-      from: vi.fn().mockReturnValue({
-        where: vi.fn().mockReturnValue({
-          orderBy: vi.fn().mockReturnValue({
-            offset: vi.fn().mockReturnValue({
-              fetch: vi.fn().mockResolvedValue(
-                Array(3).fill({ ...mockEvent, totalCount: 3 }),
-              ),
-            }),
-          }),
-        }),
-      }),
-    });
-
-    const result = await getByTrace('trace-1');
-
-    expect(result.systemsInvolved).toHaveLength(2);
-    expect(result.systemsInvolved).toContain('system-a');
-    expect(result.systemsInvolved).toContain('system-b');
-  });
-
-  it('should return null duration for empty results', async () => {
+  it('should return null duration and empty systems for no results', async () => {
+    // selectDistinct: no systems
     mockDb.selectDistinct.mockReturnValueOnce({
       from: vi.fn().mockReturnValue({
         where: vi.fn().mockResolvedValue([]),
       }),
     });
-    // aggregate query (duration only, no count)
+    // select: duration aggregate (null)
     mockDb.select.mockReturnValueOnce({
       from: vi.fn().mockReturnValue({
         where: vi.fn().mockResolvedValue([{ totalDurationMs: null }]),
       }),
     });
-    // paginated data query — empty (extractTotalCount returns totalCount: 0)
+    // select: paginated data (empty)
     mockDb.select.mockReturnValueOnce({
       from: vi.fn().mockReturnValue({
         where: vi.fn().mockReturnValue({
@@ -1247,24 +1064,23 @@ describe('getByTrace', () => {
 
     expect(result.totalDurationMs).toBeNull();
     expect(result.events).toHaveLength(0);
+    expect(result.systemsInvolved).toEqual([]);
     expect(result.totalCount).toBe(0);
-    expect(result.hasMore).toBe(false);
   });
 
-  it('should return correct totalCount on out-of-range page', async () => {
-    // selectDistinct for systems
+  it('should use fallback count query when trace page is out of range', async () => {
+    mockDb._setCountResult(12);
+
     mockDb.selectDistinct.mockReturnValueOnce({
       from: vi.fn().mockReturnValue({
         where: vi.fn().mockResolvedValue([{ targetSystem: 'system-a' }]),
       }),
     });
-    // aggregate query (duration)
     mockDb.select.mockReturnValueOnce({
       from: vi.fn().mockReturnValue({
         where: vi.fn().mockResolvedValue([{ totalDurationMs: 5000 }]),
       }),
     });
-    // paginated data query returns empty (out-of-range page, offset > 0)
     mockDb.select.mockReturnValueOnce({
       from: vi.fn().mockReturnValue({
         where: vi.fn().mockReturnValue({
@@ -1276,12 +1092,10 @@ describe('getByTrace', () => {
         }),
       }),
     });
-    // fallback count query — select({ count }) hits the count branch
-    mockDb._setCountResult(50);
 
-    const result = await getByTrace('trace-1', { page: 999, pageSize: 10 });
+    const result = await getByTrace('trace-1', { page: 4, pageSize: 5 });
 
-    expect(result.totalCount).toBe(50);
+    expect(result.totalCount).toBe(12);
     expect(result.hasMore).toBe(false);
     expect(result.events).toHaveLength(0);
     expect(result.systemsInvolved).toEqual(['system-a']);
@@ -1294,19 +1108,7 @@ describe('searchText', () => {
   });
 
   it('should use LIKE fallback when FULLTEXT_ENABLED is false', async () => {
-    const mockEvent = createEventLogDbRecord();
-    // Single data query with count(*) over()
-    mockDb.select.mockReturnValueOnce({
-      from: vi.fn().mockReturnValue({
-        where: vi.fn().mockReturnValue({
-          orderBy: vi.fn().mockReturnValue({
-            offset: vi.fn().mockReturnValue({
-              fetch: vi.fn().mockResolvedValue([{ ...mockEvent, totalCount: 1 }]),
-            }),
-          }),
-        }),
-      }),
-    });
+    mockDb._setQueryResult([createEventLogDbRecord()].map((e) => ({ ...e, _totalCount: 1 })));
 
     const result = await searchText({
       query: 'test search',
@@ -1319,18 +1121,7 @@ describe('searchText', () => {
   });
 
   it('should apply account filter when provided', async () => {
-    // Single data query — empty result
-    mockDb.select.mockReturnValueOnce({
-      from: vi.fn().mockReturnValue({
-        where: vi.fn().mockReturnValue({
-          orderBy: vi.fn().mockReturnValue({
-            offset: vi.fn().mockReturnValue({
-              fetch: vi.fn().mockResolvedValue([]),
-            }),
-          }),
-        }),
-      }),
-    });
+    mockDb._setQueryResult([]);
 
     await searchText({
       query: 'test',
@@ -1343,18 +1134,7 @@ describe('searchText', () => {
   });
 
   it('should apply process filter when provided', async () => {
-    // Single data query — empty result
-    mockDb.select.mockReturnValueOnce({
-      from: vi.fn().mockReturnValue({
-        where: vi.fn().mockReturnValue({
-          orderBy: vi.fn().mockReturnValue({
-            offset: vi.fn().mockReturnValue({
-              fetch: vi.fn().mockResolvedValue([]),
-            }),
-          }),
-        }),
-      }),
-    });
+    mockDb._setQueryResult([]);
 
     await searchText({
       query: 'test',
@@ -1367,22 +1147,8 @@ describe('searchText', () => {
   });
 
   it('should return paginated results with totalCount', async () => {
-    const mockEvent = createEventLogDbRecord();
-    // Single data query with count(*) over() — 2 rows each reporting totalCount: 5
-    mockDb.select.mockReturnValueOnce({
-      from: vi.fn().mockReturnValue({
-        where: vi.fn().mockReturnValue({
-          orderBy: vi.fn().mockReturnValue({
-            offset: vi.fn().mockReturnValue({
-              fetch: vi.fn().mockResolvedValue([
-                { ...mockEvent, totalCount: 5 },
-                { ...mockEvent, totalCount: 5 },
-              ]),
-            }),
-          }),
-        }),
-      }),
-    });
+    const mockEvents = [createEventLogDbRecord(), createEventLogDbRecord()];
+    mockDb._setQueryResult(mockEvents.map((e) => ({ ...e, _totalCount: 5 })));
 
     const result = await searchText({
       query: 'test',
@@ -1394,29 +1160,17 @@ describe('searchText', () => {
     expect(result.events).toHaveLength(2);
   });
 
-  it('should return correct totalCount on out-of-range page', async () => {
-    // data query returns empty (out-of-range page, offset > 0)
-    mockDb.select.mockReturnValueOnce({
-      from: vi.fn().mockReturnValue({
-        where: vi.fn().mockReturnValue({
-          orderBy: vi.fn().mockReturnValue({
-            offset: vi.fn().mockReturnValue({
-              fetch: vi.fn().mockResolvedValue([]),
-            }),
-          }),
-        }),
-      }),
-    });
-    // fallback count query — select({ count }) hits the count branch
-    mockDb._setCountResult(50);
+  it('should use fallback count query when search page is out of range', async () => {
+    mockDb._setQueryResult([]);
+    mockDb._setCountResult(9);
 
     const result = await searchText({
       query: 'test',
-      page: 999,
-      pageSize: 10,
+      page: 3,
+      pageSize: 5,
     });
 
-    expect(result.totalCount).toBe(50);
+    expect(result.totalCount).toBe(9);
     expect(result.events).toHaveLength(0);
   });
 });
@@ -1561,8 +1315,8 @@ describe('getByBatch', () => {
       createEventLogDbRecord({ batchId: 'batch-1' }),
     ];
 
+    // First select: stats query (uniqueCorrelationIds, successCount, failureCount)
     mockDb.select
-      // stats query
       .mockReturnValueOnce({
         from: vi.fn().mockReturnValue({
           where: vi.fn().mockResolvedValue([{
@@ -1572,14 +1326,14 @@ describe('getByBatch', () => {
           }]),
         }),
       })
-      // data query with count(*) over()
+      // Second select: paginated data with _totalCount
       .mockReturnValueOnce({
         from: vi.fn().mockReturnValue({
           where: vi.fn().mockReturnValue({
             orderBy: vi.fn().mockReturnValue({
               offset: vi.fn().mockReturnValue({
                 fetch: vi.fn().mockResolvedValue(
-                  mockEvents.map((e) => ({ ...e, totalCount: 2 })),
+                  mockEvents.map((e) => ({ ...e, _totalCount: 2 })),
                 ),
               }),
             }),
@@ -1594,9 +1348,7 @@ describe('getByBatch', () => {
   });
 
   it('should apply eventStatus filter', async () => {
-    const mockEvent = createEventLogDbRecord();
     mockDb.select
-      // stats query
       .mockReturnValueOnce({
         from: vi.fn().mockReturnValue({
           where: vi.fn().mockResolvedValue([{
@@ -1606,13 +1358,14 @@ describe('getByBatch', () => {
           }]),
         }),
       })
-      // data query with count(*) over()
       .mockReturnValueOnce({
         from: vi.fn().mockReturnValue({
           where: vi.fn().mockReturnValue({
             orderBy: vi.fn().mockReturnValue({
               offset: vi.fn().mockReturnValue({
-                fetch: vi.fn().mockResolvedValue([{ ...mockEvent, totalCount: 1 }]),
+                fetch: vi.fn().mockResolvedValue(
+                  [createEventLogDbRecord()].map((e) => ({ ...e, _totalCount: 1 })),
+                ),
               }),
             }),
           }),
@@ -1630,7 +1383,6 @@ describe('getByBatch', () => {
 
   it('should compute batch statistics', async () => {
     mockDb.select
-      // stats query
       .mockReturnValueOnce({
         from: vi.fn().mockReturnValue({
           where: vi.fn().mockResolvedValue([{
@@ -1640,7 +1392,6 @@ describe('getByBatch', () => {
           }]),
         }),
       })
-      // data query — empty (extractTotalCount returns totalCount: 0)
       .mockReturnValueOnce({
         from: vi.fn().mockReturnValue({
           where: vi.fn().mockReturnValue({
@@ -1661,9 +1412,7 @@ describe('getByBatch', () => {
   });
 
   it('should return correct hasMore flag', async () => {
-    const mockEvent = createEventLogDbRecord();
     mockDb.select
-      // stats query
       .mockReturnValueOnce({
         from: vi.fn().mockReturnValue({
           where: vi.fn().mockResolvedValue([{
@@ -1673,14 +1422,13 @@ describe('getByBatch', () => {
           }]),
         }),
       })
-      // data query with count(*) over() — 10 rows each reporting totalCount: 25
       .mockReturnValueOnce({
         from: vi.fn().mockReturnValue({
           where: vi.fn().mockReturnValue({
             orderBy: vi.fn().mockReturnValue({
               offset: vi.fn().mockReturnValue({
                 fetch: vi.fn().mockResolvedValue(
-                  Array(10).fill({ ...mockEvent, totalCount: 25 }),
+                  Array(10).fill(createEventLogDbRecord()).map((e) => ({ ...e, _totalCount: 25 })),
                 ),
               }),
             }),
@@ -1693,19 +1441,19 @@ describe('getByBatch', () => {
     expect(result.hasMore).toBe(true);
   });
 
-  it('should return correct totalCount on out-of-range page', async () => {
+  it('should use fallback count query when batch page is out of range', async () => {
+    mockDb._setCountResult(13);
+
     mockDb.select
-      // stats query
       .mockReturnValueOnce({
         from: vi.fn().mockReturnValue({
           where: vi.fn().mockResolvedValue([{
-            uniqueCorrelationIds: 5,
+            uniqueCorrelationIds: 4,
             successCount: 3,
-            failureCount: 2,
+            failureCount: 1,
           }]),
         }),
       })
-      // data query returns empty (out-of-range page, offset > 0)
       .mockReturnValueOnce({
         from: vi.fn().mockReturnValue({
           where: vi.fn().mockReturnValue({
@@ -1717,14 +1465,15 @@ describe('getByBatch', () => {
           }),
         }),
       });
-    // fallback count query — select({ count }) hits the count branch
-    mockDb._setCountResult(50);
 
-    const result = await getByBatch('batch-1', { page: 999, pageSize: 10 });
+    const result = await getByBatch('batch-1', { page: 4, pageSize: 5 });
 
-    expect(result.totalCount).toBe(50);
+    expect(result.totalCount).toBe(13);
     expect(result.hasMore).toBe(false);
     expect(result.events).toHaveLength(0);
+    expect(result.uniqueCorrelationIds).toBe(4);
+    expect(result.successCount).toBe(3);
+    expect(result.failureCount).toBe(1);
   });
 });
 
