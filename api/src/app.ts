@@ -33,7 +33,7 @@ export function buildApp() {
         title: "Event Log API",
         description:
           "REST API for ingesting, querying, and managing event logs across distributed systems.",
-        version: "1.4.0",
+        version: "1.5.0",
       },
       servers: [
         {
@@ -51,6 +51,10 @@ export function buildApp() {
         {
           name: "Batch Operations",
           description: "Batch upload, query, and summary endpoints (v1.4)",
+        },
+        {
+          name: "Lookup",
+          description: "Fast structured event lookup for dashboard and agent workflows",
         },
         { name: "Health", description: "Health check endpoint" },
       ],

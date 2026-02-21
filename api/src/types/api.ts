@@ -81,6 +81,25 @@ export interface TextSearchResponse {
   page_size: number;
 }
 
+// POST /api/v1/events/lookup
+export interface LookupEventsRequest {
+  account_id?: string;
+  process_name?: string;
+  event_status?: EventStatus;
+  start_date?: string;
+  end_date?: string;
+  page?: number;
+  page_size?: number;
+}
+
+export interface LookupEventsResponse {
+  events: EventLog[];
+  total_count: number;
+  page: number;
+  page_size: number;
+  has_more: boolean;
+}
+
 // POST /api/v1/correlation-links
 export interface CreateCorrelationLinkRequest {
   correlation_id: string;

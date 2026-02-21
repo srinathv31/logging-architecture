@@ -1,6 +1,13 @@
-import { z } from 'zod';
-import { EVENT_TYPES, EVENT_STATUSES, HTTP_METHODS } from '../types/enums';
-import { paginationQuerySchema, dateRangeQuerySchema, dateField } from './common';
+import { z } from "zod";
+import { EVENT_TYPES, EVENT_STATUSES, HTTP_METHODS } from "../types/enums";
+import {
+  paginationQuerySchema,
+  dateRangeQuerySchema,
+  dateField,
+} from "./common";
+
+const MAX_SEARCH_WINDOW_DAYS = 30;
+const MAX_SEARCH_WINDOW_MS = MAX_SEARCH_WINDOW_DAYS * 24 * 60 * 60 * 1000; // 30 days in milliseconds
 
 export const eventLogEntrySchema = z.object({
   correlation_id: z.string().min(1).max(200),
@@ -48,9 +55,54 @@ export const getEventsByAccountQuerySchema = paginationQuerySchema
     process_name: z.string().optional(),
     event_status: z.enum(EVENT_STATUSES).optional(),
     include_linked: z
-      .union([z.boolean(), z.string().transform((v) => v === 'true')])
+      .union([z.boolean(), z.string().transform((v) => v === "true")])
       .default(false),
   });
+
+const searchPaginationSchema = z.object({
+  page: z.coerce.number().int().positive().default(1),
+  page_size: z.coerce.number().int().min(1).max(50).default(20),
+});
+
+function validateDateWindow(
+  value: { start_date?: string; end_date?: string },
+  ctx: z.RefinementCtx,
+) {
+  const hasStartDate = typeof value.start_date === "string";
+  const hasEndDate = typeof value.end_date === "string";
+
+  if (hasStartDate !== hasEndDate) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ["start_date"],
+      message: "start_date and end_date must both be provided",
+    });
+    return;
+  }
+
+  if (!hasStartDate || !hasEndDate) {
+    return;
+  }
+
+  const startTime = Date.parse(value.start_date!);
+  const endTime = Date.parse(value.end_date!);
+  if (endTime < startTime) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ["end_date"],
+      message: "end_date must be greater than or equal to start_date",
+    });
+    return;
+  }
+
+  if (endTime - startTime > MAX_SEARCH_WINDOW_MS) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ["end_date"],
+      message: `date window cannot exceed ${MAX_SEARCH_WINDOW_DAYS} days`,
+    });
+  }
+}
 
 export const textSearchRequestSchema = z
   .object({
@@ -59,7 +111,38 @@ export const textSearchRequestSchema = z
     process_name: z.string().max(510).optional(),
   })
   .merge(dateRangeQuerySchema)
-  .merge(paginationQuerySchema);
+  .merge(searchPaginationSchema)
+  .superRefine((value, ctx) => {
+    if (!value.account_id && !value.process_name) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["account_id"],
+        message: "account_id or process_name is required",
+      });
+    }
+
+    validateDateWindow(value, ctx);
+  });
+
+export const lookupEventsRequestSchema = z
+  .object({
+    account_id: z.string().max(64).optional(),
+    process_name: z.string().max(510).optional(),
+    event_status: z.enum(EVENT_STATUSES).optional(),
+  })
+  .merge(dateRangeQuerySchema)
+  .merge(paginationQuerySchema)
+  .superRefine((value, ctx) => {
+    if (!value.account_id && !value.process_name) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["account_id"],
+        message: "account_id or process_name is required",
+      });
+    }
+
+    validateDateWindow(value, ctx);
+  });
 
 // ---- Response Schemas ----
 
@@ -111,7 +194,9 @@ export const createEventArrayResponseSchema = z.object({
   total_inserted: z.number().int(),
   execution_ids: z.array(z.string()),
   correlation_ids: z.array(z.string()),
-  errors: z.array(z.object({ index: z.number().int(), error: z.string() })).optional(),
+  errors: z
+    .array(z.object({ index: z.number().int(), error: z.string() }))
+    .optional(),
 });
 
 export const createEventUnionResponseSchema = z.union([
@@ -188,6 +273,14 @@ export const textSearchResponseSchema = z.object({
   total_count: z.number().int(),
   page: z.number().int(),
   page_size: z.number().int(),
+});
+
+export const lookupEventsResponseSchema = z.object({
+  events: z.array(eventLogResponseSchema),
+  total_count: z.number().int(),
+  page: z.number().int(),
+  page_size: z.number().int(),
+  has_more: z.boolean(),
 });
 
 // ---- Batch Operations Schemas ----

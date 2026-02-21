@@ -1007,7 +1007,12 @@ describe('getByTrace', () => {
     // Second: select for duration aggregate
     mockDb.select.mockReturnValueOnce({
       from: vi.fn().mockReturnValue({
-        where: vi.fn().mockResolvedValue([{ totalDurationMs: 5000 }]),
+        where: vi.fn().mockResolvedValue([
+          {
+            firstEventAt: new Date('2024-01-01T10:00:00Z'),
+            lastEventAt: new Date('2024-01-01T10:00:05Z'),
+          },
+        ]),
       }),
     });
     // Third: select for paginated data with _totalCount
@@ -1044,7 +1049,7 @@ describe('getByTrace', () => {
     // select: duration aggregate (null)
     mockDb.select.mockReturnValueOnce({
       from: vi.fn().mockReturnValue({
-        where: vi.fn().mockResolvedValue([{ totalDurationMs: null }]),
+        where: vi.fn().mockResolvedValue([{ firstEventAt: null, lastEventAt: null }]),
       }),
     });
     // select: paginated data (empty)
@@ -1078,7 +1083,12 @@ describe('getByTrace', () => {
     });
     mockDb.select.mockReturnValueOnce({
       from: vi.fn().mockReturnValue({
-        where: vi.fn().mockResolvedValue([{ totalDurationMs: 5000 }]),
+        where: vi.fn().mockResolvedValue([
+          {
+            firstEventAt: new Date('2024-01-01T00:00:00Z'),
+            lastEventAt: new Date('2024-01-01T00:00:05Z'),
+          },
+        ]),
       }),
     });
     mockDb.select.mockReturnValueOnce({
@@ -1108,7 +1118,8 @@ describe('searchText', () => {
   });
 
   it('should use LIKE fallback when FULLTEXT_ENABLED is false', async () => {
-    mockDb._setQueryResult([createEventLogDbRecord()].map((e) => ({ ...e, _totalCount: 1 })));
+    mockDb._setCountResult(1);
+    mockDb._setQueryResult([createEventLogDbRecord()]);
 
     const result = await searchText({
       query: 'test search',
@@ -1121,6 +1132,7 @@ describe('searchText', () => {
   });
 
   it('should apply account filter when provided', async () => {
+    mockDb._setCountResult(0);
     mockDb._setQueryResult([]);
 
     await searchText({
@@ -1134,6 +1146,7 @@ describe('searchText', () => {
   });
 
   it('should apply process filter when provided', async () => {
+    mockDb._setCountResult(0);
     mockDb._setQueryResult([]);
 
     await searchText({
@@ -1148,7 +1161,8 @@ describe('searchText', () => {
 
   it('should return paginated results with totalCount', async () => {
     const mockEvents = [createEventLogDbRecord(), createEventLogDbRecord()];
-    mockDb._setQueryResult(mockEvents.map((e) => ({ ...e, _totalCount: 5 })));
+    mockDb._setCountResult(5);
+    mockDb._setQueryResult(mockEvents);
 
     const result = await searchText({
       query: 'test',
@@ -1160,7 +1174,7 @@ describe('searchText', () => {
     expect(result.events).toHaveLength(2);
   });
 
-  it('should use fallback count query when search page is out of range', async () => {
+  it('should return totalCount even when search page is out of range', async () => {
     mockDb._setQueryResult([]);
     mockDb._setCountResult(9);
 

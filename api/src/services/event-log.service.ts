@@ -261,6 +261,58 @@ export async function getByAccount(
   return { events, totalCount, hasMore };
 }
 
+export async function lookupEvents(filters: {
+  accountId?: string;
+  processName?: string;
+  eventStatus?: string;
+  startDate?: string;
+  endDate?: string;
+  page: number;
+  pageSize: number;
+}) {
+  const db = await getDb();
+  const conditions: SQL[] = [eq(eventLogs.isDeleted, false)];
+
+  if (filters.accountId) {
+    conditions.push(eq(eventLogs.accountId, filters.accountId));
+  }
+  if (filters.processName) {
+    conditions.push(eq(eventLogs.processName, filters.processName));
+  }
+  if (filters.eventStatus) {
+    conditions.push(eq(eventLogs.eventStatus, filters.eventStatus));
+  }
+  if (filters.startDate) {
+    conditions.push(gte(eventLogs.eventTimestamp, new Date(filters.startDate)));
+  }
+  if (filters.endDate) {
+    conditions.push(lte(eventLogs.eventTimestamp, new Date(filters.endDate)));
+  }
+
+  const where = and(...conditions);
+  if (!where) {
+    throw new Error("lookupEvents requires at least one condition");
+  }
+  const offset = (filters.page - 1) * filters.pageSize;
+
+  const rows = await db
+    .select({
+      ...getColumns(eventLogs),
+      _totalCount: sql<number>`cast(count(*) over() as int)`,
+    })
+    .from(eventLogs)
+    .where(where)
+    .orderBy(desc(eventLogs.eventTimestamp))
+    .offset(offset)
+    .fetch(filters.pageSize);
+
+  const totalCount = await getTotalCountFromPaginatedRows(db, where, rows, offset);
+  const hasMore = offset + filters.pageSize < totalCount;
+  const events = rows.map(({ _totalCount, ...event }) => event);
+
+  return { events, totalCount, hasMore };
+}
+
 export async function getByCorrelation(
   correlationId: string,
   pagination: { page: number; pageSize: number } = { page: 1, pageSize: 200 },
@@ -314,15 +366,28 @@ export async function getByTrace(
     .selectDistinct({ targetSystem: eventLogs.targetSystem })
     .from(eventLogs)
     .where(where);
-  const systemsInvolved = systemRows.map((r) => r.targetSystem);
+  const systemsInvolved = [
+    ...new Set(
+      systemRows
+        .map((r) => r.targetSystem)
+        .filter(
+          (targetSystem): targetSystem is string =>
+            typeof targetSystem === "string" && targetSystem.length > 0,
+        ),
+    ),
+  ];
 
   const [agg] = await db
     .select({
-      totalDurationMs: sql<number | null>`case when count(*) > 1 then datediff(ms, min(${eventLogs.eventTimestamp}), max(${eventLogs.eventTimestamp})) else null end`,
+      firstEventAt: min(eventLogs.eventTimestamp),
+      lastEventAt: max(eventLogs.eventTimestamp),
     })
     .from(eventLogs)
     .where(where);
-  const totalDurationMs = agg.totalDurationMs;
+  const totalDurationMs =
+    agg.firstEventAt && agg.lastEventAt
+      ? Math.max(0, agg.lastEventAt.getTime() - agg.firstEventAt.getTime())
+      : null;
 
   // Paginated data query with count(*) over()
   const offset = (pagination.page - 1) * pagination.pageSize;
@@ -355,43 +420,49 @@ export async function searchText(filters: {
   pageSize: number;
 }) {
   const db = await getDb();
-  // Use CONTAINS for full-text search when enabled, otherwise fall back to LIKE
-  const searchCondition: SQL =
-    env.FULLTEXT_ENABLED === "true"
-      ? sql`CONTAINS(${eventLogs.summary}, ${formatFullTextQuery(filters.query)})`
-      : sql`${eventLogs.summary} LIKE '%' + ${filters.query} + '%'`;
-
-  const conditions = [eq(eventLogs.isDeleted, false), searchCondition];
+  const fullTextEnabled = env.FULLTEXT_ENABLED === "true";
+  const baseConditions: SQL[] = [eq(eventLogs.isDeleted, false)];
 
   if (filters.accountId) {
-    conditions.push(eq(eventLogs.accountId, filters.accountId));
+    baseConditions.push(eq(eventLogs.accountId, filters.accountId));
   }
   if (filters.processName) {
-    conditions.push(eq(eventLogs.processName, filters.processName));
+    baseConditions.push(eq(eventLogs.processName, filters.processName));
   }
   if (filters.startDate) {
-    conditions.push(gte(eventLogs.eventTimestamp, new Date(filters.startDate)));
+    baseConditions.push(gte(eventLogs.eventTimestamp, new Date(filters.startDate)));
   }
   if (filters.endDate) {
-    conditions.push(lte(eventLogs.eventTimestamp, new Date(filters.endDate)));
+    baseConditions.push(lte(eventLogs.eventTimestamp, new Date(filters.endDate)));
   }
 
-  const where = and(...conditions);
-  const offset = (filters.page - 1) * filters.pageSize;
+  const buildWhere = (useFullText: boolean) => {
+    const searchCondition: SQL = useFullText
+      ? sql`CONTAINS(${eventLogs.summary}, ${formatFullTextQuery(filters.query)})`
+      : sql`${eventLogs.summary} LIKE '%' + ${filters.query} + '%'`;
+    const where = and(...baseConditions, searchCondition);
+    if (!where) {
+      throw new Error("searchText requires at least one condition");
+    }
+    return where;
+  };
 
-  const rows = await db
-    .select({
-      ...getColumns(eventLogs),
-      _totalCount: sql<number>`cast(count(*) over() as int)`,
-    })
+  const offset = (filters.page - 1) * filters.pageSize;
+  const where = buildWhere(fullTextEnabled);
+
+  const [countResult] = await db
+    .select({ count: sql<number>`cast(count(*) as int)` })
+    .from(eventLogs)
+    .where(where);
+
+  const totalCount = countResult?.count ?? 0;
+  const events = await db
+    .select()
     .from(eventLogs)
     .where(where)
     .orderBy(desc(eventLogs.eventTimestamp))
     .offset(offset)
     .fetch(filters.pageSize);
-
-  const totalCount = await getTotalCountFromPaginatedRows(db, where, rows, offset);
-  const events = rows.map(({ _totalCount, ...event }) => event);
 
   return { events, totalCount };
 }

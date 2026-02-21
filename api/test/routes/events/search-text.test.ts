@@ -102,6 +102,7 @@ describe('POST /v1/events/search/text', () => {
         url: '/v1/events/search/text',
         payload: {
           query: 'payment',
+          account_id: 'acc-123',
         },
       });
 
@@ -123,6 +124,7 @@ describe('POST /v1/events/search/text', () => {
         url: '/v1/events/search/text',
         payload: {
           query: 'nonexistent-query',
+          account_id: 'acc-123',
         },
       });
 
@@ -184,14 +186,15 @@ describe('POST /v1/events/search/text', () => {
         url: '/v1/events/search/text',
         payload: {
           query: 'test',
+          account_id: 'acc-123',
           start_date: '2024-01-01T00:00:00Z',
-          end_date: '2024-01-31T23:59:59Z',
+          end_date: '2024-01-30T00:00:00Z',
         },
       });
 
       expect(response.statusCode).toBe(200);
       expect(capturedFilters?.startDate).toBe('2024-01-01T00:00:00Z');
-      expect(capturedFilters?.endDate).toBe('2024-01-31T23:59:59Z');
+      expect(capturedFilters?.endDate).toBe('2024-01-30T00:00:00Z');
     });
 
     it('should pass pagination parameters correctly', async () => {
@@ -206,6 +209,7 @@ describe('POST /v1/events/search/text', () => {
         url: '/v1/events/search/text',
         payload: {
           query: 'test',
+          account_id: 'acc-123',
           page: 3,
           page_size: 50,
         },
@@ -228,6 +232,7 @@ describe('POST /v1/events/search/text', () => {
         url: '/v1/events/search/text',
         payload: {
           query: 'test',
+          process_name: 'payment-process',
         },
       });
 
@@ -266,7 +271,49 @@ describe('POST /v1/events/search/text', () => {
         url: '/v1/events/search/text',
         payload: {
           query: 'test',
+          account_id: 'acc-123',
           page: 0,
+        },
+      });
+
+      expect(response.statusCode).toBe(400);
+    });
+
+    it('should require account_id or process_name', async () => {
+      const response = await app.inject({
+        method: 'POST',
+        url: '/v1/events/search/text',
+        payload: {
+          query: 'test',
+        },
+      });
+
+      expect(response.statusCode).toBe(400);
+    });
+
+    it('should reject date windows over 30 days', async () => {
+      const response = await app.inject({
+        method: 'POST',
+        url: '/v1/events/search/text',
+        payload: {
+          query: 'test',
+          account_id: 'acc-123',
+          start_date: '2024-01-01T00:00:00Z',
+          end_date: '2024-02-15T00:00:00Z',
+        },
+      });
+
+      expect(response.statusCode).toBe(400);
+    });
+
+    it('should reject page_size above 50', async () => {
+      const response = await app.inject({
+        method: 'POST',
+        url: '/v1/events/search/text',
+        payload: {
+          query: 'test',
+          account_id: 'acc-123',
+          page_size: 100,
         },
       });
 
@@ -285,6 +332,7 @@ describe('POST /v1/events/search/text', () => {
         url: '/v1/events/search/text',
         payload: {
           query: 'test',
+          account_id: 'acc-123',
         },
       });
 

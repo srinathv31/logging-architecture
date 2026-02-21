@@ -11,7 +11,7 @@ export async function searchTextRoutes(app: FastifyInstance) {
     {
       schema: {
         tags: ['Events'],
-        description: 'Full-text search across event log summaries',
+        description: 'Constrained text search with required account/process filters and bounded date windows',
         body: textSearchRequestSchema,
         response: { 200: textSearchResponseSchema },
       },
