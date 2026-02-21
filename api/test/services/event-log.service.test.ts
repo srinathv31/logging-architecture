@@ -174,6 +174,8 @@ import {
   getByAccount,
   getByCorrelation,
   getByTrace,
+  listTraces,
+  getDashboardStats,
   searchText,
   createBatchUpload,
   getByBatch,
@@ -1004,13 +1006,19 @@ describe('getByTrace', () => {
         ]),
       }),
     });
-    // Second: select for duration aggregate
+    // Second: select for aggregate (duration + status counts + process/account)
     mockDb.select.mockReturnValueOnce({
       from: vi.fn().mockReturnValue({
         where: vi.fn().mockResolvedValue([
           {
             firstEventAt: new Date('2024-01-01T10:00:00Z'),
             lastEventAt: new Date('2024-01-01T10:00:05Z'),
+            successCount: 2,
+            failureCount: 0,
+            inProgressCount: 0,
+            skippedCount: 0,
+            processName: 'test-process',
+            accountId: 'test-account',
           },
         ]),
       }),
@@ -1037,6 +1045,11 @@ describe('getByTrace', () => {
     expect(result.totalDurationMs).toBe(5000);
     expect(result.totalCount).toBe(2);
     expect(result.hasMore).toBe(false);
+    expect(result.statusCounts).toEqual({ success: 2, failure: 0, inProgress: 0, skipped: 0 });
+    expect(result.processName).toBe('test-process');
+    expect(result.accountId).toBe('test-account');
+    expect(result.startTime).toBe('2024-01-01T10:00:00.000Z');
+    expect(result.endTime).toBe('2024-01-01T10:00:05.000Z');
   });
 
   it('should return null duration and empty systems for no results', async () => {
@@ -1046,10 +1059,19 @@ describe('getByTrace', () => {
         where: vi.fn().mockResolvedValue([]),
       }),
     });
-    // select: duration aggregate (null)
+    // select: aggregate (null duration + zero counts)
     mockDb.select.mockReturnValueOnce({
       from: vi.fn().mockReturnValue({
-        where: vi.fn().mockResolvedValue([{ firstEventAt: null, lastEventAt: null }]),
+        where: vi.fn().mockResolvedValue([{
+          firstEventAt: null,
+          lastEventAt: null,
+          successCount: 0,
+          failureCount: 0,
+          inProgressCount: 0,
+          skippedCount: 0,
+          processName: null,
+          accountId: null,
+        }]),
       }),
     });
     // select: paginated data (empty)
@@ -1071,6 +1093,11 @@ describe('getByTrace', () => {
     expect(result.events).toHaveLength(0);
     expect(result.systemsInvolved).toEqual([]);
     expect(result.totalCount).toBe(0);
+    expect(result.statusCounts).toEqual({ success: 0, failure: 0, inProgress: 0, skipped: 0 });
+    expect(result.processName).toBeNull();
+    expect(result.accountId).toBeNull();
+    expect(result.startTime).toBeNull();
+    expect(result.endTime).toBeNull();
   });
 
   it('should use fallback count query when trace page is out of range', async () => {
@@ -1087,6 +1114,12 @@ describe('getByTrace', () => {
           {
             firstEventAt: new Date('2024-01-01T00:00:00Z'),
             lastEventAt: new Date('2024-01-01T00:00:05Z'),
+            successCount: 10,
+            failureCount: 2,
+            inProgressCount: 0,
+            skippedCount: 0,
+            processName: 'test-process',
+            accountId: 'test-account',
           },
         ]),
       }),
@@ -1109,6 +1142,255 @@ describe('getByTrace', () => {
     expect(result.hasMore).toBe(false);
     expect(result.events).toHaveLength(0);
     expect(result.systemsInvolved).toEqual(['system-a']);
+  });
+});
+
+describe('listTraces', () => {
+  beforeEach(() => {
+    mockDb._reset();
+  });
+
+  it('should return grouped trace summaries', async () => {
+    const startTime = new Date('2024-01-01T10:00:00Z');
+    const endTime = new Date('2024-01-01T10:00:05Z');
+
+    // select with groupBy chain
+    mockDb.select.mockReturnValueOnce({
+      from: vi.fn().mockReturnValue({
+        where: vi.fn().mockReturnValue({
+          groupBy: vi.fn().mockReturnValue({
+            orderBy: vi.fn().mockReturnValue({
+              offset: vi.fn().mockReturnValue({
+                fetch: vi.fn().mockResolvedValue([
+                  {
+                    traceId: 'trace-1',
+                    eventCount: 5,
+                    errorCount: 1,
+                    latestStatus: 'FAILURE',
+                    startTime,
+                    endTime,
+                    processName: 'Onboarding',
+                    accountId: 'ACC-1',
+                    _totalCount: 1,
+                  },
+                ]),
+              }),
+            }),
+          }),
+        }),
+      }),
+    });
+
+    const result = await listTraces({ page: 1, pageSize: 20 });
+
+    expect(result.traces).toHaveLength(1);
+    expect(result.traces[0].trace_id).toBe('trace-1');
+    expect(result.traces[0].event_count).toBe(5);
+    expect(result.traces[0].has_errors).toBe(true);
+    expect(result.traces[0].latest_status).toBe('FAILURE');
+    expect(result.traces[0].duration_ms).toBe(5000);
+    expect(result.traces[0].process_name).toBe('Onboarding');
+    expect(result.traces[0].account_id).toBe('ACC-1');
+    expect(result.totalCount).toBe(1);
+    expect(result.hasMore).toBe(false);
+  });
+
+  it('should return empty results', async () => {
+    mockDb.select.mockReturnValueOnce({
+      from: vi.fn().mockReturnValue({
+        where: vi.fn().mockReturnValue({
+          groupBy: vi.fn().mockReturnValue({
+            orderBy: vi.fn().mockReturnValue({
+              offset: vi.fn().mockReturnValue({
+                fetch: vi.fn().mockResolvedValue([]),
+              }),
+            }),
+          }),
+        }),
+      }),
+    });
+
+    const result = await listTraces({ page: 1, pageSize: 20 });
+
+    expect(result.traces).toHaveLength(0);
+    expect(result.totalCount).toBe(0);
+    expect(result.hasMore).toBe(false);
+  });
+
+  it('should use fallback count when page out of range', async () => {
+    mockDb.select.mockReturnValueOnce({
+      from: vi.fn().mockReturnValue({
+        where: vi.fn().mockReturnValue({
+          groupBy: vi.fn().mockReturnValue({
+            orderBy: vi.fn().mockReturnValue({
+              offset: vi.fn().mockReturnValue({
+                fetch: vi.fn().mockResolvedValue([]),
+              }),
+            }),
+          }),
+        }),
+      }),
+    });
+
+    // Fallback count query
+    mockDb.select.mockReturnValueOnce({
+      from: vi.fn().mockReturnValue({
+        where: vi.fn().mockResolvedValue([{ count: 25 }]),
+      }),
+    });
+
+    const result = await listTraces({ page: 3, pageSize: 10 });
+
+    expect(result.totalCount).toBe(25);
+    expect(result.hasMore).toBe(false);
+  });
+
+  it('should handle traces with no errors', async () => {
+    mockDb.select.mockReturnValueOnce({
+      from: vi.fn().mockReturnValue({
+        where: vi.fn().mockReturnValue({
+          groupBy: vi.fn().mockReturnValue({
+            orderBy: vi.fn().mockReturnValue({
+              offset: vi.fn().mockReturnValue({
+                fetch: vi.fn().mockResolvedValue([
+                  {
+                    traceId: 'trace-ok',
+                    eventCount: 3,
+                    errorCount: 0,
+                    latestStatus: 'SUCCESS',
+                    startTime: new Date('2024-01-01T10:00:00Z'),
+                    endTime: new Date('2024-01-01T10:00:01Z'),
+                    processName: null,
+                    accountId: null,
+                    _totalCount: 1,
+                  },
+                ]),
+              }),
+            }),
+          }),
+        }),
+      }),
+    });
+
+    const result = await listTraces({ page: 1, pageSize: 20 });
+
+    expect(result.traces[0].has_errors).toBe(false);
+    expect(result.traces[0].process_name).toBeNull();
+    expect(result.traces[0].account_id).toBeNull();
+  });
+});
+
+describe('getDashboardStats', () => {
+  beforeEach(() => {
+    mockDb._reset();
+  });
+
+  it('should return aggregate stats', async () => {
+    // Aggregate query
+    mockDb.select.mockReturnValueOnce({
+      from: vi.fn().mockReturnValue({
+        where: vi.fn().mockResolvedValue([{
+          totalTraces: 500,
+          totalAccounts: 120,
+          totalEvents: 15000,
+          tracesWithFailures: 25,
+        }]),
+      }),
+    });
+    // System names query
+    mockDb.selectDistinct.mockReturnValueOnce({
+      from: vi.fn().mockReturnValue({
+        where: vi.fn().mockResolvedValue([
+          { targetSystem: 'system-a' },
+          { targetSystem: 'system-b' },
+        ]),
+      }),
+    });
+
+    const result = await getDashboardStats();
+
+    expect(result.totalTraces).toBe(500);
+    expect(result.totalAccounts).toBe(120);
+    expect(result.totalEvents).toBe(15000);
+    expect(result.successRate).toBe(95);
+    expect(result.systemNames).toEqual(['system-a', 'system-b']);
+  });
+
+  it('should return 100 success rate when no traces', async () => {
+    mockDb.select.mockReturnValueOnce({
+      from: vi.fn().mockReturnValue({
+        where: vi.fn().mockResolvedValue([{
+          totalTraces: 0,
+          totalAccounts: 0,
+          totalEvents: 0,
+          tracesWithFailures: 0,
+        }]),
+      }),
+    });
+    mockDb.selectDistinct.mockReturnValueOnce({
+      from: vi.fn().mockReturnValue({
+        where: vi.fn().mockResolvedValue([]),
+      }),
+    });
+
+    const result = await getDashboardStats();
+
+    expect(result.totalTraces).toBe(0);
+    expect(result.successRate).toBe(100);
+    expect(result.systemNames).toEqual([]);
+  });
+
+  it('should apply date filters', async () => {
+    mockDb.select.mockReturnValueOnce({
+      from: vi.fn().mockReturnValue({
+        where: vi.fn().mockResolvedValue([{
+          totalTraces: 10,
+          totalAccounts: 5,
+          totalEvents: 100,
+          tracesWithFailures: 1,
+        }]),
+      }),
+    });
+    mockDb.selectDistinct.mockReturnValueOnce({
+      from: vi.fn().mockReturnValue({
+        where: vi.fn().mockResolvedValue([{ targetSystem: 'system-x' }]),
+      }),
+    });
+
+    const result = await getDashboardStats({
+      startDate: '2024-01-01T00:00:00Z',
+      endDate: '2024-01-31T23:59:59Z',
+    });
+
+    expect(result.totalTraces).toBe(10);
+    expect(result.successRate).toBe(90);
+    expect(mockDb.select).toHaveBeenCalled();
+  });
+
+  it('should filter out empty system names', async () => {
+    mockDb.select.mockReturnValueOnce({
+      from: vi.fn().mockReturnValue({
+        where: vi.fn().mockResolvedValue([{
+          totalTraces: 5,
+          totalAccounts: 3,
+          totalEvents: 50,
+          tracesWithFailures: 0,
+        }]),
+      }),
+    });
+    mockDb.selectDistinct.mockReturnValueOnce({
+      from: vi.fn().mockReturnValue({
+        where: vi.fn().mockResolvedValue([
+          { targetSystem: 'system-a' },
+          { targetSystem: '' },
+          { targetSystem: 'system-b' },
+        ]),
+      }),
+    });
+
+    const result = await getDashboardStats();
+
+    expect(result.systemNames).toEqual(['system-a', 'system-b']);
   });
 });
 

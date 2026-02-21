@@ -38,6 +38,11 @@ IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = 'ix_event_log_batch_id' AN
     CREATE INDEX [ix_event_log_batch_id] ON [event_log] ([batch_id], [correlation_id])
     WHERE [batch_id] IS NOT NULL;
 
+IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = 'ix_event_log_trace_timestamp' AND object_id = OBJECT_ID('event_log'))
+    CREATE INDEX [ix_event_log_trace_timestamp] ON [event_log] ([trace_id], [event_timestamp])
+    INCLUDE ([process_name], [account_id], [event_status], [target_system])
+    WHERE [is_deleted] = 0;
+
 -- ===========================================
 -- correlation_links indexes
 -- ===========================================

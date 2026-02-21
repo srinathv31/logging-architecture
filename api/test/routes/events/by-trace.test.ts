@@ -19,6 +19,11 @@ let mockGetByTrace: (traceId: string, pagination: { page: number; pageSize: numb
   totalDurationMs: number | null;
   totalCount: number;
   hasMore: boolean;
+  statusCounts: { success: number; failure: number; inProgress: number; skipped: number };
+  processName: string | null;
+  accountId: string | null;
+  startTime: string | null;
+  endTime: string | null;
 }>;
 
 function buildTestApp() {
@@ -45,8 +50,10 @@ function buildTestApp() {
       async (request, reply) => {
         const { traceId } = request.params;
         const { page, page_size } = request.query;
-        const { events, systemsInvolved, totalDurationMs, totalCount, hasMore } =
-          await mockGetByTrace(traceId, { page, pageSize: page_size });
+        const {
+          events, systemsInvolved, totalDurationMs, totalCount, hasMore,
+          statusCounts, processName, accountId, startTime, endTime,
+        } = await mockGetByTrace(traceId, { page, pageSize: page_size });
 
         return reply.send({
           trace_id: traceId,
@@ -57,6 +64,16 @@ function buildTestApp() {
           page,
           page_size,
           has_more: hasMore,
+          status_counts: {
+            success: statusCounts.success,
+            failure: statusCounts.failure,
+            in_progress: statusCounts.inProgress,
+            skipped: statusCounts.skipped,
+          },
+          process_name: processName,
+          account_id: accountId,
+          start_time: startTime,
+          end_time: endTime,
         });
       }
     );
@@ -84,6 +101,11 @@ describe('GET /v1/events/trace/:traceId', () => {
       totalDurationMs: null,
       totalCount: 0,
       hasMore: false,
+      statusCounts: { success: 0, failure: 0, inProgress: 0, skipped: 0 },
+      processName: null,
+      accountId: null,
+      startTime: null,
+      endTime: null,
     });
   });
 
@@ -100,6 +122,11 @@ describe('GET /v1/events/trace/:traceId', () => {
         totalDurationMs: 5000,
         totalCount: 2,
         hasMore: false,
+        statusCounts: { success: 2, failure: 0, inProgress: 0, skipped: 0 },
+        processName: 'test-process',
+        accountId: 'test-account-id',
+        startTime: '2024-01-01T10:00:00.000Z',
+        endTime: '2024-01-01T10:00:05.000Z',
       });
 
       const response = await app.inject({
@@ -117,6 +144,11 @@ describe('GET /v1/events/trace/:traceId', () => {
       expect(body.page).toBe(1);
       expect(body.page_size).toBe(200);
       expect(body.has_more).toBe(false);
+      expect(body.status_counts).toEqual({ success: 2, failure: 0, in_progress: 0, skipped: 0 });
+      expect(body.process_name).toBe('test-process');
+      expect(body.account_id).toBe('test-account-id');
+      expect(body.start_time).toBe('2024-01-01T10:00:00.000Z');
+      expect(body.end_time).toBe('2024-01-01T10:00:05.000Z');
     });
 
     it('should return null duration when no events exist', async () => {
@@ -126,6 +158,11 @@ describe('GET /v1/events/trace/:traceId', () => {
         totalDurationMs: null,
         totalCount: 0,
         hasMore: false,
+        statusCounts: { success: 0, failure: 0, inProgress: 0, skipped: 0 },
+        processName: null,
+        accountId: null,
+        startTime: null,
+        endTime: null,
       });
 
       const response = await app.inject({
@@ -147,6 +184,11 @@ describe('GET /v1/events/trace/:traceId', () => {
         totalDurationMs: 1000,
         totalCount: 1,
         hasMore: false,
+        statusCounts: { success: 1, failure: 0, inProgress: 0, skipped: 0 },
+        processName: 'test-process',
+        accountId: 'test-account-id',
+        startTime: '2024-01-01T10:00:00.000Z',
+        endTime: '2024-01-01T10:00:01.000Z',
       });
 
       const response = await app.inject({
@@ -167,6 +209,11 @@ describe('GET /v1/events/trace/:traceId', () => {
         totalDurationMs: 0,
         totalCount: 1,
         hasMore: false,
+        statusCounts: { success: 1, failure: 0, inProgress: 0, skipped: 0 },
+        processName: 'test-process',
+        accountId: 'test-account-id',
+        startTime: '2024-01-01T10:00:00.000Z',
+        endTime: '2024-01-01T10:00:00.000Z',
       });
 
       const response = await app.inject({
@@ -189,6 +236,11 @@ describe('GET /v1/events/trace/:traceId', () => {
         totalDurationMs: 100,
         totalCount: 10,
         hasMore: true,
+        statusCounts: { success: 1, failure: 0, inProgress: 0, skipped: 0 },
+        processName: 'test-process',
+        accountId: 'test-account-id',
+        startTime: '2024-01-01T10:00:00.000Z',
+        endTime: '2024-01-01T10:00:00.100Z',
       });
 
       const response = await app.inject({

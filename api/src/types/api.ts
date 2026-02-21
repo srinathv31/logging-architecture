@@ -60,6 +60,46 @@ export interface GetEventsByTraceResponse {
   events: EventLog[];
   systems_involved: string[];
   total_duration_ms?: number | null;
+  status_counts: {
+    success: number;
+    failure: number;
+    in_progress: number;
+    skipped: number;
+  };
+  process_name: string | null;
+  account_id: string | null;
+  start_time: string | null;
+  end_time: string | null;
+}
+
+// GET /api/v1/traces
+export interface TraceSummary {
+  trace_id: string;
+  event_count: number;
+  has_errors: boolean;
+  latest_status: string;
+  duration_ms: number | null;
+  process_name: string | null;
+  account_id: string | null;
+  start_time: string;
+  end_time: string;
+}
+
+export interface ListTracesResponse {
+  traces: TraceSummary[];
+  total_count: number;
+  page: number;
+  page_size: number;
+  has_more: boolean;
+}
+
+// GET /api/v1/dashboard/stats
+export interface DashboardStatsResponse {
+  total_traces: number;
+  total_accounts: number;
+  total_events: number;
+  success_rate: number;
+  system_names: string[];
 }
 
 // POST /api/v1/events/search/text

@@ -381,6 +381,12 @@ export async function getByTrace(
     .select({
       firstEventAt: min(eventLogs.eventTimestamp),
       lastEventAt: max(eventLogs.eventTimestamp),
+      successCount: sql<number>`cast(sum(case when ${eventLogs.eventStatus} = 'SUCCESS' then 1 else 0 end) as int)`,
+      failureCount: sql<number>`cast(sum(case when ${eventLogs.eventStatus} = 'FAILURE' then 1 else 0 end) as int)`,
+      inProgressCount: sql<number>`cast(sum(case when ${eventLogs.eventStatus} = 'IN_PROGRESS' then 1 else 0 end) as int)`,
+      skippedCount: sql<number>`cast(sum(case when ${eventLogs.eventStatus} = 'SKIPPED' then 1 else 0 end) as int)`,
+      processName: sql<string | null>`min(case when ${eventLogs.eventType} = 'PROCESS_START' then ${eventLogs.processName} end)`,
+      accountId: sql<string | null>`min(${eventLogs.accountId})`,
     })
     .from(eventLogs)
     .where(where);
@@ -407,7 +413,161 @@ export async function getByTrace(
   const hasMore = offset + pagination.pageSize < totalCount;
   const events = rows.map(({ _totalCount, ...event }) => event);
 
-  return { events, systemsInvolved, totalDurationMs, totalCount, hasMore };
+  return {
+    events,
+    systemsInvolved,
+    totalDurationMs,
+    totalCount,
+    hasMore,
+    statusCounts: {
+      success: agg.successCount ?? 0,
+      failure: agg.failureCount ?? 0,
+      inProgress: agg.inProgressCount ?? 0,
+      skipped: agg.skippedCount ?? 0,
+    },
+    processName: agg.processName ?? null,
+    accountId: agg.accountId ?? null,
+    startTime: agg.firstEventAt ? agg.firstEventAt.toISOString() : null,
+    endTime: agg.lastEventAt ? agg.lastEventAt.toISOString() : null,
+  };
+}
+
+export async function listTraces(filters: {
+  startDate?: string;
+  endDate?: string;
+  processName?: string;
+  eventStatus?: string;
+  accountId?: string;
+  page: number;
+  pageSize: number;
+}) {
+  const db = await getDb();
+  const conditions: SQL[] = [eq(eventLogs.isDeleted, false)];
+
+  if (filters.startDate) {
+    conditions.push(gte(eventLogs.eventTimestamp, new Date(filters.startDate)));
+  }
+  if (filters.endDate) {
+    conditions.push(lte(eventLogs.eventTimestamp, new Date(filters.endDate)));
+  }
+  if (filters.processName) {
+    conditions.push(eq(eventLogs.processName, filters.processName));
+  }
+  if (filters.eventStatus) {
+    conditions.push(eq(eventLogs.eventStatus, filters.eventStatus));
+  }
+  if (filters.accountId) {
+    conditions.push(eq(eventLogs.accountId, filters.accountId));
+  }
+
+  const where = and(...conditions);
+  const offset = (filters.page - 1) * filters.pageSize;
+
+  const rows = await db
+    .select({
+      traceId: eventLogs.traceId,
+      eventCount: sql<number>`cast(count(*) as int)`,
+      errorCount: sql<number>`cast(sum(case when ${eventLogs.eventStatus} = 'FAILURE' then 1 else 0 end) as int)`,
+      latestStatus: sql<string>`(select top 1 e2.event_status from [event_log] e2 where e2.trace_id = ${eventLogs.traceId} and e2.is_deleted = 0 order by e2.event_timestamp desc)`,
+      startTime: min(eventLogs.eventTimestamp),
+      endTime: max(eventLogs.eventTimestamp),
+      processName: sql<string | null>`min(case when ${eventLogs.eventType} = 'PROCESS_START' then ${eventLogs.processName} end)`,
+      accountId: sql<string | null>`min(${eventLogs.accountId})`,
+      _totalCount: sql<number>`cast(count(*) over() as int)`,
+    })
+    .from(eventLogs)
+    .where(where)
+    .groupBy(eventLogs.traceId)
+    .orderBy(sql`max(${eventLogs.eventTimestamp}) desc`)
+    .offset(offset)
+    .fetch(filters.pageSize);
+
+  let totalCount: number;
+  if (rows.length > 0) {
+    totalCount = rows[0]._totalCount;
+  } else if (offset === 0) {
+    totalCount = 0;
+  } else {
+    const [countRow] = await db
+      .select({
+        count: sql<number>`cast(count(distinct ${eventLogs.traceId}) as int)`,
+      })
+      .from(eventLogs)
+      .where(where);
+    totalCount = countRow?.count ?? 0;
+  }
+
+  const hasMore = offset + filters.pageSize < totalCount;
+
+  const traces = rows.map(({ _totalCount, startTime, endTime, errorCount, ...row }) => ({
+    trace_id: row.traceId,
+    event_count: row.eventCount,
+    has_errors: errorCount > 0,
+    latest_status: row.latestStatus,
+    duration_ms:
+      startTime && endTime
+        ? Math.max(0, endTime.getTime() - startTime.getTime())
+        : null,
+    process_name: row.processName ?? null,
+    account_id: row.accountId ?? null,
+    start_time: startTime ? startTime.toISOString() : '',
+    end_time: endTime ? endTime.toISOString() : '',
+  }));
+
+  return { traces, totalCount, hasMore };
+}
+
+export async function getDashboardStats(filters: {
+  startDate?: string;
+  endDate?: string;
+} = {}) {
+  const db = await getDb();
+  const conditions: SQL[] = [eq(eventLogs.isDeleted, false)];
+
+  if (filters.startDate) {
+    conditions.push(gte(eventLogs.eventTimestamp, new Date(filters.startDate)));
+  }
+  if (filters.endDate) {
+    conditions.push(lte(eventLogs.eventTimestamp, new Date(filters.endDate)));
+  }
+
+  const where = and(...conditions);
+
+  const [stats] = await db
+    .select({
+      totalTraces: sql<number>`cast(count(distinct ${eventLogs.traceId}) as int)`,
+      totalAccounts: sql<number>`cast(count(distinct case when ${eventLogs.accountId} is not null then ${eventLogs.accountId} end) as int)`,
+      totalEvents: sql<number>`cast(count(*) as int)`,
+      tracesWithFailures: sql<number>`cast(count(distinct case when ${eventLogs.eventStatus} = 'FAILURE' then ${eventLogs.traceId} end) as int)`,
+    })
+    .from(eventLogs)
+    .where(where);
+
+  const systemRows = await db
+    .selectDistinct({ targetSystem: eventLogs.targetSystem })
+    .from(eventLogs)
+    .where(where);
+
+  const systemNames = systemRows
+    .map((r) => r.targetSystem)
+    .filter(
+      (s): s is string => typeof s === "string" && s.length > 0,
+    );
+
+  const totalTraces = stats.totalTraces ?? 0;
+  const tracesWithFailures = stats.tracesWithFailures ?? 0;
+  const successRate =
+    totalTraces > 0
+      ? Math.round(((totalTraces - tracesWithFailures) / totalTraces) * 10000) / 100
+      : 100;
+
+  return {
+    totalTraces,
+    totalAccounts: stats.totalAccounts ?? 0,
+    totalEvents: stats.totalEvents ?? 0,
+    successRate,
+    systemNames,
+  };
 }
 
 export async function searchText(filters: {

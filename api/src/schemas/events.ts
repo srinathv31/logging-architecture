@@ -237,6 +237,16 @@ export const getEventsByTraceResponseSchema = z.object({
   page: z.number().int(),
   page_size: z.number().int(),
   has_more: z.boolean(),
+  status_counts: z.object({
+    success: z.number().int(),
+    failure: z.number().int(),
+    in_progress: z.number().int(),
+    skipped: z.number().int(),
+  }),
+  process_name: z.string().nullable(),
+  account_id: z.string().nullable(),
+  start_time: z.string().nullable(),
+  end_time: z.string().nullable(),
 });
 
 export const getEventsByCorrelationResponseSchema = z.object({

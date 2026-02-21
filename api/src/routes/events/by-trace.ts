@@ -22,8 +22,10 @@ export async function byTraceRoutes(app: FastifyInstance) {
     async (request, reply) => {
       const { traceId } = request.params;
       const { page, page_size } = request.query;
-      const { events, systemsInvolved, totalDurationMs, totalCount, hasMore } =
-        await eventLogService.getByTrace(traceId, { page, pageSize: page_size });
+      const {
+        events, systemsInvolved, totalDurationMs, totalCount, hasMore,
+        statusCounts, processName, accountId, startTime, endTime,
+      } = await eventLogService.getByTrace(traceId, { page, pageSize: page_size });
 
       return reply.send({
         trace_id: traceId,
@@ -34,6 +36,16 @@ export async function byTraceRoutes(app: FastifyInstance) {
         page,
         page_size,
         has_more: hasMore,
+        status_counts: {
+          success: statusCounts.success,
+          failure: statusCounts.failure,
+          in_progress: statusCounts.inProgress,
+          skipped: statusCounts.skipped,
+        },
+        process_name: processName,
+        account_id: accountId,
+        start_time: startTime,
+        end_time: endTime,
       });
     },
   );
