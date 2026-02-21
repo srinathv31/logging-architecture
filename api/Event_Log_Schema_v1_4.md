@@ -1,5 +1,5 @@
 # Event Log API - Complete Schema & Interfaces
-## Version 1.4 (with batch_id + span_links for OpenTelemetry Compliance)
+## Version 1.5 (lookup endpoint, search guardrails, pagination on all query endpoints)
 
 ---
 
@@ -28,7 +28,23 @@
 
 ---
 
-## Changelog from v1.3
+## Changelog from v1.4
+
+- **Added `POST /v1/events/lookup` endpoint** — Fast structured event lookup by account/process with optional date and status filters. Designed for dashboard and agent workflows.
+
+- **Added pagination to correlation and trace endpoints** — `GET /v1/events/correlation/{id}` and `GET /v1/events/trace/{id}` now accept `page` and `page_size` query params (default page_size=200, max 500). Responses include `total_count`, `page`, `page_size`, `has_more`.
+
+- **Single-query pagination with `COUNT(*) OVER()`** — Paginated endpoints now use a window function to return total count alongside data rows, eliminating one DB round-trip per request.
+
+- **Search guardrails on `POST /v1/events/search/text`** — Requires at least one of `account_id` or `process_name`. Date window capped at 30 days. Page size capped at 50.
+
+- **POST /v1/events array mode routes through batch service** — Sending an array to `POST /v1/events` now uses the transactional batch insert path with per-item error reporting and all unique `correlation_ids` in the response.
+
+- **Added `GET /healthcheck/ready`** — DB readiness probe (executes `SELECT 1` with 3s timeout) for Kubernetes readiness checks.
+
+- **Bumped OpenAPI version to 1.5.0** and added `Lookup` tag.
+
+## Changelog from v1.3 → v1.4
 
 - **Added `batch_id` field** (NVARCHAR(200), optional) - Groups multiple independent process instances triggered by a single batch operation (e.g., CSV upload). Each row in a batch gets its own `correlation_id` and `trace_id`, but shares a `batch_id`.
 
@@ -248,7 +264,7 @@ Pre-aggregated account summary for fast lookups.
 ```sql
 -- ============================================================================
 -- EVENT LOG API - DATABASE SCHEMA
--- Version 1.4
+-- Version 1.5
 -- ============================================================================
 
 -- ----------------------------------------------------------------------------
@@ -456,7 +472,7 @@ CREATE INDEX IX_account_timeline_summary_last_event
 ```typescript
 // ============================================================================
 // EVENT LOG API - TYPESCRIPT INTERFACES
-// Version 1.4
+// Version 1.5
 // ============================================================================
 
 // ----------------------------------------------------------------------------
@@ -683,7 +699,7 @@ export interface AccountTimelineSummary {
 // API Request/Response Types
 // ----------------------------------------------------------------------------
 
-// POST /api/v1/events
+// POST /v1/events (single event)
 export interface CreateEventRequest {
   events: EventLogEntry | EventLogEntry[];
 }
@@ -694,7 +710,20 @@ export interface CreateEventResponse {
   correlation_id: string;
 }
 
-// POST /api/v1/events/batch
+// POST /v1/events (array of events — routes through batch service)
+export interface CreateEventArrayResponse {
+  success: boolean;
+  total_received: number;
+  total_inserted: number;
+  execution_ids: string[];
+  correlation_ids: string[];
+  errors?: Array<{
+    index: number;
+    error: string;
+  }>;
+}
+
+// POST /v1/events/batch
 export interface BatchCreateEventRequest {
   events: EventLogEntry[];
 }
@@ -710,7 +739,7 @@ export interface BatchCreateEventResponse {
   }>;
 }
 
-// POST /api/v1/events/batch/upload (v1.4)
+// POST /v1/events/batch/upload
 export interface BatchUploadRequest {
   batch_id: string;
   events: EventLogEntry[];
@@ -724,17 +753,16 @@ export interface BatchUploadResponse {
   correlation_ids: string[];
   errors?: Array<{
     index: number;
-    correlation_id?: string;
     error: string;
   }>;
 }
 
-// GET /api/v1/events/batch/{batch_id} (v1.4)
+// GET /v1/events/batch/{batch_id}
 export interface GetEventsByBatchRequest {
   batch_id: string;
   event_status?: EventStatus;
-  page?: number;
-  page_size?: number;
+  page?: number;      // default 1
+  page_size?: number;  // default 20, max 100
 }
 
 export interface GetEventsByBatchResponse {
@@ -749,7 +777,7 @@ export interface GetEventsByBatchResponse {
   has_more: boolean;
 }
 
-// GET /api/v1/events/batch/{batch_id}/summary (v1.4)
+// GET /v1/events/batch/{batch_id}/summary
 export interface BatchSummaryResponse {
   batch_id: string;
   total_processes: number;
@@ -757,11 +785,11 @@ export interface BatchSummaryResponse {
   in_progress: number;
   failed: number;
   correlation_ids: string[];
-  started_at: string;
-  last_event_at: string;
+  started_at: string | null;
+  last_event_at: string | null;
 }
 
-// GET /api/v1/events/account/{account_id}
+// GET /v1/events/account/{account_id}
 export interface GetEventsByAccountRequest {
   account_id: string;
   start_date?: string;
@@ -769,8 +797,8 @@ export interface GetEventsByAccountRequest {
   process_name?: string;
   event_status?: EventStatus;
   include_linked?: boolean;
-  page?: number;
-  page_size?: number;
+  page?: number;      // default 1
+  page_size?: number;  // default 20, max 100
 }
 
 export interface GetEventsByAccountResponse {
@@ -782,63 +810,53 @@ export interface GetEventsByAccountResponse {
   has_more: boolean;
 }
 
-// GET /api/v1/events/correlation/{correlation_id}
-export interface GetEventsByCorrelationResponse {
+// GET /v1/events/correlation/{correlation_id}
+export interface GetEventsByCorrelationRequest {
   correlation_id: string;
-  account_id?: string;
-  events: EventLogRecord[];
-  is_linked: boolean;
+  page?: number;      // default 1
+  page_size?: number;  // default 200, max 500
 }
 
-// GET /api/v1/events/trace/{trace_id}
+export interface GetEventsByCorrelationResponse {
+  correlation_id: string;
+  account_id: string | null;
+  events: EventLogRecord[];
+  is_linked: boolean;
+  total_count: number;
+  page: number;
+  page_size: number;
+  has_more: boolean;
+}
+
+// GET /v1/events/trace/{trace_id}
+export interface GetEventsByTraceRequest {
+  trace_id: string;
+  page?: number;      // default 1
+  page_size?: number;  // default 200, max 500
+}
+
 export interface GetEventsByTraceResponse {
   trace_id: string;
   events: EventLogRecord[];
-  span_tree: SpanNode[];
   systems_involved: string[];
-  total_duration_ms?: number;
+  total_duration_ms: number | null;
+  total_count: number;
+  page: number;
+  page_size: number;
+  has_more: boolean;
 }
 
-// Span tree node for visualizing trace hierarchy (v1.4)
-export interface SpanNode {
-  span_id: string;
-  parent_span_id?: string;
-  span_links?: string[];
-  step_name?: string;
-  event_status: EventStatus;
-  execution_time_ms?: number;
-  children: SpanNode[];
-}
-
-// POST /api/v1/events/search
-export interface SemanticSearchRequest {
-  query: string;
-  account_id?: string;
-  correlation_id?: string;
-  process_name?: string;
-  start_date?: string;
-  end_date?: string;
-  top_k?: number;
-}
-
-export interface SemanticSearchResponse {
-  query: string;
-  results: Array<{
-    event: EventLogRecord;
-    score: number;
-    matched_text: string;
-  }>;
-}
-
-// POST /api/v1/events/search/text
+// POST /v1/events/search/text
+// Guardrails: at least one of account_id or process_name required.
+// Date window capped at 30 days. Page size max 50.
 export interface TextSearchRequest {
   query: string;
-  account_id?: string;
-  process_name?: string;
-  start_date?: string;
+  account_id?: string;    // required if process_name is not provided
+  process_name?: string;  // required if account_id is not provided
+  start_date?: string;    // must pair with end_date; window ≤ 30 days
   end_date?: string;
-  page?: number;
-  page_size?: number;
+  page?: number;      // default 1
+  page_size?: number;  // default 20, max 50
 }
 
 export interface TextSearchResponse {
@@ -849,7 +867,28 @@ export interface TextSearchResponse {
   page_size: number;
 }
 
-// POST /api/v1/correlation-links
+// POST /v1/events/lookup
+// Guardrails: at least one of account_id or process_name required.
+// Date window capped at 30 days.
+export interface LookupEventsRequest {
+  account_id?: string;    // required if process_name is not provided
+  process_name?: string;  // required if account_id is not provided
+  event_status?: EventStatus;
+  start_date?: string;    // must pair with end_date; window ≤ 30 days
+  end_date?: string;
+  page?: number;      // default 1
+  page_size?: number;  // default 20, max 100
+}
+
+export interface LookupEventsResponse {
+  events: EventLogRecord[];
+  total_count: number;
+  page: number;
+  page_size: number;
+  has_more: boolean;
+}
+
+// POST /v1/correlation-links
 export interface CreateCorrelationLinkRequest {
   correlation_id: string;
   account_id: string;
@@ -865,7 +904,7 @@ export interface CreateCorrelationLinkResponse {
   linked_at: string;
 }
 
-// GET /api/v1/events/account/{account_id}/summary
+// GET /v1/events/account/{account_id}/summary
 export interface GetAccountSummaryResponse {
   summary: AccountTimelineSummary;
   recent_events: EventLogRecord[];
@@ -1522,21 +1561,23 @@ ORDER BY e.event_timestamp;
 
 | Method | Endpoint | Description |
 |--------|----------|-------------|
-| POST | `/api/v1/events` | Insert event(s) |
-| POST | `/api/v1/events/batch` | Batch insert events |
-| POST | `/api/v1/events/batch/upload` | **v1.4:** Upload batch with shared batch_id |
-| GET | `/api/v1/events/batch/{batch_id}` | **v1.4:** Get all events for a batch |
-| GET | `/api/v1/events/batch/{batch_id}/summary` | **v1.4:** Get batch statistics |
-| GET | `/api/v1/events/account/{account_id}` | Get timeline for account |
-| GET | `/api/v1/events/account/{account_id}/summary` | Get account summary |
-| GET | `/api/v1/events/correlation/{correlation_id}` | Get events by correlation ID |
-| GET | `/api/v1/events/trace/{trace_id}` | Get events by trace ID with span tree |
-| POST | `/api/v1/events/search` | Semantic search (vector) |
-| POST | `/api/v1/events/search/text` | Full-text search on summary |
-| POST | `/api/v1/correlation-links` | Create correlation link |
-| GET | `/api/v1/correlation-links/{correlation_id}` | Get correlation link |
-| GET | `/api/v1/processes` | List process definitions |
-| POST | `/api/v1/processes` | Register new process |
+| GET | `/healthcheck` | Liveness probe (no DB call) |
+| GET | `/healthcheck/ready` | Readiness probe (executes `SELECT 1`, 3s timeout) |
+| POST | `/v1/events` | Insert event(s) — single or array with per-item errors |
+| POST | `/v1/events/batch` | Batch insert events with per-item error reporting |
+| POST | `/v1/events/batch/upload` | Upload batch with shared batch_id |
+| GET | `/v1/events/batch/{batch_id}` | Paginated events for a batch with aggregate stats |
+| GET | `/v1/events/batch/{batch_id}/summary` | Aggregate batch statistics |
+| GET | `/v1/events/account/{account_id}` | Paginated timeline for account |
+| GET | `/v1/events/account/{account_id}/summary` | Pre-aggregated account summary |
+| GET | `/v1/events/correlation/{correlation_id}` | Paginated events by correlation ID |
+| GET | `/v1/events/trace/{trace_id}` | Paginated events by trace ID |
+| POST | `/v1/events/search/text` | Constrained full-text search on summary |
+| POST | `/v1/events/lookup` | **v1.5:** Fast structured event lookup by account/process |
+| POST | `/v1/correlation-links` | Create correlation link |
+| GET | `/v1/correlation-links/{correlation_id}` | Get correlation link |
+| GET | `/v1/processes` | List process definitions |
+| POST | `/v1/processes` | Register new process |
 
 ---
 
@@ -1581,3 +1622,4 @@ The receiving service:
 | 1.2 | — | Added correlation_links, process_definitions, account_timeline_summary, discriminated unions |
 | 1.3 | — | Added required `summary` field for AI/human readable narratives, full-text search support |
 | 1.4 | — | Added `batch_id` for batch operations, `span_links` for fork-join parallel dependencies (OpenTelemetry compliant), new batch API endpoints |
+| 1.5 | Feb 2026 | Added `POST /v1/events/lookup` endpoint, pagination on correlation/trace endpoints, search guardrails, `COUNT(*) OVER()` single-query pagination, `GET /healthcheck/ready`, array mode through batch service |
