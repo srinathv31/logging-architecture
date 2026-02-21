@@ -9,10 +9,7 @@ import {
   jsonSchemaTransform,
   type ZodTypeProvider,
 } from "fastify-type-provider-zod";
-import { z } from "zod";
-import { sql } from "drizzle-orm";
 import { env } from "./config/env";
-import { getDb } from "./db/client";
 import { registerErrorHandler } from "./plugins/error-handler";
 import { registerRoutes } from "./routes/index";
 
@@ -56,7 +53,7 @@ export function buildApp() {
           name: "Lookup",
           description: "Fast structured event lookup for dashboard and agent workflows",
         },
-        { name: "Health", description: "Health check endpoint" },
+        { name: "Health", description: "Health and version endpoints" },
       ],
     },
     transform: jsonSchemaTransform,
@@ -70,69 +67,6 @@ export function buildApp() {
   app.register(sensible);
 
   registerErrorHandler(app);
-
-  app.get(
-    "/healthcheck",
-    {
-      schema: {
-        tags: ["Health"],
-        description: "Returns API health status",
-        response: {
-          200: z.object({
-            status: z.literal("ok"),
-          }),
-        },
-      },
-    },
-    async () => ({ status: "ok" as const }),
-  );
-
-  app.get(
-    "/healthcheck/ready",
-    {
-      schema: {
-        tags: ["Health"],
-        description: "Returns DB readiness status",
-        response: {
-          200: z.object({
-            status: z.literal("ready"),
-            database: z.literal("connected"),
-            timestamp: z.string(),
-          }),
-          503: z.object({
-            status: z.literal("not_ready"),
-            database: z.literal("error"),
-            error: z.string(),
-            timestamp: z.string(),
-          }),
-        },
-      },
-    },
-    async (_request, reply) => {
-      try {
-        const db = await getDb();
-        await Promise.race([
-          db.execute(sql`SELECT 1`),
-          new Promise((_, reject) =>
-            setTimeout(() => reject(new Error("Database health check timed out")), 3000),
-          ),
-        ]);
-        return {
-          status: "ready" as const,
-          database: "connected" as const,
-          timestamp: new Date().toISOString(),
-        };
-      } catch (err) {
-        const message = err instanceof Error ? err.message : "Unknown error";
-        return reply.status(503).send({
-          status: "not_ready" as const,
-          database: "error" as const,
-          error: message,
-          timestamp: new Date().toISOString(),
-        });
-      }
-    },
-  );
 
   app.register(registerRoutes, { prefix: "/v1" });
 

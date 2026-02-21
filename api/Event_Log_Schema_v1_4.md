@@ -40,7 +40,7 @@
 
 - **POST /v1/events array mode routes through batch service** — Sending an array to `POST /v1/events` now uses the transactional batch insert path with per-item error reporting and all unique `correlation_ids` in the response.
 
-- **Added `GET /healthcheck/ready`** — DB readiness probe (executes `SELECT 1` with 3s timeout) for Kubernetes readiness checks.
+- **Moved health endpoints under `/v1`** — `GET /v1/healthcheck`, `GET /v1/healthcheck/ready`, and new `GET /v1/version`. Liveness and version responses are pre-computed at startup.
 
 - **Bumped OpenAPI version to 1.5.0** and added `Lookup` tag.
 
@@ -1561,8 +1561,9 @@ ORDER BY e.event_timestamp;
 
 | Method | Endpoint | Description |
 |--------|----------|-------------|
-| GET | `/healthcheck` | Liveness probe (no DB call) |
-| GET | `/healthcheck/ready` | Readiness probe (executes `SELECT 1`, 3s timeout) |
+| GET | `/v1/healthcheck` | Liveness probe — pre-computed static response (no DB call) |
+| GET | `/v1/healthcheck/ready` | Readiness probe (executes `SELECT 1`, 3s timeout) |
+| GET | `/v1/version` | API version — pre-computed from `package.json` at startup |
 | POST | `/v1/events` | Insert event(s) — single or array with per-item errors |
 | POST | `/v1/events/batch` | Batch insert events with per-item error reporting |
 | POST | `/v1/events/batch/upload` | Upload batch with shared batch_id |
@@ -1622,4 +1623,4 @@ The receiving service:
 | 1.2 | — | Added correlation_links, process_definitions, account_timeline_summary, discriminated unions |
 | 1.3 | — | Added required `summary` field for AI/human readable narratives, full-text search support |
 | 1.4 | — | Added `batch_id` for batch operations, `span_links` for fork-join parallel dependencies (OpenTelemetry compliant), new batch API endpoints |
-| 1.5 | Feb 2026 | Added `POST /v1/events/lookup` endpoint, pagination on correlation/trace endpoints, search guardrails, `COUNT(*) OVER()` single-query pagination, `GET /healthcheck/ready`, array mode through batch service |
+| 1.5 | Feb 2026 | Added `POST /v1/events/lookup` endpoint, pagination on correlation/trace endpoints, search guardrails, `COUNT(*) OVER()` single-query pagination, `GET /v1/healthcheck/ready`, `GET /v1/version`, health routes moved under `/v1`, array mode through batch service |

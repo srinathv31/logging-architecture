@@ -86,7 +86,7 @@ CREATE FULLTEXT INDEX ON [event_logs] ([summary])
 
 ### Health
 
-#### GET /healthcheck
+#### GET /v1/healthcheck
 
 **Purpose**: Liveness probe for load balancers (F5/ALB).
 
@@ -95,12 +95,12 @@ CREATE FULLTEXT INDEX ON [event_logs] ([summary])
 **Complexity**: O(1)
 
 **Design Notes**:
-- No DB call — always returns `{ status: "ok" }`
+- No DB call — response `{ status: "ok" }` is pre-computed at startup (zero per-request allocation)
 - Use for liveness probes where you only need to know the process is running
 
 ---
 
-#### GET /healthcheck/ready
+#### GET /v1/healthcheck/ready
 
 **Purpose**: Readiness probe — verifies DB connectivity.
 
@@ -112,6 +112,20 @@ CREATE FULLTEXT INDEX ON [event_logs] ([summary])
 **Design Notes**:
 - Returns 200 `{ status: "ready", database: "connected" }` or 503 `{ status: "not_ready", database: "error" }`
 - Use for Kubernetes readiness probes and operations dashboards
+
+---
+
+#### GET /v1/version
+
+**Purpose**: Returns the API version from `package.json`.
+
+**Database Operations**: None
+
+**Complexity**: O(1)
+
+**Design Notes**:
+- Response `{ version: "1.0.0" }` is pre-computed at startup via `readFileSync` (zero per-request allocation)
+- Version reflects the deployed `package.json`, not a build-time constant
 
 ---
 
@@ -582,8 +596,9 @@ When a page is requested beyond the result set (e.g., page 100 when only 50 rows
 
 | Endpoint | Complexity | Index Dependency | Queries |
 |----------|------------|------------------|---------|
-| GET /healthcheck | O(1) | none | 0 |
-| GET /healthcheck/ready | O(1) | none | 1 |
+| GET /v1/healthcheck | O(1) | none | 0 |
+| GET /v1/healthcheck/ready | O(1) | none | 1 |
+| GET /v1/version | O(1) | none | 0 |
 | POST /events (single) | O(1) | idempotency (optional) | 1-2 |
 | POST /events (array) | O(k + n/chunk) | idempotency | 2+ |
 | POST /events/batch | O(k + n/chunk) | idempotency | 2+ |
