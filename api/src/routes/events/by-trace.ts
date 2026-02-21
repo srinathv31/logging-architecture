@@ -13,7 +13,8 @@ export async function byTraceRoutes(app: FastifyInstance) {
     {
       schema: {
         tags: ['Events'],
-        description: 'Get all events associated with a distributed trace',
+        summary: 'Get events by trace ID',
+        description: 'Returns paginated events for a distributed trace along with aggregate metadata: systems involved, total duration, per-status event counts, process name, account ID, and start/end timestamps. Designed for the dashboard trace-detail view.',
         params: z.object({ traceId: z.string().min(1) }),
         querystring: eventLogPaginationQuerySchema,
         response: { 200: getEventsByTraceResponseSchema },

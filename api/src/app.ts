@@ -40,8 +40,8 @@ export function buildApp() {
       ],
       tags: [
         { name: "Events", description: "Create and query event log entries" },
-        { name: "Traces", description: "Query traces grouped by trace ID" },
-        { name: "Dashboard", description: "Aggregate statistics for dashboard views" },
+        { name: "Traces", description: "List and filter traces grouped by trace_id — designed for dashboard trace-list views" },
+        { name: "Dashboard", description: "Aggregate statistics (trace counts, account counts, success rates, system names) for dashboard overview panels" },
         { name: "Processes", description: "Manage process definitions" },
         {
           name: "Correlation Links",

@@ -11,7 +11,9 @@ export async function dashboardStatsRoute(app: FastifyInstance) {
     {
       schema: {
         tags: ["Dashboard"],
-        description: "Get aggregate dashboard statistics",
+        summary: "Get dashboard statistics",
+        description:
+          "Returns aggregate statistics for the dashboard overview: total traces, total unique accounts, total events, trace-level success rate (percentage of traces with zero failures), and a list of all distinct system names. Supports optional date range filtering.",
         querystring: dashboardStatsQuerySchema,
         response: { 200: dashboardStatsResponseSchema },
       },

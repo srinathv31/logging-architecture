@@ -12,8 +12,9 @@ export async function listTracesRoute(app: FastifyInstance) {
     {
       schema: {
         tags: ["Traces"],
+        summary: "List traces",
         description:
-          "List traces grouped by trace_id with aggregate info",
+          "Returns a paginated list of traces grouped by `trace_id`. Each trace summary includes event count, error presence, latest status, duration, process name, and account ID. Supports filtering by date range, process name, event status, and account ID. Ordered by most recent activity descending.",
         querystring: listTracesQuerySchema,
         response: { 200: listTracesResponseSchema },
       },
