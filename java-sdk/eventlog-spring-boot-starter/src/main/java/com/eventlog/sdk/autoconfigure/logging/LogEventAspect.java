@@ -111,8 +111,12 @@ public class LogEventAspect {
         String traceId = firstNonBlank(
                 mdcValue("traceId", "trace_id", "trace-id"),
                 EventLogUtils.createTraceId());
-        String spanId = mdcValue("spanId", "span_id", "span-id");
+        String mdcSpanId = mdcValue("spanId", "span_id", "span-id");
+        String spanId = EventLogUtils.createSpanId();
         String parentSpanId = mdcValue("parentSpanId", "parent_span_id", "parent-span-id");
+        if (!hasText(parentSpanId) && hasText(mdcSpanId)) {
+            parentSpanId = mdcSpanId;
+        }
         String batchId = mdcValue("batchId", "batch_id", "batch-id");
 
         String stepName = hasText(annotation.name()) ? annotation.name() : resolveMethodName(joinPoint);
@@ -143,9 +147,7 @@ public class LogEventAspect {
         } else if (eventType == EventType.PROCESS_START) {
             builder.stepSequence(0);
         }
-        if (hasText(spanId)) {
-            builder.spanId(spanId);
-        }
+        builder.spanId(spanId);
         if (hasText(parentSpanId)) {
             builder.parentSpanId(parentSpanId);
         }

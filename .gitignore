@@ -16,4 +16,5 @@ dist/
 # Logs
 *.log
 applogs/
-java-sdk/**/target/
+# Java/Maven build output
+**/target/

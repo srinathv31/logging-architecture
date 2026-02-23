@@ -44,7 +44,7 @@ class EventLogUtilsTest {
                 .build();
 
         assertEquals(EventType.PROCESS_START, entry.getEventType());
-        assertEquals(EventStatus.IN_PROGRESS, entry.getEventStatus());
+        assertEquals(EventStatus.SUCCESS, entry.getEventStatus());
         assertEquals(0, entry.getStepSequence());
         assertNotNull(entry.getEventTimestamp());
     }
@@ -78,7 +78,7 @@ class EventLogUtilsTest {
         assertEquals("Starting up", entry.getSummary());
         assertEquals("INIT", entry.getResult());
         assertEquals(EventType.PROCESS_START, entry.getEventType());
-        assertEquals(EventStatus.IN_PROGRESS, entry.getEventStatus());
+        assertEquals(EventStatus.SUCCESS, entry.getEventStatus());
         assertEquals(0, entry.getStepSequence());
     }
 

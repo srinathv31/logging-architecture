@@ -42,10 +42,17 @@ describe('Error Handler Plugin', () => {
       throw new ConflictError('Resource already exists');
     });
 
-    // Route that throws PostgreSQL unique violation
-    app.get('/pg-unique', async () => {
-      const error = new Error('unique constraint violation') as Error & { code: string };
-      error.code = '23505';
+    // Route that throws MSSQL unique constraint violation (2627)
+    app.get('/mssql-unique-constraint', async () => {
+      const error = new Error('unique constraint violation') as Error & { number: number };
+      error.number = 2627;
+      throw error;
+    });
+
+    // Route that throws MSSQL unique index violation (2601)
+    app.get('/mssql-unique-index', async () => {
+      const error = new Error('unique index violation') as Error & { number: number };
+      error.number = 2601;
       throw error;
     });
 
@@ -157,11 +164,23 @@ describe('Error Handler Plugin', () => {
     });
   });
 
-  describe('PostgreSQL unique violation handling', () => {
-    it('should return 409 for PostgreSQL unique violation (code 23505)', async () => {
+  describe('MSSQL unique violation handling', () => {
+    it('should return 409 for MSSQL unique constraint violation (error 2627)', async () => {
       const response = await app.inject({
         method: 'GET',
-        url: '/pg-unique',
+        url: '/mssql-unique-constraint',
+      });
+
+      expect(response.statusCode).toBe(409);
+      const body = response.json();
+      expect(body.error).toBe('Conflict');
+      expect(body.message).toBe('A resource with the given unique constraint already exists.');
+    });
+
+    it('should return 409 for MSSQL unique index violation (error 2601)', async () => {
+      const response = await app.inject({
+        method: 'GET',
+        url: '/mssql-unique-index',
       });
 
       expect(response.statusCode).toBe(409);

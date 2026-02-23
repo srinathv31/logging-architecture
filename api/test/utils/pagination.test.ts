@@ -1,4 +1,4 @@
-import { calculatePagination } from '../../src/utils/pagination';
+import { calculatePagination, extractTotalCount } from '../../src/utils/pagination';
 
 describe('calculatePagination', () => {
   describe('offset calculation', () => {
@@ -89,5 +89,41 @@ describe('calculatePagination', () => {
       expect(result.offset).toBe(0);
       expect(result.hasMore).toBe(false);
     });
+  });
+});
+
+describe('extractTotalCount', () => {
+  it('should return empty rows and zero count for empty array', () => {
+    const result = extractTotalCount([]);
+    expect(result.rows).toEqual([]);
+    expect(result.totalCount).toBe(0);
+  });
+
+  it('should extract totalCount from single row', () => {
+    const result = extractTotalCount([
+      { id: 1, name: 'test', totalCount: 42 },
+    ]);
+    expect(result.totalCount).toBe(42);
+    expect(result.rows).toEqual([{ id: 1, name: 'test' }]);
+  });
+
+  it('should extract totalCount from multiple rows', () => {
+    const result = extractTotalCount([
+      { id: 1, name: 'a', totalCount: 100 },
+      { id: 2, name: 'b', totalCount: 100 },
+      { id: 3, name: 'c', totalCount: 100 },
+    ]);
+    expect(result.totalCount).toBe(100);
+    expect(result.rows).toHaveLength(3);
+    expect(result.rows[0]).toEqual({ id: 1, name: 'a' });
+    expect(result.rows[2]).toEqual({ id: 3, name: 'c' });
+  });
+
+  it('should default to 0 when totalCount field is missing', () => {
+    const result = extractTotalCount([
+      { id: 1, name: 'test' } as { id: number; name: string; totalCount?: number },
+    ]);
+    expect(result.totalCount).toBe(0);
+    expect(result.rows).toEqual([{ id: 1, name: 'test' }]);
   });
 });

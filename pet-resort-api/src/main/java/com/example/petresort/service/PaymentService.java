@@ -39,46 +39,94 @@ public class PaymentService {
      * Demonstrates raw EventLogEntry.builder() usage — the most manual approach.
      * Useful when you need full control over every field.
      */
-    public boolean processPayment(String bookingId, BigDecimal amount, String cardLast4) {
+    public boolean processPayment(String bookingId, BigDecimal amount, String cardLast4, String parentSpanId) {
         String correlationId = MDC.get("correlationId");
         String traceId = MDC.get("traceId");
         long start = System.currentTimeMillis();
 
+        // Check for payment-failure simulation (process-level retry demo)
+        String simulate = MDC.get("simulate");
+
+        if ("payment-failure".equals(simulate)) {
+            try { Thread.sleep(800); } catch (InterruptedException e) { Thread.currentThread().interrupt(); }
+
+            EventLogEntry.Builder failBuilder = EventLogEntry.builder()
+                    .correlationId(correlationId)
+                    .traceId(traceId)
+                    .spanId(EventLogUtils.createSpanId())
+                    .applicationId(applicationId)
+                    .targetSystem("STRIPE")
+                    .originatingSystem(originatingSystem)
+                    .processName("PROCESS_PAYMENT")
+                    .stepSequence(1)
+                    .stepName("Charge Card")
+                    .eventType(EventType.STEP)
+                    .eventStatus(EventStatus.FAILURE)
+                    .errorCode("PAYMENT_DECLINED")
+                    .errorMessage("Card ending ***" + EventLogUtils.maskLast4(cardLast4) + " declined by issuer")
+                    .summary("Payment of $" + amount + " DECLINED by STRIPE for booking "
+                            + bookingId + " — card ending ***" + EventLogUtils.maskLast4(cardLast4))
+                    .result("PAYMENT_DECLINED")
+                    .executionTimeMs((int) (System.currentTimeMillis() - start))
+                    .metadata(Map.of("booking_id", bookingId, "amount", amount.toString(),
+                            "card_last4", EventLogUtils.maskLast4(cardLast4), "declined_reason", "insufficient_funds"));
+
+            if (parentSpanId != null && !parentSpanId.isBlank()) {
+                failBuilder.parentSpanId(parentSpanId);
+            }
+            if (!asyncEventLogger.log(failBuilder.build())) {
+                log.warn("Event not queued: {} for booking {}", "Payment Declined", bookingId);
+            }
+            throw new PaymentFailedException(bookingId,
+                    "Card declined: ***" + EventLogUtils.maskLast4(cardLast4));
+        }
+
+        // Simulate Stripe API call latency
+        try { Thread.sleep(100); } catch (InterruptedException e) { Thread.currentThread().interrupt(); }
+
         // Build the event entry using the raw builder
-        EventLogEntry paymentEvent = EventLogEntry.builder()
+        EventLogEntry.Builder paymentBuilder = EventLogEntry.builder()
                 .correlationId(correlationId)
                 .traceId(traceId)
                 .spanId(EventLogUtils.createSpanId())
                 .applicationId(applicationId)
-                .targetSystem(targetSystem)
+                .targetSystem("STRIPE")
                 .originatingSystem(originatingSystem)
                 .processName("PROCESS_PAYMENT")
                 .stepSequence(1)
                 .stepName("Charge Card")
                 .eventType(EventType.STEP)
                 .eventStatus(EventStatus.SUCCESS)
-                .summary(EventLogUtils.generateSummary("Process", "payment",
-                        "charged", amount + " to card"))
+                .summary("Payment of $" + amount + " processed via STRIPE for booking "
+                        + bookingId + " — card ending ***" + EventLogUtils.maskLast4(cardLast4))
                 .result("PAYMENT_PROCESSED")
                 .metadata(Map.of(
                         "booking_id", bookingId,
                         "amount", amount.toString(),
                         "card_last4", EventLogUtils.maskLast4(cardLast4),
                         "currency", "USD"))
-                .executionTimeMs((int) (System.currentTimeMillis() - start))
-                .build();
+                .executionTimeMs((int) (System.currentTimeMillis() - start));
 
-        // Fire-and-forget via AsyncEventLogger
-        asyncEventLogger.log(paymentEvent);
+        if (parentSpanId != null && !parentSpanId.isBlank()) {
+            paymentBuilder.parentSpanId(parentSpanId);
+        }
 
-        // Demonstrate toBuilder() — copy and modify pattern
-        EventLogEntry auditCopy = paymentEvent.toBuilder()
+        EventLogEntry paymentEvent = paymentBuilder.build();
+
+        if (!asyncEventLogger.log(paymentEvent)) {
+            log.warn("Event not queued: {} for booking {}", "Payment Processed", bookingId);
+        }
+
+        // Demonstrate toBuilder() — copy and modify pattern (fresh spanId for audit)
+        EventLogEntry.Builder auditBuilder = paymentEvent.toBuilder()
+                .spanId(EventLogUtils.createSpanId())
                 .processName("PAYMENT_AUDIT")
                 .stepName("Audit Trail")
                 .summary("Payment audit record created")
-                .result("AUDIT_RECORDED")
-                .build();
-        asyncEventLogger.log(auditCopy);
+                .result("AUDIT_RECORDED");
+        if (!asyncEventLogger.log(auditBuilder.build())) {
+            log.warn("Event not queued: {} for booking {}", "Payment Audit", bookingId);
+        }
 
         log.debug("Payment processed for booking {} — amount: {}, card: {}",
                 bookingId, amount, EventLogUtils.maskLast4(cardLast4));
@@ -89,5 +137,10 @@ public class PaymentService {
         }
 
         return true;
+    }
+
+    @Deprecated
+    public boolean processPayment(String bookingId, BigDecimal amount, String cardLast4) {
+        return processPayment(bookingId, amount, cardLast4, null);
     }
 }

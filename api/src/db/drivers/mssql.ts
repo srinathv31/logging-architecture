@@ -14,6 +14,8 @@ let drizzleDb: NodeMsSqlDatabase | null = null;
 let tokenTimestamp = 0;
 let refreshPromise: Promise<void> | null = null;
 
+const useSqlAuth = !!(env.DB_USER && env.DB_PASSWORD);
+
 /**
  * Fetches an Azure AD access token from the MSI endpoint with retry logic
  */
@@ -60,24 +62,43 @@ async function getConfig(): Promise<mssql.config> {
     throw new Error("DB_SERVER and DB_NAME are required for MSSQL connection");
   }
 
+  const baseConfig: mssql.config = {
+    server: env.DB_SERVER,
+    pool: {
+      max: env.DB_POOL_MAX,
+      min: env.DB_POOL_MIN,
+      idleTimeoutMillis: env.DB_IDLE_TIMEOUT_MS,
+      acquireTimeoutMillis: env.DB_ACQUIRE_TIMEOUT_MS,
+    },
+    options: {
+      database: env.DB_NAME,
+      rowCollectionOnRequestCompletion: true,
+      requestTimeout: env.DB_REQUEST_TIMEOUT_MS,
+      connectTimeout: env.DB_CONNECT_TIMEOUT_MS,
+    },
+  };
+
+  if (useSqlAuth) {
+    return {
+      ...baseConfig,
+      user: env.DB_USER,
+      password: env.DB_PASSWORD,
+      options: {
+        ...baseConfig.options,
+        encrypt: false,
+        trustServerCertificate: true,
+      },
+    };
+  }
+
   const token = await getToken();
   tokenTimestamp = Date.now();
 
   return {
-    server: env.DB_SERVER,
-    // Pool config at top level (not nested under options)
-    pool: {
-      max: 10,
-      min: 0,
-      idleTimeoutMillis: 30000,
-      acquireTimeoutMillis: 15000,
-    },
+    ...baseConfig,
     options: {
+      ...baseConfig.options,
       encrypt: true,
-      database: env.DB_NAME,
-      rowCollectionOnRequestCompletion: true,
-      requestTimeout: 30000,
-      connectTimeout: 30000,
     },
     authentication: {
       type: "azure-active-directory-access-token",
@@ -115,8 +136,9 @@ async function refreshConnection(): Promise<void> {
  * Uses a mutex pattern to prevent race conditions during token refresh.
  */
 export async function getDb(): Promise<NodeMsSqlDatabase> {
-  // Happy path: return cached instance if token is valid and pool is connected
-  if (!isTokenExpired() && pool?.connected && drizzleDb) {
+  // Happy path: return cached instance if pool is connected
+  // SQL auth doesn't need token refresh; only Azure AD tokens expire
+  if ((useSqlAuth || !isTokenExpired()) && pool?.connected && drizzleDb) {
     return drizzleDb;
   }
 

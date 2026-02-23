@@ -8,6 +8,7 @@ import { DurationBreakdown } from "@/components/trace-detail/duration-breakdown"
 import { TraceDetailSkeleton } from "@/components/trace-detail/trace-detail-skeleton";
 import { ErrorBoundary } from "@/components/error-boundary";
 import { TraceDetailError } from "./trace-detail-error";
+import { detectAttempts } from "@/lib/span-tree";
 
 async function TraceContent({ traceId }: { traceId: string }) {
   const detail = await getTraceDetail(traceId);
@@ -16,12 +17,14 @@ async function TraceContent({ traceId }: { traceId: string }) {
     notFound();
   }
 
+  const retryInfo = detectAttempts(detail.events);
+
   return (
     <div className="space-y-6">
-      <TraceHeader traceId={traceId} detail={detail} />
-      <JourneyNarrative traceId={traceId} detail={detail} />
+      <TraceHeader traceId={traceId} detail={detail} retryInfo={retryInfo} />
+      <JourneyNarrative traceId={traceId} detail={detail} retryInfo={retryInfo} />
       <DurationBreakdown events={detail.events} />
-      <TraceTimeline events={detail.events} />
+      <TraceTimeline events={detail.events} retryInfo={retryInfo} />
     </div>
   );
 }
