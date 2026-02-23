@@ -10,17 +10,17 @@ import {
 import { z } from 'zod';
 import { createEventFixture, createEventLogDbRecord } from '../../fixtures/events';
 import {
-  batchUploadRequestSchema,
-  batchUploadResponseSchema,
+  batchCreateEventRequestSchema,
+  batchCreateEventResponseSchema,
   getEventsByBatchQuerySchema,
   getEventsByBatchResponseSchema,
   batchSummaryResponseSchema,
 } from '../../../src/schemas/events';
 
 // Mock functions
-let mockCreateBatchUpload: (batchId: string, events: unknown[]) => Promise<{
+let mockCreateEvents: (events: unknown[], batchId?: string) => Promise<{
+  executionIds: string[];
   correlationIds: string[];
-  totalInserted: number;
   errors: Array<{ index: number; error: string }>;
 }>;
 
@@ -59,26 +59,27 @@ function buildTestApp() {
   app.register(async (fastify) => {
     const typedApp = fastify.withTypeProvider<ZodTypeProvider>();
 
-    // POST /events/batch/upload
+    // POST /events/batch
     typedApp.post(
-      '/batch/upload',
+      '/batch',
       {
         schema: {
-          body: batchUploadRequestSchema,
-          response: { 201: batchUploadResponseSchema },
+          body: batchCreateEventRequestSchema,
+          response: { 201: batchCreateEventResponseSchema },
         },
       },
       async (request, reply) => {
-        const { batchId, events } = request.body;
-        const { correlationIds, totalInserted, errors } =
-          await mockCreateBatchUpload(batchId, events);
+        const { events, batchId } = request.body;
+        const { executionIds, correlationIds, errors } =
+          await mockCreateEvents(events, batchId);
 
         return reply.status(201).send({
           success: errors.length === 0,
-          batchId,
           totalReceived: events.length,
-          totalInserted,
+          totalInserted: executionIds.length,
+          executionIds,
           correlationIds,
+          ...(batchId ? { batchId } : {}),
           errors: errors.length > 0 ? errors : undefined,
         });
       }
@@ -161,9 +162,9 @@ describe('Batch Routes', () => {
   });
 
   beforeEach(() => {
-    mockCreateBatchUpload = async () => ({
+    mockCreateEvents = async () => ({
+      executionIds: [],
       correlationIds: [],
-      totalInserted: 0,
       errors: [],
     });
     mockGetByBatch = async () => ({
@@ -185,11 +186,11 @@ describe('Batch Routes', () => {
     });
   });
 
-  describe('POST /v1/events/batch/upload', () => {
-    it('should upload batch successfully', async () => {
-      mockCreateBatchUpload = async () => ({
+  describe('POST /v1/events/batch', () => {
+    it('should create batch successfully without batchId', async () => {
+      mockCreateEvents = async () => ({
+        executionIds: ['exec-1', 'exec-2'],
         correlationIds: ['corr-1', 'corr-2'],
-        totalInserted: 2,
         errors: [],
       });
 
@@ -200,10 +201,38 @@ describe('Batch Routes', () => {
 
       const response = await app.inject({
         method: 'POST',
-        url: '/v1/events/batch/upload',
+        url: '/v1/events/batch',
+        payload: { events },
+      });
+
+      expect(response.statusCode).toBe(201);
+      const body = response.json();
+      expect(body.success).toBe(true);
+      expect(body.totalReceived).toBe(2);
+      expect(body.totalInserted).toBe(2);
+      expect(body.correlationIds).toEqual(['corr-1', 'corr-2']);
+      expect(body.batchId).toBeUndefined();
+      expect(body.errors).toBeUndefined();
+    });
+
+    it('should accept batch with optional batchId and return it in response', async () => {
+      mockCreateEvents = async () => ({
+        executionIds: ['exec-1', 'exec-2'],
+        correlationIds: ['corr-1', 'corr-2'],
+        errors: [],
+      });
+
+      const events = [
+        createEventFixture({ correlationId: 'corr-1' }),
+        createEventFixture({ correlationId: 'corr-2' }),
+      ];
+
+      const response = await app.inject({
+        method: 'POST',
+        url: '/v1/events/batch',
         payload: {
-          batchId: 'batch-123',
           events,
+          batchId: 'batch-123',
         },
       });
 
@@ -214,13 +243,12 @@ describe('Batch Routes', () => {
       expect(body.totalReceived).toBe(2);
       expect(body.totalInserted).toBe(2);
       expect(body.correlationIds).toHaveLength(2);
-      expect(body.errors).toBeUndefined();
     });
 
     it('should report partial failures', async () => {
-      mockCreateBatchUpload = async () => ({
+      mockCreateEvents = async () => ({
+        executionIds: ['exec-1'],
         correlationIds: ['corr-1'],
-        totalInserted: 1,
         errors: [{ index: 1, error: 'Duplicate key' }],
       });
 
@@ -231,11 +259,8 @@ describe('Batch Routes', () => {
 
       const response = await app.inject({
         method: 'POST',
-        url: '/v1/events/batch/upload',
-        payload: {
-          batchId: 'batch-123',
-          events,
-        },
+        url: '/v1/events/batch',
+        payload: { events },
       });
 
       expect(response.statusCode).toBe(201);
@@ -246,24 +271,11 @@ describe('Batch Routes', () => {
       expect(body.errors[0].index).toBe(1);
     });
 
-    it('should require batchId', async () => {
-      const response = await app.inject({
-        method: 'POST',
-        url: '/v1/events/batch/upload',
-        payload: {
-          events: [createEventFixture()],
-        },
-      });
-
-      expect(response.statusCode).toBe(400);
-    });
-
     it('should require at least one event', async () => {
       const response = await app.inject({
         method: 'POST',
-        url: '/v1/events/batch/upload',
+        url: '/v1/events/batch',
         payload: {
-          batchId: 'batch-123',
           events: [],
         },
       });
@@ -271,16 +283,25 @@ describe('Batch Routes', () => {
       expect(response.statusCode).toBe(400);
     });
 
+    it('should require events array', async () => {
+      const response = await app.inject({
+        method: 'POST',
+        url: '/v1/events/batch',
+        payload: {},
+      });
+
+      expect(response.statusCode).toBe(400);
+    });
+
     it('should handle service errors gracefully', async () => {
-      mockCreateBatchUpload = async () => {
+      mockCreateEvents = async () => {
         throw new Error('Database error');
       };
 
       const response = await app.inject({
         method: 'POST',
-        url: '/v1/events/batch/upload',
+        url: '/v1/events/batch',
         payload: {
-          batchId: 'batch-123',
           events: [createEventFixture()],
         },
       });

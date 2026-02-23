@@ -2,10 +2,6 @@ import type { EventLog } from '../db/schema/index';
 import type { EventStatus } from './enums';
 
 // POST /api/v1/events
-export interface CreateEventRequest {
-  events: EventLogEntry | EventLogEntry[];
-}
-
 export interface CreateEventResponse {
   success: boolean;
   executionIds: string[];
@@ -15,6 +11,7 @@ export interface CreateEventResponse {
 // POST /api/v1/events/batch
 export interface BatchCreateEventRequest {
   events: EventLogEntry[];
+  batchId?: string;
 }
 
 export interface BatchCreateEventResponse {
@@ -22,6 +19,8 @@ export interface BatchCreateEventResponse {
   totalReceived: number;
   totalInserted: number;
   executionIds: string[];
+  correlationIds: string[];
+  batchId?: string;
   errors?: Array<{ index: number; error: string }>;
 }
 
@@ -205,21 +204,6 @@ export interface EventLogEntry {
   requestPayload?: string;
   responsePayload?: string;
   idempotencyKey?: string;
-}
-
-// POST /api/v1/events/batch/upload
-export interface BatchUploadRequest {
-  batchId: string;
-  events: EventLogEntry[];
-}
-
-export interface BatchUploadResponse {
-  success: boolean;
-  batchId: string;
-  totalReceived: number;
-  totalInserted: number;
-  correlationIds: string[];
-  errors?: Array<{ index: number; error: string }>;
 }
 
 // GET /api/v1/events/batch/:batchId

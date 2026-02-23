@@ -7,8 +7,8 @@ export function createEventFixture(overrides: Partial<EventLogEntry> = {}): Even
   return {
     correlationId: 'test-correlation-id',
     accountId: 'test-account-id',
-    traceId: 'test-trace-id',
-    spanId: 'test-span-id',
+    traceId: 'a1b2c3d4e5f6a7b8a1b2c3d4e5f6a7b8',
+    spanId: 'a1b2c3d4e5f6a7b8',
     applicationId: 'test-app',
     targetSystem: 'test-target',
     originatingSystem: 'test-origin',
@@ -35,7 +35,7 @@ export function createEventBatchFixture(count: number, baseOverrides: Partial<Ev
     createEventFixture({
       ...baseOverrides,
       correlationId: `${baseOverrides.correlationId ?? 'batch-correlation'}-${i}`,
-      spanId: `span-${i}`,
+      spanId: `a1b2c3d4e5f600${i.toString(16).padStart(2, '0')}`,
       stepSequence: i + 1,
     })
   );
@@ -52,8 +52,8 @@ export function createEventLogDbRecord(overrides: Partial<Record<string, unknown
     executionId: 'test-execution-id',
     correlationId: 'test-correlation-id',
     accountId: 'test-account-id',
-    traceId: 'test-trace-id',
-    spanId: 'test-span-id',
+    traceId: 'a1b2c3d4e5f6a7b8a1b2c3d4e5f6a7b8',
+    spanId: 'a1b2c3d4e5f6a7b8',
     parentSpanId: null,
     spanLinks: null,
     batchId: null,

@@ -114,11 +114,16 @@ class EventLogClientTest {
         assertEquals("POST", request.getMethod());
         assertTrue(request.getUri().toString().endsWith("/v1/events"));
         assertNotNull(request.getBody());
+        // Verify flat body (no "events" wrapper)
+        assertFalse(request.getBody().contains("\"events\""),
+                "Body should be a flat event, not wrapped in {\"events\": ...}");
+        assertTrue(request.getBody().contains("\"correlationId\""),
+                "Body should contain event fields directly");
     }
 
     @Test
     void createEventsPostsBatchResponse() {
-        String responseBody = "{\"success\":true,\"totalReceived\":2,\"totalInserted\":2,\"executionIds\":[\"e1\",\"e2\"],\"errors\":[]}";
+        String responseBody = "{\"success\":true,\"totalReceived\":2,\"totalInserted\":2,\"executionIds\":[\"e1\",\"e2\"],\"correlationIds\":[\"corr\"],\"errors\":[]}";
         SequencedTransport transport = new SequencedTransport(
                 new EventLogResponse(200, responseBody)
         );
@@ -134,6 +139,8 @@ class EventLogClientTest {
         assertEquals(2, response.getTotalReceived());
         assertEquals(2, response.getTotalInserted());
         assertEquals(2, response.getExecutionIds().size());
+        assertEquals(List.of("corr"), response.getCorrelationIds());
+        assertNull(response.getBatchId());
 
         EventLogRequest request = transport.getRequests().get(0);
         assertTrue(request.getUri().toString().endsWith("/v1/events/batch"));

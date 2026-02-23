@@ -12,10 +12,10 @@ const MAX_SEARCH_WINDOW_MS = MAX_SEARCH_WINDOW_DAYS * 24 * 60 * 60 * 1000; // 30
 export const eventLogEntrySchema = z.object({
   correlationId: z.string().min(1).max(200),
   accountId: z.string().max(64).nullish(),
-  traceId: z.string().min(1).max(200),
-  spanId: z.string().max(64).optional(),
-  parentSpanId: z.string().max(64).optional(),
-  spanLinks: z.array(z.string().min(1).max(64)).optional(),
+  traceId: z.string().regex(/^[0-9a-f]{32}$/, 'Must be 32 lowercase hex characters (W3C Trace Context)'),
+  spanId: z.string().regex(/^[0-9a-f]{16}$/, 'Must be 16 lowercase hex characters').optional(),
+  parentSpanId: z.string().regex(/^[0-9a-f]{16}$/, 'Must be 16 lowercase hex characters').optional(),
+  spanLinks: z.array(z.string().regex(/^[0-9a-f]{16}$/)).optional(),
   batchId: z.string().max(200).optional(),
   applicationId: z.string().min(1).max(200),
   targetSystem: z.string().min(1).max(200),
@@ -41,12 +41,9 @@ export const eventLogEntrySchema = z.object({
   idempotencyKey: z.string().max(128).optional(),
 });
 
-export const createEventRequestSchema = z.object({
-  events: z.union([eventLogEntrySchema, z.array(eventLogEntrySchema).min(1)]),
-});
-
 export const batchCreateEventRequestSchema = z.object({
   events: z.array(eventLogEntrySchema).min(1),
+  batchId: z.string().min(1).max(200).optional(),
 });
 
 export const getEventsByAccountQuerySchema = paginationQuerySchema
@@ -188,27 +185,13 @@ export const createEventResponseSchema = z.object({
   correlationId: z.string(),
 });
 
-export const createEventArrayResponseSchema = z.object({
-  success: z.boolean(),
-  totalReceived: z.number().int(),
-  totalInserted: z.number().int(),
-  executionIds: z.array(z.string()),
-  correlationIds: z.array(z.string()),
-  errors: z
-    .array(z.object({ index: z.number().int(), error: z.string() }))
-    .optional(),
-});
-
-export const createEventUnionResponseSchema = z.union([
-  createEventResponseSchema,
-  createEventArrayResponseSchema,
-]);
-
 export const batchCreateEventResponseSchema = z.object({
   success: z.boolean(),
   totalReceived: z.number().int(),
   totalInserted: z.number().int(),
   executionIds: z.array(z.string()),
+  correlationIds: z.array(z.string()),
+  batchId: z.string().optional(),
   errors: z
     .array(
       z.object({
@@ -294,27 +277,6 @@ export const lookupEventsResponseSchema = z.object({
 });
 
 // ---- Batch Operations Schemas ----
-
-export const batchUploadRequestSchema = z.object({
-  batchId: z.string().min(1).max(200),
-  events: z.array(eventLogEntrySchema).min(1),
-});
-
-export const batchUploadResponseSchema = z.object({
-  success: z.boolean(),
-  batchId: z.string(),
-  totalReceived: z.number().int(),
-  totalInserted: z.number().int(),
-  correlationIds: z.array(z.string()),
-  errors: z
-    .array(
-      z.object({
-        index: z.number().int(),
-        error: z.string(),
-      }),
-    )
-    .optional(),
-});
 
 export const getEventsByBatchQuerySchema = paginationQuerySchema.extend({
   eventStatus: z.enum(EVENT_STATUSES).optional(),

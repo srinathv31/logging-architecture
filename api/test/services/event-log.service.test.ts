@@ -177,7 +177,6 @@ import {
   listTraces,
   getDashboardStats,
   searchText,
-  createBatchUpload,
   getByBatch,
   getBatchSummary,
   deleteAll,
@@ -350,7 +349,7 @@ describe('EventLogService - Test Fixtures', () => {
       const fixture = createEventFixture();
 
       expect(fixture.correlationId).toBe('test-correlation-id');
-      expect(fixture.traceId).toBe('test-trace-id');
+      expect(fixture.traceId).toBe('a1b2c3d4e5f6a7b8a1b2c3d4e5f6a7b8');
       expect(fixture.applicationId).toBe('test-app');
       expect(fixture.eventType).toBe('PROCESS_START');
       expect(fixture.eventStatus).toBe('SUCCESS');
@@ -364,7 +363,7 @@ describe('EventLogService - Test Fixtures', () => {
 
       expect(fixture.correlationId).toBe('custom-id');
       expect(fixture.eventStatus).toBe('FAILURE');
-      expect(fixture.traceId).toBe('test-trace-id');
+      expect(fixture.traceId).toBe('a1b2c3d4e5f6a7b8a1b2c3d4e5f6a7b8');
     });
 
     it('should have required fields', () => {
@@ -1469,135 +1468,6 @@ describe('searchText', () => {
 
     expect(result.totalCount).toBe(9);
     expect(result.events).toHaveLength(0);
-  });
-});
-
-describe('createBatchUpload', () => {
-  beforeEach(() => {
-    mockDb._reset();
-  });
-
-  it('should associate batchId with entries', async () => {
-    const entries = [createEventFixture({ correlationId: 'corr-1' })];
-
-    mockDb.transaction.mockImplementation(async (callback: (tx: typeof mockDb) => Promise<void>) => {
-      const txMock = {
-        select: vi.fn().mockReturnValue({
-          from: vi.fn().mockReturnValue({
-            where: vi.fn().mockResolvedValue([]),
-          }),
-        }),
-        insert: vi.fn().mockReturnValue({
-          values: vi.fn().mockResolvedValue(undefined),
-        }),
-      };
-      return callback(txMock as unknown as typeof mockDb);
-    });
-
-    const result = await createBatchUpload('batch-123', entries);
-
-    expect(result.correlationIds).toContain('corr-1');
-  });
-
-  it('should handle idempotency deduplication', async () => {
-    const entries = [
-      createEventFixture({ idempotencyKey: 'existing-key', correlationId: 'corr-1' }),
-    ];
-
-    mockDb.transaction.mockImplementation(async (callback: (tx: typeof mockDb) => Promise<void>) => {
-      const txMock = {
-        select: vi.fn().mockReturnValue({
-          from: vi.fn().mockReturnValue({
-            where: vi.fn().mockResolvedValue([{ idempotencyKey: 'existing-key' }]),
-          }),
-        }),
-        insert: vi.fn(),
-      };
-      return callback(txMock as unknown as typeof mockDb);
-    });
-
-    const result = await createBatchUpload('batch-123', entries);
-
-    expect(result.correlationIds).toContain('corr-1');
-    expect(result.totalInserted).toBe(1);
-  });
-
-  it('should return unique correlationIds', async () => {
-    const entries = [
-      createEventFixture({ correlationId: 'corr-1' }),
-      createEventFixture({ correlationId: 'corr-1' }),
-      createEventFixture({ correlationId: 'corr-2' }),
-    ];
-
-    mockDb.transaction.mockImplementation(async (callback: (tx: typeof mockDb) => Promise<void>) => {
-      const txMock = {
-        select: vi.fn().mockReturnValue({
-          from: vi.fn().mockReturnValue({
-            where: vi.fn().mockResolvedValue([]),
-          }),
-        }),
-        insert: vi.fn().mockReturnValue({
-          values: vi.fn().mockResolvedValue(undefined),
-        }),
-      };
-      return callback(txMock as unknown as typeof mockDb);
-    });
-
-    const result = await createBatchUpload('batch-123', entries);
-
-    expect(result.correlationIds).toHaveLength(2);
-    expect(result.correlationIds).toContain('corr-1');
-    expect(result.correlationIds).toContain('corr-2');
-  });
-
-  it('should track inserted count', async () => {
-    const entries = [
-      createEventFixture({ correlationId: 'corr-1' }),
-      createEventFixture({ correlationId: 'corr-2' }),
-    ];
-
-    mockDb.transaction.mockImplementation(async (callback: (tx: typeof mockDb) => Promise<void>) => {
-      const txMock = {
-        select: vi.fn().mockReturnValue({
-          from: vi.fn().mockReturnValue({
-            where: vi.fn().mockResolvedValue([]),
-          }),
-        }),
-        insert: vi.fn().mockReturnValue({
-          values: vi.fn().mockResolvedValue(undefined),
-        }),
-      };
-      return callback(txMock as unknown as typeof mockDb);
-    });
-
-    const result = await createBatchUpload('batch-123', entries);
-
-    expect(result.totalInserted).toBe(2);
-  });
-
-  it('should handle partial failures with errors array', async () => {
-    const entries = [createEventFixture({ correlationId: 'corr-1' })];
-
-    mockDb.transaction.mockImplementation(async (callback: (tx: typeof mockDb) => Promise<void>) => {
-      const txMock = {
-        select: vi.fn().mockReturnValue({
-          from: vi.fn().mockReturnValue({
-            where: vi.fn().mockResolvedValue([]),
-          }),
-        }),
-        insert: vi.fn().mockImplementation(() => ({
-          values: vi.fn().mockImplementation(() => {
-            throw new Error('Insert failed');
-          }),
-        })),
-      };
-      return callback(txMock as unknown as typeof mockDb);
-    });
-
-    const result = await createBatchUpload('batch-123', entries);
-
-    expect(result.errors).toHaveLength(1);
-    expect(result.errors[0].error).toContain('Insert failed');
   });
 });
 

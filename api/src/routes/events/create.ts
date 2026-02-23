@@ -1,73 +1,32 @@
 import type { FastifyInstance } from 'fastify';
 import type { ZodTypeProvider } from 'fastify-type-provider-zod';
 import {
-  createEventRequestSchema,
-  batchCreateEventRequestSchema,
-  createEventUnionResponseSchema,
-  batchCreateEventResponseSchema,
+  eventLogEntrySchema,
+  createEventResponseSchema,
 } from '../../schemas/events';
 import * as eventLogService from '../../services/event-log.service';
 
 export async function createEventRoutes(app: FastifyInstance) {
   const typedApp = app.withTypeProvider<ZodTypeProvider>();
 
-  // POST /events — single or array insert
+  // POST /events — single event insert (flat body)
   typedApp.post(
     '/',
     {
       schema: {
         tags: ['Events'],
-        description: 'Create one or more event log entries',
-        body: createEventRequestSchema,
-        response: { 201: createEventUnionResponseSchema },
+        description: 'Create a single event log entry',
+        body: eventLogEntrySchema,
+        response: { 201: createEventResponseSchema },
       },
     },
     async (request, reply) => {
-      const { events } = request.body;
-
-      if (Array.isArray(events)) {
-        const { executionIds, errors } = await eventLogService.createEvents(events);
-        const correlationIds = [...new Set(events.map((e) => e.correlationId))];
-        return reply.status(201).send({
-          success: errors.length === 0,
-          totalReceived: events.length,
-          totalInserted: executionIds.length,
-          executionIds,
-          correlationIds,
-          errors: errors.length > 0 ? errors : undefined,
-        });
-      }
-
-      const result = await eventLogService.createEvent(events);
+      const event = request.body;
+      const result = await eventLogService.createEvent(event);
       return reply.status(201).send({
         success: true,
         executionIds: [result.executionId],
-        correlationId: events.correlationId,
-      });
-    },
-  );
-
-  // POST /events/batch — batch insert with per-item errors
-  typedApp.post(
-    '/batch',
-    {
-      schema: {
-        tags: ['Events'],
-        description: 'Batch create event log entries with per-item error reporting',
-        body: batchCreateEventRequestSchema,
-        response: { 201: batchCreateEventResponseSchema },
-      },
-    },
-    async (request, reply) => {
-      const { events } = request.body;
-      const { executionIds, errors } = await eventLogService.createEvents(events);
-
-      return reply.status(201).send({
-        success: errors.length === 0,
-        totalReceived: events.length,
-        totalInserted: executionIds.length,
-        executionIds,
-        errors: errors.length > 0 ? errors : undefined,
+        correlationId: event.correlationId,
       });
     },
   );

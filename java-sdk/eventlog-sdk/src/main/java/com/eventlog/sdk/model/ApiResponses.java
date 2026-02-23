@@ -47,6 +47,12 @@ public class ApiResponses {
         @JsonProperty("executionIds")
         private List<String> executionIds;
 
+        @JsonProperty("correlationIds")
+        private List<String> correlationIds;
+
+        @JsonProperty("batchId")
+        private String batchId;
+
         @JsonProperty("errors")
         private List<BatchError> errors;
 
@@ -54,6 +60,8 @@ public class ApiResponses {
         public int getTotalReceived() { return totalReceived; }
         public int getTotalInserted() { return totalInserted; }
         public List<String> getExecutionIds() { return executionIds; }
+        public List<String> getCorrelationIds() { return correlationIds; }
+        public String getBatchId() { return batchId; }
         public List<BatchError> getErrors() { return errors; }
     }
 

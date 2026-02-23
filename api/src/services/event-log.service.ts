@@ -110,7 +110,7 @@ export async function createEvent(entry: EventLogEntry) {
   return result;
 }
 
-export async function createEvents(entries: EventLogEntry[]) {
+export async function createEvents(entries: EventLogEntry[], batchId?: string) {
   const db = await getDb();
   const executionIds: (string | null)[] = new Array(entries.length).fill(null);
   const errors: Array<{ index: number; error: string }> = [];
@@ -167,7 +167,10 @@ export async function createEvents(entries: EventLogEntry[]) {
         const results = await tx
           .insert(eventLogs)
           .output({ executionId: eventLogs.executionId })
-          .values(chunk.map((c) => entryToInsert(c.entry)));
+          .values(chunk.map((c) => ({
+            ...entryToInsert(c.entry),
+            ...(batchId ? { batchId } : {}),
+          })));
 
         results.forEach((row, i) => {
           executionIds[chunk[i].index] = row.executionId;
@@ -179,7 +182,10 @@ export async function createEvents(entries: EventLogEntry[]) {
             const [result] = await tx
               .insert(eventLogs)
               .output({ executionId: eventLogs.executionId })
-              .values(entryToInsert(item.entry));
+              .values({
+                ...entryToInsert(item.entry),
+                ...(batchId ? { batchId } : {}),
+              });
             executionIds[item.index] = result.executionId;
           } catch (err) {
             errors.push({
@@ -197,7 +203,11 @@ export async function createEvents(entries: EventLogEntry[]) {
     (id): id is string => id !== null,
   );
 
-  return { executionIds: finalExecutionIds, errors };
+  const correlationIds = [...new Set(
+    entries.filter((_, i) => executionIds[i] !== null).map(e => e.correlationId)
+  )];
+
+  return { executionIds: finalExecutionIds, correlationIds, errors };
 }
 
 export async function getByAccount(
@@ -630,106 +640,6 @@ export async function searchText(filters: {
     .fetch(filters.pageSize);
 
   return { events, totalCount };
-}
-
-export async function createBatchUpload(
-  batchId: string,
-  entries: EventLogEntry[],
-) {
-  const db = await getDb();
-  const correlationIds: (string | null)[] = new Array(entries.length).fill(
-    null,
-  );
-  const errors: Array<{ index: number; error: string }> = [];
-  let totalInserted = 0;
-
-  await db.transaction(async (tx) => {
-    // Collect all idempotency keys and their indices
-    const idempotencyMap = new Map<string, number[]>();
-    entries.forEach((entry, index) => {
-      if (entry.idempotencyKey) {
-        const indices = idempotencyMap.get(entry.idempotencyKey) || [];
-        indices.push(index);
-        idempotencyMap.set(entry.idempotencyKey, indices);
-      }
-    });
-
-    // Batch check existing idempotency keys
-    const existingKeys = new Set<string>();
-    if (idempotencyMap.size > 0) {
-      const idempotencyKeys = Array.from(idempotencyMap.keys());
-      const keyChunks = chunkArray(idempotencyKeys, BATCH_CHUNK_SIZE);
-
-      for (const keyChunk of keyChunks) {
-        const existing = await tx
-          .select({ idempotencyKey: eventLogs.idempotencyKey })
-          .from(eventLogs)
-          .where(inArray(eventLogs.idempotencyKey, keyChunk));
-
-        for (const row of existing) {
-          if (row.idempotencyKey) {
-            existingKeys.add(row.idempotencyKey);
-          }
-        }
-      }
-    }
-
-    // Partition entries into existing (skip) vs to-insert
-    const toInsert: Array<{ index: number; entry: EventLogEntry }> = [];
-    for (let i = 0; i < entries.length; i++) {
-      const entry = entries[i];
-      if (entry.idempotencyKey && existingKeys.has(entry.idempotencyKey)) {
-        // Already exists - count as inserted and record correlation_id
-        correlationIds[i] = entry.correlationId;
-        totalInserted++;
-      } else {
-        toInsert.push({ index: i, entry });
-      }
-    }
-
-    // Bulk insert in chunks with per-chunk error fallback
-    const chunks = chunkArray(toInsert, BATCH_CHUNK_SIZE);
-    for (const chunk of chunks) {
-      try {
-        await tx.insert(eventLogs).values(
-          chunk.map((c) => ({
-            ...entryToInsert(c.entry),
-            batchId,
-          })),
-        );
-
-        // Mark all as successful
-        for (const item of chunk) {
-          correlationIds[item.index] = item.entry.correlationId;
-          totalInserted++;
-        }
-      } catch {
-        // Chunk failed - fall back to individual inserts to identify which rows failed
-        for (const item of chunk) {
-          try {
-            await tx.insert(eventLogs).values({
-              ...entryToInsert(item.entry),
-              batchId,
-            });
-            correlationIds[item.index] = item.entry.correlationId;
-            totalInserted++;
-          } catch (err) {
-            errors.push({
-              index: item.index,
-              error: err instanceof Error ? err.message : "Unknown error",
-            });
-          }
-        }
-      }
-    }
-  });
-
-  // Filter out nulls and deduplicate correlation IDs
-  const uniqueCorrelationIds = [
-    ...new Set(correlationIds.filter((id): id is string => id !== null)),
-  ];
-
-  return { correlationIds: uniqueCorrelationIds, totalInserted, errors };
 }
 
 export async function getByBatch(

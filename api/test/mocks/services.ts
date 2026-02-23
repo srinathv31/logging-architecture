@@ -8,7 +8,7 @@ import { createAccountSummaryDbRecord } from '../fixtures/account-summary';
 // Event Log Service Mocks
 export const mockEventLogService = {
   createEvent: vi.fn().mockResolvedValue(createEventLogDbRecord()),
-  createEvents: vi.fn().mockResolvedValue({ executionIds: ['exec-1'], errors: [] }),
+  createEvents: vi.fn().mockResolvedValue({ executionIds: ['exec-1'], correlationIds: ['corr-1'], errors: [] }),
   getByAccount: vi.fn().mockResolvedValue({
     events: [createEventLogDbRecord()],
     totalCount: 1,
@@ -27,11 +27,6 @@ export const mockEventLogService = {
   searchText: vi.fn().mockResolvedValue({
     events: [createEventLogDbRecord()],
     totalCount: 1,
-  }),
-  createBatchUpload: vi.fn().mockResolvedValue({
-    correlationIds: ['corr-1'],
-    totalInserted: 1,
-    errors: [],
   }),
   getByBatch: vi.fn().mockResolvedValue({
     events: [createEventLogDbRecord()],

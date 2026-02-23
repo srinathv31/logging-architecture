@@ -129,14 +129,14 @@ public class EventLogClient implements AutoCloseable {
      * @throws EventLogException on API or network errors
      */
     public CreateEventResponse createEvent(EventLogEntry event) {
-        return post("/v1/events", Map.of("events", event), CreateEventResponse.class);
+        return post("/v1/events", event, CreateEventResponse.class);
     }
 
     /**
      * Create a single event (asynchronous)
      */
     public CompletableFuture<CreateEventResponse> createEventAsync(EventLogEntry event) {
-        return postAsync("/v1/events", Map.of("events", event), CreateEventResponse.class);
+        return postAsync("/v1/events", event, CreateEventResponse.class);
     }
 
     /**

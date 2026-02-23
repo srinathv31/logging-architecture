@@ -116,9 +116,9 @@ Primary event storage table.
 | `execution_id` | UUID | Auto | NEWID() | Unique execution identifier |
 | `correlation_id` | NVARCHAR(200) | **Yes** | — | Process-level anchor ID (ties events across identity boundary) |
 | `account_id` | NVARCHAR(64) | No | NULL | Account identifier (NULL until known, e.g., during origination) |
-| `trace_id` | NVARCHAR(200) | **Yes** | — | W3C distributed trace ID (request-scoped) |
-| `span_id` | NVARCHAR(64) | No | NULL | Span ID within trace |
-| `parent_span_id` | NVARCHAR(64) | No | NULL | Parent span for hierarchy |
+| `trace_id` | NVARCHAR(200) | **Yes** | — | W3C distributed trace ID — must be 32 lowercase hex chars (request-scoped) |
+| `span_id` | NVARCHAR(64) | No | NULL | Span ID within trace — must be 16 lowercase hex chars |
+| `parent_span_id` | NVARCHAR(64) | No | NULL | Parent span for hierarchy — must be 16 lowercase hex chars |
 | `span_links` | NVARCHAR(MAX) | No | NULL | **v1.4:** JSON array of span IDs this span waited for (fork-join) |
 | `batch_id` | NVARCHAR(200) | No | NULL | **v1.4:** Groups events from a single batch operation |
 | `application_id` | NVARCHAR(200) | **Yes** | — | Source application identifier |
@@ -567,9 +567,9 @@ export interface EventLogEntry {
   // Core identifiers
   correlation_id: string;
   account_id?: string | null;
-  trace_id: string;
-  span_id?: string;
-  parent_span_id?: string;
+  trace_id: string;        // 32 lowercase hex chars (W3C Trace Context)
+  span_id?: string;        // 16 lowercase hex chars
+  parent_span_id?: string; // 16 lowercase hex chars
 
   /**
    * JSON array of span IDs that this span waited for (fork-join pattern).
@@ -704,33 +704,17 @@ export interface AccountTimelineSummary {
 // API Request/Response Types
 // ----------------------------------------------------------------------------
 
-// POST /v1/events (single event)
-export interface CreateEventRequest {
-  events: EventLogEntry | EventLogEntry[];
-}
-
+// POST /v1/events — flat EventLogEntry body (no wrapper)
 export interface CreateEventResponse {
   success: boolean;
   execution_ids: string[];
   correlation_id: string;
 }
 
-// POST /v1/events (array of events — routes through batch service)
-export interface CreateEventArrayResponse {
-  success: boolean;
-  total_received: number;
-  total_inserted: number;
-  execution_ids: string[];
-  correlation_ids: string[];
-  errors?: Array<{
-    index: number;
-    error: string;
-  }>;
-}
-
-// POST /v1/events/batch
+// POST /v1/events/batch — optional batch_id, merges old /batch/upload
 export interface BatchCreateEventRequest {
   events: EventLogEntry[];
+  batch_id?: string;  // optional — stamps all events with this batch_id
 }
 
 export interface BatchCreateEventResponse {
@@ -738,24 +722,8 @@ export interface BatchCreateEventResponse {
   total_received: number;
   total_inserted: number;
   execution_ids: string[];
-  errors?: Array<{
-    index: number;
-    error: string;
-  }>;
-}
-
-// POST /v1/events/batch/upload
-export interface BatchUploadRequest {
-  batch_id: string;
-  events: EventLogEntry[];
-}
-
-export interface BatchUploadResponse {
-  success: boolean;
-  batch_id: string;
-  total_received: number;
-  total_inserted: number;
   correlation_ids: string[];
+  batch_id?: string;  // echoed back if provided
   errors?: Array<{
     index: number;
     error: string;
@@ -1569,9 +1537,8 @@ ORDER BY e.event_timestamp;
 | GET | `/v1/healthcheck` | Liveness probe — pre-computed static response (no DB call) |
 | GET | `/v1/healthcheck/ready` | Readiness probe (executes `SELECT 1`, 3s timeout) |
 | GET | `/v1/version` | API version — pre-computed from `package.json` at startup |
-| POST | `/v1/events` | Insert event(s) — single or array with per-item errors |
-| POST | `/v1/events/batch` | Batch insert events with per-item error reporting |
-| POST | `/v1/events/batch/upload` | Upload batch with shared batch_id |
+| POST | `/v1/events` | Insert a single event (flat `EventLogEntry` body) |
+| POST | `/v1/events/batch` | Batch insert events with optional `batchId` and per-item error reporting |
 | GET | `/v1/events/batch/{batch_id}` | Paginated events for a batch with aggregate stats |
 | GET | `/v1/events/batch/{batch_id}/summary` | Aggregate batch statistics |
 | GET | `/v1/events/account/{account_id}` | Paginated timeline for account |
@@ -1631,3 +1598,4 @@ For active release numbering and rollout notes, use `CHANGELOG.md`.
 | 1.3 | — | Added required `summary` field for AI/human readable narratives, full-text search support |
 | 1.4 | — | Added `batch_id` for batch operations, `span_links` for fork-join parallel dependencies (OpenTelemetry compliant), new batch API endpoints |
 | 1.5 | Feb 2026 | Added `POST /v1/events/lookup` endpoint, pagination on correlation/trace endpoints, search guardrails, `COUNT(*) OVER()` single-query pagination, `GET /v1/healthcheck/ready`, `GET /v1/version`, health routes moved under `/v1`, array mode through batch service |
+| 1.6 | Feb 2026 | Simplified `POST /v1/events` to flat `EventLogEntry` body (no wrapper). Merged `POST /v1/events/batch/upload` into `POST /v1/events/batch` with optional `batchId`. Enforced W3C hex format: `traceId` must be 32 lowercase hex, `spanId`/`parentSpanId` must be 16 lowercase hex. |

@@ -2,8 +2,8 @@ import type { FastifyInstance } from 'fastify';
 import type { ZodTypeProvider } from 'fastify-type-provider-zod';
 import { z } from 'zod';
 import {
-  batchUploadRequestSchema,
-  batchUploadResponseSchema,
+  batchCreateEventRequestSchema,
+  batchCreateEventResponseSchema,
   getEventsByBatchQuerySchema,
   getEventsByBatchResponseSchema,
   batchSummaryResponseSchema,
@@ -13,28 +13,29 @@ import * as eventLogService from '../../services/event-log.service';
 export async function batchRoutes(app: FastifyInstance) {
   const typedApp = app.withTypeProvider<ZodTypeProvider>();
 
-  // POST /events/batch/upload — batch upload with shared batchId
+  // POST /events/batch — batch insert with optional batchId
   typedApp.post(
-    '/batch/upload',
+    '/batch',
     {
       schema: {
         tags: ['Batch Operations'],
-        description: 'Upload a batch of event log entries with a shared batchId',
-        body: batchUploadRequestSchema,
-        response: { 201: batchUploadResponseSchema },
+        description: 'Batch create event log entries with optional batchId and per-item error reporting',
+        body: batchCreateEventRequestSchema,
+        response: { 201: batchCreateEventResponseSchema },
       },
     },
     async (request, reply) => {
-      const { batchId, events } = request.body;
-      const { correlationIds, totalInserted, errors } =
-        await eventLogService.createBatchUpload(batchId, events);
+      const { events, batchId } = request.body;
+      const { executionIds, correlationIds, errors } =
+        await eventLogService.createEvents(events, batchId);
 
       return reply.status(201).send({
         success: errors.length === 0,
-        batchId,
         totalReceived: events.length,
-        totalInserted,
+        totalInserted: executionIds.length,
+        executionIds,
         correlationIds,
+        ...(batchId ? { batchId } : {}),
         errors: errors.length > 0 ? errors : undefined,
       });
     },
