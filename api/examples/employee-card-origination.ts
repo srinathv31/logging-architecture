@@ -13,10 +13,10 @@
  *   - Database migrated
  *
  * Environment:
- *   BASE_URL — override the default http://localhost:3000/v1
+ *   BASE_URL — override the default http://localhost:8080/v1
  */
 
-const BASE_URL = process.env.BASE_URL ?? "http://localhost:8000/v1";
+const BASE_URL = process.env.BASE_URL ?? "http://localhost:8080/v1";
 
 // ---------------------------------------------------------------------------
 // Helper
@@ -707,7 +707,7 @@ async function main() {
   }
 
   console.log("\n" + "=".repeat(70));
-  console.log("  Done! Check Swagger UI at http://localhost:3000/docs");
+  console.log("  Done! Check Swagger UI at http://localhost:8080/docs");
   console.log("=".repeat(70));
 }
 

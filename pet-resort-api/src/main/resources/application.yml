@@ -3,11 +3,11 @@ spring:
     name: pet-resort-api
 
 server:
-  port: 8080
+  port: 8081
 
 eventlog:
   enabled: true
-  base-url: http://localhost:3001
+  base-url: http://localhost:8080
   application-id: pet-resort-api
   target-system: PET_RESORT
   originating-system: PET_RESORT
