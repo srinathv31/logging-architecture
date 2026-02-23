@@ -7,7 +7,7 @@ server:
 
 eventlog:
   enabled: true
-  base-url: http://localhost:8080
+  base-url: http://localhost:3000
   application-id: pet-resort-api
   target-system: PET_RESORT
   originating-system: PET_RESORT
@@ -21,6 +21,15 @@ eventlog:
     enabled: true
   mdc-filter:
     url-patterns: "/api/*"
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,metrics
+  endpoint:
+    health:
+      show-details: always
 
 logging:
   level:
