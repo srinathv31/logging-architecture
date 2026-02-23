@@ -6,6 +6,7 @@ import { makeTraceEvent, makeTraceDetail } from '../util/fixtures';
 
 vi.mock('@/lib/span-tree', () => ({
   hasParallelExecution: vi.fn().mockReturnValue(false),
+  buildStepFlow: vi.fn().mockReturnValue([]),
 }));
 
 import { JourneyNarrative } from '@/components/trace-detail/journey-narrative';
@@ -21,7 +22,7 @@ describe('JourneyNarrative', () => {
       events: [
         makeTraceEvent({ targetSystem: 'Gateway' }),
         makeTraceEvent({ targetSystem: 'PaymentService' }),
-        makeTraceEvent({ targetSystem: 'Gateway' }),
+        makeTraceEvent({ targetSystem: 'Gateway', eventType: 'PROCESS_END', eventStatus: 'SUCCESS' }),
       ],
     });
 

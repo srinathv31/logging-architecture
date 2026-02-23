@@ -5,15 +5,28 @@ import { render } from '@testing-library/react';
 import { makeTraceEvent } from '../util/fixtures';
 
 vi.mock('@/lib/span-tree', () => ({
-  buildSystemFlow: vi.fn().mockReturnValue([]),
+  buildStepFlow: vi.fn().mockReturnValue([]),
 }));
 
 import { SystemsFlow } from '@/components/trace-detail/systems-flow';
-import { buildSystemFlow } from '@/lib/span-tree';
+import { buildStepFlow } from '@/lib/span-tree';
+
+function makeStep(overrides: Partial<{ stepName: string | null; stepSequence: number | null; eventType: string; eventStatus: string; processName: string; targetSystem: string; executionTimeMs: number | null }> = {}) {
+  return {
+    stepName: 'init',
+    stepSequence: 1,
+    eventType: 'API_CALL',
+    eventStatus: 'SUCCESS',
+    processName: 'test-process',
+    targetSystem: 'Gateway',
+    executionTimeMs: 100,
+    ...overrides,
+  };
+}
 
 describe('SystemsFlow', () => {
   it('returns null when flow is empty', () => {
-    (buildSystemFlow as any).mockReturnValue([]);
+    (buildStepFlow as any).mockReturnValue([]);
 
     const events = [makeTraceEvent({ targetSystem: 'A' })];
     const { container } = render(<SystemsFlow events={events} />);
@@ -22,8 +35,8 @@ describe('SystemsFlow', () => {
   });
 
   it('renders system journey header', () => {
-    (buildSystemFlow as any).mockReturnValue([
-      { systems: ['Gateway'], isParallel: false },
+    (buildStepFlow as any).mockReturnValue([
+      { type: 'sequential', steps: [makeStep({ targetSystem: 'Gateway' })] },
     ]);
 
     const events = [
@@ -34,9 +47,9 @@ describe('SystemsFlow', () => {
     expect(container.textContent).toContain('System Journey');
   });
 
-  it('renders single system node', () => {
-    (buildSystemFlow as any).mockReturnValue([
-      { systems: ['Gateway'], isParallel: false },
+  it('renders single step node', () => {
+    (buildStepFlow as any).mockReturnValue([
+      { type: 'sequential', steps: [makeStep({ targetSystem: 'Gateway', stepName: 'init' })] },
     ]);
 
     const events = [
@@ -45,26 +58,28 @@ describe('SystemsFlow', () => {
     const { container } = render(<SystemsFlow events={events} />);
 
     expect(container.textContent).toContain('Gateway');
-    expect(container.textContent).toContain('1 event');
+    expect(container.textContent).toContain('init');
   });
 
-  it('renders multiple events as plural', () => {
-    (buildSystemFlow as any).mockReturnValue([
-      { systems: ['Gateway'], isParallel: false },
+  it('renders multiple sequential steps', () => {
+    (buildStepFlow as any).mockReturnValue([
+      { type: 'sequential', steps: [makeStep({ targetSystem: 'Gateway', stepName: 'receive' })] },
+      { type: 'sequential', steps: [makeStep({ targetSystem: 'Service', stepName: 'process' })] },
     ]);
 
     const events = [
       makeTraceEvent({ targetSystem: 'Gateway', eventStatus: 'SUCCESS', executionTimeMs: 50 }),
-      makeTraceEvent({ targetSystem: 'Gateway', eventStatus: 'SUCCESS', executionTimeMs: 50 }),
+      makeTraceEvent({ targetSystem: 'Service', eventStatus: 'SUCCESS', executionTimeMs: 50 }),
     ];
     const { container } = render(<SystemsFlow events={events} />);
 
-    expect(container.textContent).toContain('2 events');
+    expect(container.textContent).toContain('Gateway');
+    expect(container.textContent).toContain('Service');
   });
 
-  it('renders execution time for system', () => {
-    (buildSystemFlow as any).mockReturnValue([
-      { systems: ['Gateway'], isParallel: false },
+  it('renders execution time for step', () => {
+    (buildStepFlow as any).mockReturnValue([
+      { type: 'sequential', steps: [makeStep({ targetSystem: 'Gateway', executionTimeMs: 500 })] },
     ]);
 
     const events = [
@@ -75,9 +90,15 @@ describe('SystemsFlow', () => {
     expect(container.textContent).toContain('500ms');
   });
 
-  it('renders parallel systems in column layout', () => {
-    (buildSystemFlow as any).mockReturnValue([
-      { systems: ['ServiceA', 'ServiceB'], isParallel: true },
+  it('renders parallel steps in column layout', () => {
+    (buildStepFlow as any).mockReturnValue([
+      {
+        type: 'parallel',
+        steps: [
+          makeStep({ targetSystem: 'ServiceA', stepName: 'callA', eventStatus: 'SUCCESS' }),
+          makeStep({ targetSystem: 'ServiceB', stepName: 'callB', eventStatus: 'FAILURE' }),
+        ],
+      },
     ]);
 
     const events = [
@@ -90,9 +111,9 @@ describe('SystemsFlow', () => {
     expect(container.textContent).toContain('ServiceB');
   });
 
-  it('handles failure status on a system', () => {
-    (buildSystemFlow as any).mockReturnValue([
-      { systems: ['FailedService'], isParallel: false },
+  it('handles failure status on a step', () => {
+    (buildStepFlow as any).mockReturnValue([
+      { type: 'sequential', steps: [makeStep({ targetSystem: 'FailedService', eventStatus: 'FAILURE' })] },
     ]);
 
     const events = [
@@ -103,9 +124,9 @@ describe('SystemsFlow', () => {
     expect(container.textContent).toContain('FailedService');
   });
 
-  it('handles in-progress status on a system', () => {
-    (buildSystemFlow as any).mockReturnValue([
-      { systems: ['SlowService'], isParallel: false },
+  it('handles in-progress status on a step', () => {
+    (buildStepFlow as any).mockReturnValue([
+      { type: 'sequential', steps: [makeStep({ targetSystem: 'SlowService', eventStatus: 'IN_PROGRESS' })] },
     ]);
 
     const events = [
@@ -117,8 +138,8 @@ describe('SystemsFlow', () => {
   });
 
   it('renders seconds for time >= 1000ms', () => {
-    (buildSystemFlow as any).mockReturnValue([
-      { systems: ['Gateway'], isParallel: false },
+    (buildStepFlow as any).mockReturnValue([
+      { type: 'sequential', steps: [makeStep({ targetSystem: 'Gateway', executionTimeMs: 2500 })] },
     ]);
 
     const events = [
@@ -130,9 +151,9 @@ describe('SystemsFlow', () => {
   });
 
   it('renders sequential flow with arrows', () => {
-    (buildSystemFlow as any).mockReturnValue([
-      { systems: ['A'], isParallel: false },
-      { systems: ['B'], isParallel: false },
+    (buildStepFlow as any).mockReturnValue([
+      { type: 'sequential', steps: [makeStep({ targetSystem: 'A', stepName: 'stepA' })] },
+      { type: 'sequential', steps: [makeStep({ targetSystem: 'B', stepName: 'stepB' })] },
     ]);
 
     const events = [

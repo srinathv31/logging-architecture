@@ -30,6 +30,13 @@ vi.mock('nuqs', () => ({
   parseAsString: { withDefault: () => ({}) },
 }));
 
+vi.mock('@/lib/span-tree', () => ({
+  detectAttempts: vi.fn().mockReturnValue(null),
+  hasParallelExecution: vi.fn().mockReturnValue(false),
+  buildStepFlow: vi.fn().mockReturnValue([]),
+  buildSpanTree: vi.fn().mockReturnValue([]),
+}));
+
 import TraceDetailPage from '@/app/trace/[traceId]/page';
 
 describe('TraceDetailPage', () => {

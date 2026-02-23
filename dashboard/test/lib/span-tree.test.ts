@@ -57,9 +57,9 @@ describe('buildSpanTree', () => {
 
   it('groups parallel siblings sharing the same parentSpanId and stepSequence', () => {
     const events = [
-      makeEvent({ eventLogId: 1, targetSystem: 'SystemA', parentSpanId: 'span-1', stepSequence: 1 }),
-      makeEvent({ eventLogId: 2, targetSystem: 'SystemB', parentSpanId: 'span-1', stepSequence: 1 }),
-      makeEvent({ eventLogId: 3, targetSystem: 'SystemC', parentSpanId: 'span-1', stepSequence: 1 }),
+      makeEvent({ eventLogId: 1, targetSystem: 'SystemA', parentSpanId: 'span-1', stepSequence: 1, spanId: 'child-1', stepName: 'StepA' }),
+      makeEvent({ eventLogId: 2, targetSystem: 'SystemB', parentSpanId: 'span-1', stepSequence: 1, spanId: 'child-2', stepName: 'StepB' }),
+      makeEvent({ eventLogId: 3, targetSystem: 'SystemC', parentSpanId: 'span-1', stepSequence: 1, spanId: 'child-3', stepName: 'StepC' }),
     ];
 
     const timeline = buildSpanTree(events);
@@ -72,8 +72,8 @@ describe('buildSpanTree', () => {
   it('handles mixed sequential and parallel events', () => {
     const events = [
       makeEvent({ eventLogId: 1, targetSystem: 'SystemA', stepSequence: 1 }),
-      makeEvent({ eventLogId: 2, targetSystem: 'SystemB', parentSpanId: 'span-1', stepSequence: 2 }),
-      makeEvent({ eventLogId: 3, targetSystem: 'SystemC', parentSpanId: 'span-1', stepSequence: 2 }),
+      makeEvent({ eventLogId: 2, targetSystem: 'SystemB', parentSpanId: 'span-1', stepSequence: 2, spanId: 'child-1', stepName: 'StepB' }),
+      makeEvent({ eventLogId: 3, targetSystem: 'SystemC', parentSpanId: 'span-1', stepSequence: 2, spanId: 'child-2', stepName: 'StepC' }),
       makeEvent({ eventLogId: 4, targetSystem: 'SystemD', stepSequence: 3 }),
     ];
 
@@ -129,8 +129,8 @@ describe('hasParallelExecution', () => {
 
   it('returns true when parallel groups exist', () => {
     const events = [
-      makeEvent({ eventLogId: 1, targetSystem: 'SystemA', parentSpanId: 'span-1', stepSequence: 1 }),
-      makeEvent({ eventLogId: 2, targetSystem: 'SystemB', parentSpanId: 'span-1', stepSequence: 1 }),
+      makeEvent({ eventLogId: 1, targetSystem: 'SystemA', parentSpanId: 'span-1', stepSequence: 1, spanId: 'child-1', stepName: 'StepA' }),
+      makeEvent({ eventLogId: 2, targetSystem: 'SystemB', parentSpanId: 'span-1', stepSequence: 1, spanId: 'child-2', stepName: 'StepB' }),
     ];
 
     expect(hasParallelExecution(events)).toBe(true);
@@ -159,8 +159,8 @@ describe('buildSystemFlow', () => {
 
   it('groups parallel systems together', () => {
     const events = [
-      makeEvent({ eventLogId: 1, targetSystem: 'SystemA', parentSpanId: 'span-1', stepSequence: 1 }),
-      makeEvent({ eventLogId: 2, targetSystem: 'SystemB', parentSpanId: 'span-1', stepSequence: 1 }),
+      makeEvent({ eventLogId: 1, targetSystem: 'SystemA', parentSpanId: 'span-1', stepSequence: 1, spanId: 'child-1', stepName: 'StepA' }),
+      makeEvent({ eventLogId: 2, targetSystem: 'SystemB', parentSpanId: 'span-1', stepSequence: 1, spanId: 'child-2', stepName: 'StepB' }),
     ];
 
     const flow = buildSystemFlow(events);
@@ -188,8 +188,8 @@ describe('buildSystemFlow', () => {
   it('deduplicates systems across parallel groups', () => {
     const events = [
       makeEvent({ eventLogId: 1, targetSystem: 'SystemA', stepSequence: 1 }),
-      makeEvent({ eventLogId: 2, targetSystem: 'SystemA', parentSpanId: 'span-1', stepSequence: 2 }),
-      makeEvent({ eventLogId: 3, targetSystem: 'SystemB', parentSpanId: 'span-1', stepSequence: 2 }),
+      makeEvent({ eventLogId: 2, targetSystem: 'SystemA', parentSpanId: 'span-1', stepSequence: 2, spanId: 'child-1', stepName: 'StepA' }),
+      makeEvent({ eventLogId: 3, targetSystem: 'SystemB', parentSpanId: 'span-1', stepSequence: 2, spanId: 'child-2', stepName: 'StepB' }),
     ];
 
     const flow = buildSystemFlow(events);
@@ -203,8 +203,8 @@ describe('buildSystemFlow', () => {
   it('handles mixed sequential and parallel with deduplication', () => {
     const events = [
       makeEvent({ eventLogId: 1, targetSystem: 'Gateway', stepSequence: 1 }),
-      makeEvent({ eventLogId: 2, targetSystem: 'ServiceA', parentSpanId: 'span-1', stepSequence: 2 }),
-      makeEvent({ eventLogId: 3, targetSystem: 'ServiceB', parentSpanId: 'span-1', stepSequence: 2 }),
+      makeEvent({ eventLogId: 2, targetSystem: 'ServiceA', parentSpanId: 'span-1', stepSequence: 2, spanId: 'child-1', stepName: 'StepA' }),
+      makeEvent({ eventLogId: 3, targetSystem: 'ServiceB', parentSpanId: 'span-1', stepSequence: 2, spanId: 'child-2', stepName: 'StepB' }),
       makeEvent({ eventLogId: 4, targetSystem: 'Database', stepSequence: 3 }),
     ];
 

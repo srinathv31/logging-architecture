@@ -6,7 +6,7 @@ import { makeTraceEvent } from '../util/fixtures';
 
 vi.mock('@/lib/span-tree', () => ({
   buildSpanTree: vi.fn().mockReturnValue([]),
-  buildSystemFlow: vi.fn().mockReturnValue([]),
+  buildStepFlow: vi.fn().mockReturnValue([]),
 }));
 
 vi.mock('next/link', () => ({
