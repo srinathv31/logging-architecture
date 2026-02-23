@@ -30,7 +30,10 @@ Release history is maintained in `CHANGELOG.md`.
 
 ---
 
-## Changelog from v1.4
+## Historical Evolution Notes (Pre-1.0.0 Reset)
+
+These notes capture milestones before versioning was reset to `1.0.0`.
+Current release/version tracking is maintained in `CHANGELOG.md`.
 
 - **Added `POST /v1/events/lookup` endpoint** — Fast structured event lookup by account/process with optional date and status filters. Designed for dashboard and agent workflows.
 
@@ -44,9 +47,9 @@ Release history is maintained in `CHANGELOG.md`.
 
 - **Moved health endpoints under `/v1`** — `GET /v1/healthcheck`, `GET /v1/healthcheck/ready`, and new `GET /v1/version`. Liveness and version responses are pre-computed at startup.
 
-- **Bumped OpenAPI version to 1.5.0** and added `Lookup` tag.
+- **Historical milestone:** OpenAPI spec was moved to 1.5.0 during the pre-reset cycle and added `Lookup` tag.
 
-## Changelog from v1.3 → v1.4
+## Earlier Historical Notes (Pre-1.0.0 Reset)
 
 - **Added `batch_id` field** (NVARCHAR(200), optional) - Groups multiple independent process instances triggered by a single batch operation (e.g., CSV upload). Each row in a batch gets its own `correlation_id` and `trace_id`, but shares a `batch_id`.
 
@@ -1617,7 +1620,9 @@ The receiving service:
 
 ---
 
-## Version History
+## Historical Version History (Pre-1.0.0 Reset)
+
+For active release numbering and rollout notes, use `CHANGELOG.md`.
 
 | Version | Date | Changes |
 |---------|------|---------|
