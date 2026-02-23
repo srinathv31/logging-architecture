@@ -279,14 +279,14 @@ class EventLogEntryTest {
         String json = mapper.writeValueAsString(original);
 
         // Verify NON_NULL behavior - null fields should not appear
-        assertFalse(json.contains("\"account_id\""), "null accountId should be excluded");
-        assertFalse(json.contains("\"error_code\""), "null errorCode should be excluded");
+        assertFalse(json.contains("\"accountId\""), "null accountId should be excluded");
+        assertFalse(json.contains("\"errorCode\""), "null errorCode should be excluded");
 
         // Verify JSON property names
-        assertTrue(json.contains("\"correlation_id\""));
-        assertTrue(json.contains("\"trace_id\""));
-        assertTrue(json.contains("\"event_type\""));
-        assertTrue(json.contains("\"event_status\""));
+        assertTrue(json.contains("\"correlationId\""));
+        assertTrue(json.contains("\"traceId\""));
+        assertTrue(json.contains("\"eventType\""));
+        assertTrue(json.contains("\"eventStatus\""));
 
         // Round-trip
         EventLogEntry deserialized = mapper.readValue(json, EventLogEntry.class);

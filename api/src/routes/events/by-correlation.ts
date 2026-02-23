@@ -21,19 +21,19 @@ export async function byCorrelationRoutes(app: FastifyInstance) {
     },
     async (request, reply) => {
       const { correlationId } = request.params;
-      const { page, page_size } = request.query;
+      const { page, pageSize } = request.query;
       const { events, accountId, isLinked, totalCount, hasMore } =
-        await eventLogService.getByCorrelation(correlationId, { page, pageSize: page_size });
+        await eventLogService.getByCorrelation(correlationId, { page, pageSize });
 
       return reply.send({
-        correlation_id: correlationId,
-        account_id: accountId,
+        correlationId,
+        accountId,
         events,
-        is_linked: isLinked,
-        total_count: totalCount,
+        isLinked,
+        totalCount,
         page,
-        page_size,
-        has_more: hasMore,
+        pageSize,
+        hasMore,
       });
     },
   );

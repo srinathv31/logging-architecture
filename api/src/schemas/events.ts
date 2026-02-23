@@ -1,37 +1,44 @@
-import { z } from 'zod';
-import { EVENT_TYPES, EVENT_STATUSES, HTTP_METHODS } from '../types/enums';
-import { paginationQuerySchema, dateRangeQuerySchema, dateField } from './common';
+import { z } from "zod";
+import { EVENT_TYPES, EVENT_STATUSES, HTTP_METHODS } from "../types/enums";
+import {
+  paginationQuerySchema,
+  dateRangeQuerySchema,
+  dateField,
+} from "./common";
+
+const MAX_SEARCH_WINDOW_DAYS = 30;
+const MAX_SEARCH_WINDOW_MS = MAX_SEARCH_WINDOW_DAYS * 24 * 60 * 60 * 1000; // 30 days in milliseconds
 
 export const eventLogEntrySchema = z.object({
-  correlation_id: z.string().min(1).max(200),
-  account_id: z.string().max(64).nullish(),
-  trace_id: z.string().min(1).max(200),
-  span_id: z.string().max(64).optional(),
-  parent_span_id: z.string().max(64).optional(),
-  span_links: z.array(z.string().min(1).max(64)).optional(),
-  batch_id: z.string().max(200).optional(),
-  application_id: z.string().min(1).max(200),
-  target_system: z.string().min(1).max(200),
-  originating_system: z.string().min(1).max(200),
-  process_name: z.string().min(1).max(510),
-  step_sequence: z.number().int().min(0).optional(),
-  step_name: z.string().max(510).optional(),
-  event_type: z.enum(EVENT_TYPES),
-  event_status: z.enum(EVENT_STATUSES),
+  correlationId: z.string().min(1).max(200),
+  accountId: z.string().max(64).nullish(),
+  traceId: z.string().min(1).max(200),
+  spanId: z.string().max(64).optional(),
+  parentSpanId: z.string().max(64).optional(),
+  spanLinks: z.array(z.string().min(1).max(64)).optional(),
+  batchId: z.string().max(200).optional(),
+  applicationId: z.string().min(1).max(200),
+  targetSystem: z.string().min(1).max(200),
+  originatingSystem: z.string().min(1).max(200),
+  processName: z.string().min(1).max(510),
+  stepSequence: z.number().int().min(0).optional(),
+  stepName: z.string().max(510).optional(),
+  eventType: z.enum(EVENT_TYPES),
+  eventStatus: z.enum(EVENT_STATUSES),
   identifiers: z.record(z.unknown()),
   summary: z.string().min(1),
   result: z.string().min(1).max(2048),
   metadata: z.record(z.unknown()).optional(),
-  event_timestamp: z.string().datetime({ offset: true }),
-  execution_time_ms: z.number().int().min(0).optional(),
+  eventTimestamp: z.string().datetime({ offset: true }),
+  executionTimeMs: z.number().int().min(0).optional(),
   endpoint: z.string().max(510).optional(),
-  http_method: z.enum(HTTP_METHODS).optional(),
-  http_status_code: z.number().int().min(100).max(599).optional(),
-  error_code: z.string().max(100).optional(),
-  error_message: z.string().max(2048).optional(),
-  request_payload: z.string().optional(),
-  response_payload: z.string().optional(),
-  idempotency_key: z.string().max(128).optional(),
+  httpMethod: z.enum(HTTP_METHODS).optional(),
+  httpStatusCode: z.number().int().min(100).max(599).optional(),
+  errorCode: z.string().max(100).optional(),
+  errorMessage: z.string().max(2048).optional(),
+  requestPayload: z.string().optional(),
+  responsePayload: z.string().optional(),
+  idempotencyKey: z.string().max(128).optional(),
 });
 
 export const createEventRequestSchema = z.object({
@@ -45,21 +52,97 @@ export const batchCreateEventRequestSchema = z.object({
 export const getEventsByAccountQuerySchema = paginationQuerySchema
   .merge(dateRangeQuerySchema)
   .extend({
-    process_name: z.string().optional(),
-    event_status: z.enum(EVENT_STATUSES).optional(),
-    include_linked: z
-      .union([z.boolean(), z.string().transform((v) => v === 'true')])
+    processName: z.string().optional(),
+    eventStatus: z.enum(EVENT_STATUSES).optional(),
+    includeLinked: z
+      .union([z.boolean(), z.string().transform((v) => v === "true")])
       .default(false),
   });
+
+const searchPaginationSchema = z.object({
+  page: z.coerce.number().int().positive().default(1),
+  pageSize: z.coerce.number().int().min(1).max(50).default(20),
+});
+
+function validateDateWindow(
+  value: { startDate?: string; endDate?: string },
+  ctx: z.RefinementCtx,
+) {
+  const hasStartDate = typeof value.startDate === "string";
+  const hasEndDate = typeof value.endDate === "string";
+
+  if (hasStartDate !== hasEndDate) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ["startDate"],
+      message: "startDate and endDate must both be provided",
+    });
+    return;
+  }
+
+  if (!hasStartDate || !hasEndDate) {
+    return;
+  }
+
+  const startTime = Date.parse(value.startDate!);
+  const endTime = Date.parse(value.endDate!);
+  if (endTime < startTime) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ["endDate"],
+      message: "endDate must be greater than or equal to startDate",
+    });
+    return;
+  }
+
+  if (endTime - startTime > MAX_SEARCH_WINDOW_MS) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ["endDate"],
+      message: `date window cannot exceed ${MAX_SEARCH_WINDOW_DAYS} days`,
+    });
+  }
+}
 
 export const textSearchRequestSchema = z
   .object({
     query: z.string().min(1),
-    account_id: z.string().max(64).optional(),
-    process_name: z.string().max(510).optional(),
+    accountId: z.string().max(64).optional(),
+    processName: z.string().max(510).optional(),
   })
   .merge(dateRangeQuerySchema)
-  .merge(paginationQuerySchema);
+  .merge(searchPaginationSchema)
+  .superRefine((value, ctx) => {
+    if (!value.accountId && !value.processName) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["accountId"],
+        message: "accountId or processName is required",
+      });
+    }
+
+    validateDateWindow(value, ctx);
+  });
+
+export const lookupEventsRequestSchema = z
+  .object({
+    accountId: z.string().max(64).optional(),
+    processName: z.string().max(510).optional(),
+    eventStatus: z.enum(EVENT_STATUSES).optional(),
+  })
+  .merge(dateRangeQuerySchema)
+  .merge(paginationQuerySchema)
+  .superRefine((value, ctx) => {
+    if (!value.accountId && !value.processName) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["accountId"],
+        message: "accountId or processName is required",
+      });
+    }
+
+    validateDateWindow(value, ctx);
+  });
 
 // ---- Response Schemas ----
 
@@ -101,17 +184,19 @@ export const eventLogResponseSchema = z.object({
 
 export const createEventResponseSchema = z.object({
   success: z.boolean(),
-  execution_ids: z.array(z.string()),
-  correlation_id: z.string(),
+  executionIds: z.array(z.string()),
+  correlationId: z.string(),
 });
 
 export const createEventArrayResponseSchema = z.object({
   success: z.boolean(),
-  total_received: z.number().int(),
-  total_inserted: z.number().int(),
-  execution_ids: z.array(z.string()),
-  correlation_ids: z.array(z.string()),
-  errors: z.array(z.object({ index: z.number().int(), error: z.string() })).optional(),
+  totalReceived: z.number().int(),
+  totalInserted: z.number().int(),
+  executionIds: z.array(z.string()),
+  correlationIds: z.array(z.string()),
+  errors: z
+    .array(z.object({ index: z.number().int(), error: z.string() }))
+    .optional(),
 });
 
 export const createEventUnionResponseSchema = z.union([
@@ -121,9 +206,9 @@ export const createEventUnionResponseSchema = z.union([
 
 export const batchCreateEventResponseSchema = z.object({
   success: z.boolean(),
-  total_received: z.number().int(),
-  total_inserted: z.number().int(),
-  execution_ids: z.array(z.string()),
+  totalReceived: z.number().int(),
+  totalInserted: z.number().int(),
+  executionIds: z.array(z.string()),
   errors: z
     .array(
       z.object({
@@ -135,74 +220,92 @@ export const batchCreateEventResponseSchema = z.object({
 });
 
 export const getEventsByAccountResponseSchema = z.object({
-  account_id: z.string(),
+  accountId: z.string(),
   events: z.array(eventLogResponseSchema),
-  total_count: z.number().int(),
+  totalCount: z.number().int(),
   page: z.number().int(),
-  page_size: z.number().int(),
-  has_more: z.boolean(),
+  pageSize: z.number().int(),
+  hasMore: z.boolean(),
 });
 
 export const getEventsByTraceResponseSchema = z.object({
-  trace_id: z.string(),
+  traceId: z.string(),
   events: z.array(eventLogResponseSchema),
-  systems_involved: z.array(z.string()),
-  total_duration_ms: z.number().nullable(),
-  total_count: z.number().int(),
+  systemsInvolved: z.array(z.string()),
+  totalDurationMs: z.number().nullable(),
+  totalCount: z.number().int(),
   page: z.number().int(),
-  page_size: z.number().int(),
-  has_more: z.boolean(),
+  pageSize: z.number().int(),
+  hasMore: z.boolean(),
+  statusCounts: z.object({
+    success: z.number().int(),
+    failure: z.number().int(),
+    inProgress: z.number().int(),
+    skipped: z.number().int(),
+  }),
+  processName: z.string().nullable(),
+  accountId: z.string().nullable(),
+  startTime: z.string().nullable(),
+  endTime: z.string().nullable(),
 });
 
 export const getEventsByCorrelationResponseSchema = z.object({
-  correlation_id: z.string(),
-  account_id: z.string().nullable(),
+  correlationId: z.string(),
+  accountId: z.string().nullable(),
   events: z.array(eventLogResponseSchema),
-  is_linked: z.boolean(),
-  total_count: z.number().int(),
+  isLinked: z.boolean(),
+  totalCount: z.number().int(),
   page: z.number().int(),
-  page_size: z.number().int(),
-  has_more: z.boolean(),
+  pageSize: z.number().int(),
+  hasMore: z.boolean(),
 });
 
 export const accountSummaryResponseSchema = z.object({
   summary: z.object({
-    account_id: z.string(),
-    first_event_at: z.string(),
-    last_event_at: z.string(),
-    total_events: z.number().int(),
-    total_processes: z.number().int(),
-    error_count: z.number().int(),
-    last_process: z.string().nullable(),
-    systems_touched: z.array(z.string()).nullable(),
-    correlation_ids: z.array(z.string()).nullable(),
-    updated_at: z.string(),
+    accountId: z.string(),
+    firstEventAt: z.string(),
+    lastEventAt: z.string(),
+    totalEvents: z.number().int(),
+    totalProcesses: z.number().int(),
+    errorCount: z.number().int(),
+    lastProcess: z.string().nullable(),
+    systemsTouched: z.array(z.string()).nullable(),
+    correlationIds: z.array(z.string()).nullable(),
+    updatedAt: z.string(),
   }),
-  recent_events: z.array(eventLogResponseSchema),
-  recent_errors: z.array(eventLogResponseSchema),
+  recentEvents: z.array(eventLogResponseSchema),
+  recentErrors: z.array(eventLogResponseSchema),
 });
 
 export const textSearchResponseSchema = z.object({
   query: z.string(),
   events: z.array(eventLogResponseSchema),
-  total_count: z.number().int(),
+  totalCount: z.number().int(),
   page: z.number().int(),
-  page_size: z.number().int(),
+  pageSize: z.number().int(),
+});
+
+export const lookupEventsResponseSchema = z.object({
+  events: z.array(eventLogResponseSchema),
+  totalCount: z.number().int(),
+  page: z.number().int(),
+  pageSize: z.number().int(),
+  hasMore: z.boolean(),
 });
 
 // ---- Batch Operations Schemas ----
 
 export const batchUploadRequestSchema = z.object({
-  batch_id: z.string().min(1).max(200),
+  batchId: z.string().min(1).max(200),
   events: z.array(eventLogEntrySchema).min(1),
 });
 
 export const batchUploadResponseSchema = z.object({
   success: z.boolean(),
-  batch_id: z.string(),
-  total_received: z.number().int(),
-  total_inserted: z.number().int(),
-  correlation_ids: z.array(z.string()),
+  batchId: z.string(),
+  totalReceived: z.number().int(),
+  totalInserted: z.number().int(),
+  correlationIds: z.array(z.string()),
   errors: z
     .array(
       z.object({
@@ -214,28 +317,28 @@ export const batchUploadResponseSchema = z.object({
 });
 
 export const getEventsByBatchQuerySchema = paginationQuerySchema.extend({
-  event_status: z.enum(EVENT_STATUSES).optional(),
+  eventStatus: z.enum(EVENT_STATUSES).optional(),
 });
 
 export const getEventsByBatchResponseSchema = z.object({
-  batch_id: z.string(),
+  batchId: z.string(),
   events: z.array(eventLogResponseSchema),
-  total_count: z.number().int(),
-  unique_correlation_ids: z.number().int(),
-  success_count: z.number().int(),
-  failure_count: z.number().int(),
+  totalCount: z.number().int(),
+  uniqueCorrelationIds: z.number().int(),
+  successCount: z.number().int(),
+  failureCount: z.number().int(),
   page: z.number().int(),
-  page_size: z.number().int(),
-  has_more: z.boolean(),
+  pageSize: z.number().int(),
+  hasMore: z.boolean(),
 });
 
 export const batchSummaryResponseSchema = z.object({
-  batch_id: z.string(),
-  total_processes: z.number().int(),
+  batchId: z.string(),
+  totalProcesses: z.number().int(),
   completed: z.number().int(),
-  in_progress: z.number().int(),
+  inProgress: z.number().int(),
   failed: z.number().int(),
-  correlation_ids: z.array(z.string()),
-  started_at: z.string().nullable(),
-  last_event_at: z.string().nullable(),
+  correlationIds: z.array(z.string()),
+  startedAt: z.string().nullable(),
+  lastEventAt: z.string().nullable(),
 });

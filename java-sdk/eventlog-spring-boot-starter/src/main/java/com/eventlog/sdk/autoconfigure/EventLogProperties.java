@@ -38,6 +38,9 @@ public class EventLogProperties {
     @NestedConfigurationProperty
     private final MdcFilter mdcFilter;
 
+    @NestedConfigurationProperty
+    private final Metrics metrics;
+
     public EventLogProperties(
             Boolean enabled,
             String baseUrl,
@@ -50,7 +53,8 @@ public class EventLogProperties {
             String transport,
             OAuth oauth,
             Async async,
-            MdcFilter mdcFilter) {
+            MdcFilter mdcFilter,
+            Metrics metrics) {
         this.enabled = enabled != null && enabled;
         this.baseUrl = baseUrl;
         this.applicationId = applicationId;
@@ -63,6 +67,7 @@ public class EventLogProperties {
         this.oauth = oauth != null ? oauth : new OAuth(null, null, null, null, null, null, null);
         this.async = async != null ? async : new Async(null, null, null, null, null, null, null, null, null, null, null, null, null);
         this.mdcFilter = mdcFilter != null ? mdcFilter : new MdcFilter(null, null, null, null, null, null);
+        this.metrics = metrics != null ? metrics : new Metrics(null);
     }
 
     public boolean isEnabled() {
@@ -111,6 +116,10 @@ public class EventLogProperties {
 
     public MdcFilter getMdcFilter() {
         return mdcFilter;
+    }
+
+    public Metrics getMetrics() {
+        return metrics;
     }
 
     @AssertTrue(message = "eventlog.base-url is required when eventlog.enabled=true")
@@ -347,6 +356,18 @@ public class EventLogProperties {
 
         public String getSpanHeader() {
             return spanHeader;
+        }
+    }
+
+    public static class Metrics {
+        private final boolean enabled;
+
+        public Metrics(Boolean enabled) {
+            this.enabled = enabled == null || enabled;
+        }
+
+        public boolean isEnabled() {
+            return enabled;
         }
     }
 

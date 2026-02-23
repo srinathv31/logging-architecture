@@ -20,3 +20,6 @@ dist/
 nyc_output/
 test-results.xml
 coverage/
+
+# Benchmark results (regenerated locally)
+benchmarks/results/

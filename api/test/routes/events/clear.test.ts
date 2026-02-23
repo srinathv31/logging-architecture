@@ -1,14 +1,15 @@
-import type { FastifyInstance } from 'fastify';
-import Fastify from 'fastify';
-import cors from '@fastify/cors';
-import sensible from '@fastify/sensible';
+import type { FastifyInstance } from "fastify";
+import Fastify from "fastify";
+import cors from "@fastify/cors";
+import sensible from "@fastify/sensible";
 import {
   serializerCompiler,
   validatorCompiler,
   type ZodTypeProvider,
-} from 'fastify-type-provider-zod';
+} from "fastify-type-provider-zod";
+import { z } from "zod";
+import { describe, it, expect, beforeAll, afterAll, beforeEach } from "vitest";
 
-// Mock function for deleteAll
 let mockDeleteAll: () => Promise<void>;
 
 function buildTestApp() {
@@ -20,27 +21,35 @@ function buildTestApp() {
   app.register(cors, { origin: true });
   app.register(sensible);
 
-  app.register(async (fastify) => {
-    const typedApp = fastify.withTypeProvider<ZodTypeProvider>();
+  app.register(
+    async (fastify) => {
+      const typedApp = fastify.withTypeProvider<ZodTypeProvider>();
 
-    typedApp.delete(
-      '/',
-      {
-        schema: {
-          description: 'Clear all event log entries',
+      typedApp.post(
+        "/events/clear",
+        {
+          schema: {
+            tags: ["Debug"],
+            description:
+              "Temporary debug endpoint that hard-deletes data from all Event Log tables",
+            body: z.object({
+              confirm: z.literal(true),
+            }),
+          },
         },
-      },
-      async (_request, reply) => {
-        await mockDeleteAll();
-        return reply.status(204).send();
-      }
-    );
-  }, { prefix: '/v1/events' });
+        async (_request, reply) => {
+          await mockDeleteAll();
+          return reply.status(204).send();
+        },
+      );
+    },
+    { prefix: "/v1/debug" },
+  );
 
   return app;
 }
 
-describe('DELETE /v1/events', () => {
+describe("POST /v1/debug/events/clear", () => {
   let app: FastifyInstance;
 
   beforeAll(async () => {
@@ -56,58 +65,63 @@ describe('DELETE /v1/events', () => {
     mockDeleteAll = async () => {};
   });
 
-  it('should delete all events and return 204', async () => {
+  it("should not expose DELETE /v1/events", async () => {
+    const response = await app.inject({
+      method: "DELETE",
+      url: "/v1/events",
+    });
+
+    expect(response.statusCode).toBe(404);
+  });
+
+  it("should clear all data and return 204 when confirmed", async () => {
     let deleteAllCalled = false;
     mockDeleteAll = async () => {
       deleteAllCalled = true;
     };
 
     const response = await app.inject({
-      method: 'DELETE',
-      url: '/v1/events',
+      method: "POST",
+      url: "/v1/debug/events/clear",
+      payload: { confirm: true },
     });
 
     expect(response.statusCode).toBe(204);
-    expect(response.body).toBe('');
+    expect(response.body).toBe("");
     expect(deleteAllCalled).toBe(true);
   });
 
-  it('should return 204 even when no events exist', async () => {
-    mockDeleteAll = async () => {
-      // No-op, simulates deleting from empty table
-    };
-
+  it("should reject request without confirmation", async () => {
     const response = await app.inject({
-      method: 'DELETE',
-      url: '/v1/events',
+      method: "POST",
+      url: "/v1/debug/events/clear",
+      payload: {},
     });
 
-    expect(response.statusCode).toBe(204);
+    expect(response.statusCode).toBe(400);
   });
 
-  it('should handle service errors gracefully', async () => {
+  it("should reject request when confirm is false", async () => {
+    const response = await app.inject({
+      method: "POST",
+      url: "/v1/debug/events/clear",
+      payload: { confirm: false },
+    });
+
+    expect(response.statusCode).toBe(400);
+  });
+
+  it("should handle service errors gracefully", async () => {
     mockDeleteAll = async () => {
-      throw new Error('Database error');
+      throw new Error("Database error");
     };
 
     const response = await app.inject({
-      method: 'DELETE',
-      url: '/v1/events',
+      method: "POST",
+      url: "/v1/debug/events/clear",
+      payload: { confirm: true },
     });
 
     expect(response.statusCode).toBe(500);
-  });
-
-  it('should not accept request body', async () => {
-    mockDeleteAll = async () => {};
-
-    const response = await app.inject({
-      method: 'DELETE',
-      url: '/v1/events',
-      payload: { some: 'data' },
-    });
-
-    // Should still work, body is ignored
-    expect(response.statusCode).toBe(204);
   });
 });

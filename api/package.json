@@ -16,7 +16,12 @@
     "db:studio": "drizzle-kit studio --config=drizzle.mssql.config.ts",
     "test": "vitest run --coverage",
     "test:watch": "vitest",
-    "test:coverage": "vitest run --coverage"
+    "test:coverage": "vitest run --coverage",
+    "bench:seed": "tsx scripts/seed-benchmark.ts",
+    "bench:pagination": "tsx scripts/benchmark-pagination.ts --suite=core",
+    "bench:pagination-core": "tsx scripts/benchmark-pagination.ts --suite=core",
+    "bench:search": "tsx scripts/benchmark-pagination.ts --suite=search",
+    "bench:all": "pnpm run bench:seed && pnpm run bench:pagination-core && pnpm run bench:search"
   },
   "dependencies": {
     "@fastify/cors": "^10.0.0",

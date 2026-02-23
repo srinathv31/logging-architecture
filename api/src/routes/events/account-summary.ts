@@ -24,19 +24,19 @@ export async function accountSummaryRoutes(app: FastifyInstance) {
 
       return reply.send({
         summary: {
-          account_id: summary.accountId,
-          first_event_at: summary.firstEventAt.toISOString(),
-          last_event_at: summary.lastEventAt.toISOString(),
-          total_events: summary.totalEvents,
-          total_processes: summary.totalProcesses,
-          error_count: summary.errorCount,
-          last_process: summary.lastProcess,
-          systems_touched: summary.systemsTouched,
-          correlation_ids: summary.correlationIds,
-          updated_at: summary.updatedAt.toISOString(),
+          accountId: summary.accountId,
+          firstEventAt: summary.firstEventAt.toISOString(),
+          lastEventAt: summary.lastEventAt.toISOString(),
+          totalEvents: summary.totalEvents,
+          totalProcesses: summary.totalProcesses,
+          errorCount: summary.errorCount,
+          lastProcess: summary.lastProcess,
+          systemsTouched: summary.systemsTouched,
+          correlationIds: summary.correlationIds,
+          updatedAt: summary.updatedAt.toISOString(),
         },
-        recent_events: recentEvents,
-        recent_errors: recentErrors,
+        recentEvents,
+        recentErrors,
       });
     },
   );

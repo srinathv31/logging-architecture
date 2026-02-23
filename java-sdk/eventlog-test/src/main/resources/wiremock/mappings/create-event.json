@@ -10,8 +10,8 @@
     },
     "jsonBody": {
       "success": true,
-      "execution_ids": ["exec-1"],
-      "correlation_id": "corr-test"
+      "executionIds": ["exec-1"],
+      "correlationId": "corr-test"
     }
   }
 }

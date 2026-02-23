@@ -1,6 +1,8 @@
 # Event Log API — Database & Endpoint Technical Design
 
-## Version 1.0 | January 2025
+## Technical design reference for API v1
+
+Release history is maintained in `CHANGELOG.md`.
 
 ---
 
@@ -9,13 +11,16 @@
 1. [Overview](#overview)
 2. [Indexing Strategy](#indexing-strategy)
 3. [Endpoint Reference](#endpoint-reference)
+   - [Health](#health)
    - [Event Ingestion](#event-ingestion)
    - [Event Queries](#event-queries)
+   - [Lookup](#lookup)
    - [Search Operations](#search-operations)
    - [Batch Operations](#batch-operations)
    - [Correlation Links](#correlation-links)
    - [Process Definitions](#process-definitions)
-4. [Performance Summary](#performance-summary)
+4. [Pagination Strategy](#pagination-strategy)
+5. [Performance Summary](#performance-summary)
 
 ---
 
@@ -81,23 +86,76 @@ CREATE FULLTEXT INDEX ON [event_logs] ([summary])
 
 ## Endpoint Reference
 
+### Health
+
+#### GET /v1/healthcheck
+
+**Purpose**: Liveness probe for load balancers (F5/ALB).
+
+**Database Operations**: None
+
+**Complexity**: O(1)
+
+**Design Notes**:
+- No DB call — response `{ status: "ok" }` is pre-computed at startup (zero per-request allocation)
+- Use for liveness probes where you only need to know the process is running
+
+---
+
+#### GET /v1/healthcheck/ready
+
+**Purpose**: Readiness probe — verifies DB connectivity.
+
+**Database Operations**:
+- `SELECT 1` with a 3-second timeout via `Promise.race`
+
+**Complexity**: O(1)
+
+**Design Notes**:
+- Returns 200 `{ status: "ready", database: "connected" }` or 503 `{ status: "not_ready", database: "error" }`
+- Use for Kubernetes readiness probes and operations dashboards
+
+---
+
+#### GET /v1/version
+
+**Purpose**: Returns the API version from `package.json`.
+
+**Database Operations**: None
+
+**Complexity**: O(1)
+
+**Design Notes**:
+- Response `{ version: "1.0.0" }` is pre-computed at startup via `readFileSync` (zero per-request allocation)
+- Version reflects the deployed `package.json`, not a build-time constant
+
+---
+
 ### Event Ingestion
 
 #### POST /v1/events
 
 **Purpose**: Create one or more event log entries.
 
-**Database Operations**:
-1. If `idempotency_key` provided: `SELECT` to check existence
+**Database Operations (single event)**:
+1. If `idempotency_key` provided: `SELECT TOP 1` to check existence
 2. `INSERT` with `OUTPUT` clause to return `execution_id`
+
+**Database Operations (array of events)**:
+1. Collect all `idempotency_key` values from array
+2. Single `SELECT ... WHERE idempotency_key IN (...)` to find existing (chunked at 100)
+3. Bulk `INSERT` for new entries within a transaction (chunked at 100 rows)
+4. If chunk fails, fallback to individual inserts to identify bad rows
 
 **Indexes Used**:
 - `ix_event_logs_idempotency` (idempotency check)
 
-**Complexity**: O(1) per event
+**Complexity**: O(1) per single event; O(k + n/chunk) for arrays
 
 **Design Notes**:
-- Idempotency check before insert prevents duplicates from retry logic
+- Single event: idempotency check before insert prevents duplicates from retry logic
+- Array mode: routes through transactional batch service with per-item error reporting
+- Array response includes all unique `correlation_ids` and optional `errors[]` array
 - `OUTPUT` clause returns auto-generated fields without separate SELECT
 
 ---
@@ -135,9 +193,11 @@ Worst case: 1 SELECT + n INSERTs (all rows fail bulk insert)
 
 **Purpose**: Retrieve event timeline for an account with filtering and pagination.
 
+**Pagination**: `page` (default 1), `page_size` (default 20, max 100)
+
 **Database Operations**:
-1. `SELECT COUNT(*)` for total (with filters)
-2. `SELECT ... ORDER BY event_timestamp DESC OFFSET x FETCH y`
+1. Single query: `SELECT *, COUNT(*) OVER() as _totalCount` with filters, `OFFSET/FETCH`
+2. If page is beyond results (offset > 0, no rows returned), fallback `SELECT COUNT(*)` to return accurate total
 
 **Optional**: If `include_linked=true`, subquery joins `correlation_links` to include pre-account events.
 
@@ -150,8 +210,9 @@ Worst case: 1 SELECT + n INSERTs (all rows fail bulk insert)
 
 **Query Pattern**:
 ```sql
--- Without include_linked
-SELECT * FROM event_logs
+-- Single query with COUNT(*) OVER()
+SELECT *, CAST(COUNT(*) OVER() AS INT) as _totalCount
+FROM event_logs
 WHERE account_id = @accountId
   AND is_deleted = 0
   [AND process_name = @processName]
@@ -162,7 +223,8 @@ ORDER BY event_timestamp DESC
 OFFSET @offset ROWS FETCH NEXT @pageSize ROWS ONLY;
 
 -- With include_linked
-SELECT * FROM event_logs
+SELECT *, CAST(COUNT(*) OVER() AS INT) as _totalCount
+FROM event_logs
 WHERE (account_id = @accountId
        OR correlation_id IN (
          SELECT correlation_id FROM correlation_links
@@ -177,41 +239,47 @@ OFFSET @offset ROWS FETCH NEXT @pageSize ROWS ONLY;
 
 #### GET /v1/events/correlation/{correlationId}
 
-**Purpose**: Retrieve all events for a business process instance.
+**Purpose**: Retrieve paginated events for a business process instance.
+
+**Pagination**: `page` (default 1), `page_size` (default 200, max 500)
 
 **Database Operations**:
-1. `SELECT` from `event_logs` filtered by `correlation_id`
-2. `SELECT` from `correlation_links` to check if linked to account
+1. Single query: `SELECT *, COUNT(*) OVER() as _totalCount` filtered by `correlation_id`, ordered by `step_sequence, event_timestamp`, with `OFFSET/FETCH`
+2. `SELECT TOP 1` from `correlation_links` to check if linked to account
 
 **Indexes Used**:
 - `ix_event_logs_correlation_id`
 - `correlation_links` primary key
 
-**Complexity**: O(log n) + O(m) where m = events in process (typically 5-20)
+**Complexity**: O(log n) index seek + O(page_size) fetch + O(1) link check
 
 **Design Notes**:
 - Orders by `step_sequence, event_timestamp` to reconstruct process flow
 - Returns `is_linked` flag indicating if correlation has been mapped to account
+- Default page_size of 200 captures virtually all processes without pagination (typical process has 5-20 steps)
 
 ---
 
 #### GET /v1/events/trace/{traceId}
 
-**Purpose**: Retrieve all events sharing a distributed trace ID.
+**Purpose**: Retrieve paginated events sharing a distributed trace ID, with aggregate metadata.
+
+**Pagination**: `page` (default 1), `page_size` (default 200, max 500)
 
 **Database Operations**:
-1. `SELECT` from `event_logs` filtered by `trace_id`
-2. Compute `systems_involved` (distinct `target_system` values)
-3. Compute `total_duration_ms` (last timestamp - first timestamp)
+1. `SELECT DISTINCT target_system` for `systems_involved` (over full trace, not paginated)
+2. `SELECT MIN(event_timestamp), MAX(event_timestamp)` for `total_duration_ms` (over full trace)
+3. Paginated data: `SELECT *, COUNT(*) OVER() as _totalCount` with `OFFSET/FETCH`
 
 **Indexes Used**:
 - `ix_event_logs_trace_id`
 
-**Complexity**: O(log n) + O(m) where m = events in trace (typically 1-10)
+**Complexity**: O(log n) + O(m) for aggregates (m = events in trace, typically 1-10) + O(page_size) fetch
 
 **Design Notes**:
 - Trace IDs follow W3C format, propagated via `traceparent` header
-- Duration calculated in application layer from ordered results
+- `systems_involved` and `total_duration_ms` are computed over the full trace (not just the current page) via separate SQL aggregation queries
+- Duration calculated as `MAX(event_timestamp) - MIN(event_timestamp)` in milliseconds
 
 ---
 
@@ -237,14 +305,66 @@ OFFSET @offset ROWS FETCH NEXT @pageSize ROWS ONLY;
 
 ---
 
+### Lookup
+
+#### POST /v1/events/lookup
+
+**Purpose**: Fast structured event lookup by account/process with optional date and status filters. Designed for dashboard and agent workflows that need filtered, paginated event lists without full-text search overhead.
+
+**Pagination**: `page` (default 1), `page_size` (default 20, max 100)
+
+**Guardrails**:
+- At least one of `account_id` or `process_name` is required
+- `start_date` and `end_date` must both be provided or both omitted
+- Date window cannot exceed 30 days
+
+**Database Operations**:
+1. Single query: `SELECT *, COUNT(*) OVER() as _totalCount` with dynamic filter conditions and `OFFSET/FETCH`
+
+**Indexes Used**:
+- `ix_event_logs_account_id` (if `account_id` filter)
+- `ix_event_logs_process` (if `process_name` filter)
+- `ix_event_logs_status` (if `event_status` filter)
+
+**Complexity**: O(log n) index seek + O(page_size) fetch
+
+**Query Pattern**:
+```sql
+SELECT *, CAST(COUNT(*) OVER() AS INT) as _totalCount
+FROM event_logs
+WHERE is_deleted = 0
+  [AND account_id = @accountId]
+  [AND process_name = @processName]
+  [AND event_status = @eventStatus]
+  [AND event_timestamp >= @startDate]
+  [AND event_timestamp <= @endDate]
+ORDER BY event_timestamp DESC
+OFFSET @offset ROWS FETCH NEXT @pageSize ROWS ONLY;
+```
+
+**Design Notes**:
+- Same query pattern as `getByAccount` but without `include_linked` join or account_id requirement
+- Accepts any combination of account_id, process_name, event_status, and date range
+- Useful for dashboard grids that filter by process name across all accounts, or by account without the correlation_links join
+
+---
+
 ### Search Operations
 
 #### POST /v1/events/search/text
 
-**Purpose**: Full-text search across event summaries.
+**Purpose**: Constrained full-text search across event summaries.
+
+**Pagination**: `page` (default 1), `page_size` (default 20, max 50)
+
+**Guardrails**:
+- At least one of `account_id` or `process_name` is required
+- `start_date` and `end_date` must both be provided or both omitted
+- Date window cannot exceed 30 days
+- Page size capped at 50 (lower than other endpoints to bound full-text query cost)
 
 **Database Operations**:
-1. `SELECT COUNT(*)` with `CONTAINS()` predicate
+1. `SELECT COUNT(*)` with `CONTAINS()` predicate (or `LIKE` fallback when full-text is disabled)
 2. `SELECT ... WHERE CONTAINS(summary, @query)` with pagination
 
 **Indexes Used**:
@@ -296,6 +416,9 @@ Full-text index builds an inverted word → row_id mapping:
 
 Search for "payment" does binary search on word list (~19 comparisons at 500k rows) instead of scanning all rows.
 
+- **Note**: This endpoint uses 2 queries (separate `COUNT(*)` + data query) because `CONTAINS()` with `COUNT(*) OVER()` can produce inconsistent counts in MSSQL full-text scenarios. All other paginated endpoints use the single-query `COUNT(*) OVER()` pattern.
+- Falls back to `LIKE` when `FULLTEXT_ENABLED` env var is not `"true"` (e.g., local dev without full-text catalog)
+
 ---
 
 ### Batch Operations
@@ -322,9 +445,10 @@ Search for "payment" does binary search on word list (~19 comparisons at 500k ro
 
 **Purpose**: Paginated query of events in a batch with aggregate statistics.
 
+**Pagination**: `page` (default 1), `page_size` (default 20, max 100)
+
 **Database Operations**:
-1. `SELECT COUNT(*)` for total
-2. Aggregate query for stats:
+1. Aggregate query for stats (unfiltered by event_status for overall batch stats):
    ```sql
    SELECT
      COUNT(DISTINCT correlation_id) as unique_correlations,
@@ -333,16 +457,17 @@ Search for "payment" does binary search on word list (~19 comparisons at 500k ro
    FROM event_logs
    WHERE batch_id = @batchId AND is_deleted = 0
    ```
-3. `SELECT` with pagination
+2. Paginated data: `SELECT *, COUNT(*) OVER() as _totalCount` with optional `event_status` filter and `OFFSET/FETCH`
 
 **Indexes Used**:
 - `ix_event_logs_batch_id`
 
-**Complexity**: O(log n) seek + O(batch size) for aggregates
+**Complexity**: O(log n) seek + O(batch size) for aggregates + O(page_size) fetch
 
 **Design Notes**:
 - Stats count **distinct correlations**, not events (a failed process with 3 events counts as 1 failure)
 - Uses `COUNT(DISTINCT CASE WHEN ... THEN correlation_id END)` pattern
+- Stats query runs unfiltered (all statuses) while data query respects optional `event_status` filter
 
 ---
 
@@ -447,26 +572,51 @@ WHERE batch_id = @batchId AND is_deleted = 0;
 
 ---
 
+## Pagination Strategy
+
+All paginated endpoints use `COUNT(*) OVER()` as a window function to return the total count alongside each data row in a **single query**, eliminating one DB round-trip per request compared to the traditional 2-query pattern (`SELECT COUNT(*)` + `SELECT ... OFFSET/FETCH`).
+
+**Exception**: `POST /v1/events/search/text` uses 2 queries because `CONTAINS()` with `COUNT(*) OVER()` can produce inconsistent counts in MSSQL full-text scenarios.
+
+### Edge Case Handling
+
+When a page is requested beyond the result set (e.g., page 100 when only 50 rows exist), the `COUNT(*) OVER()` window function returns no rows. In this case, a fallback `SELECT COUNT(*)` is issued to return an accurate `total_count` so the client knows the true size. If offset is 0 and no rows are returned, the total is definitively 0 with no fallback needed.
+
+### Pagination Defaults
+
+| Endpoint Category | Default page_size | Max page_size | Rationale |
+|-------------------|-------------------|---------------|-----------|
+| Standard (account, batch, lookup) | 20 | 100 | Matches typical UI grid sizes |
+| Correlation / Trace | 200 | 500 | Most processes have 5-20 steps; 200 captures virtually all without needing pagination params |
+| Text search | 20 | 50 | Lower cap to bound full-text query cost |
+
+---
+
 ## Performance Summary
 
 ### Query Complexity by Endpoint
 
-| Endpoint | Complexity | Index Dependency |
-|----------|------------|------------------|
-| POST /events | O(1) | idempotency (optional) |
-| POST /events/batch | O(k + n/chunk) | idempotency |
-| GET /events/account/{id} | O(log n + page) | account_id |
-| GET /events/correlation/{id} | O(log n + m) | correlation_id |
-| GET /events/trace/{id} | O(log n + m) | trace_id |
-| GET /events/account/{id}/summary | O(1) | account_id |
-| POST /events/search/text | O(log n + page) | full-text |
-| POST /events/batch/upload | O(k + n/chunk) | idempotency |
-| GET /events/batch/{id} | O(log n + batch) | batch_id |
-| GET /events/batch/{id}/summary | O(log n + batch) | batch_id |
-| POST /correlation-links | O(log n) | primary key |
-| GET /correlation-links/{id} | O(1) | primary key |
-| GET /processes | O(n) | none (small table) |
-| POST /processes | O(log n) | process_name |
+| Endpoint | Complexity | Index Dependency | Queries |
+|----------|------------|------------------|---------|
+| GET /v1/healthcheck | O(1) | none | 0 |
+| GET /v1/healthcheck/ready | O(1) | none | 1 |
+| GET /v1/version | O(1) | none | 0 |
+| POST /events (single) | O(1) | idempotency (optional) | 1-2 |
+| POST /events (array) | O(k + n/chunk) | idempotency | 2+ |
+| POST /events/batch | O(k + n/chunk) | idempotency | 2+ |
+| GET /events/account/{id} | O(log n + page) | account_id | 1 |
+| GET /events/correlation/{id} | O(log n + page) | correlation_id | 1 + 1 link |
+| GET /events/trace/{id} | O(log n + page) | trace_id | 3 |
+| GET /events/account/{id}/summary | O(1) | account_id | 3 |
+| POST /events/lookup | O(log n + page) | account_id, process | 1 |
+| POST /events/search/text | O(log n + page) | full-text | 2 |
+| POST /events/batch/upload | O(k + n/chunk) | idempotency | 2+ |
+| GET /events/batch/{id} | O(log n + batch) | batch_id | 1 + 1 stats |
+| GET /events/batch/{id}/summary | O(log n + batch) | batch_id | 1 + 1 corr |
+| POST /correlation-links | O(log n) | primary key | 1 |
+| GET /correlation-links/{id} | O(1) | primary key | 1 |
+| GET /processes | O(n) | none (small table) | 1 |
+| POST /processes | O(log n) | process_name | 1 |
 
 ### Critical Indexes
 
@@ -487,6 +637,8 @@ If these indexes are missing, performance degrades significantly:
 | Batch insert (100 events) | 50-100ms | 50-100ms | 50-100ms |
 | Account timeline (page 1) | 5-20ms | 10-30ms | 15-50ms |
 | Correlation lookup | 2-10ms | 5-15ms | 5-20ms |
+| Trace lookup | 2-10ms | 5-15ms | 5-20ms |
+| Event lookup | 5-20ms | 10-30ms | 15-50ms |
 | Full-text search | 10-30ms | 20-50ms | 30-80ms |
 | Batch summary | 20-50ms | 50-100ms | 80-150ms |
 

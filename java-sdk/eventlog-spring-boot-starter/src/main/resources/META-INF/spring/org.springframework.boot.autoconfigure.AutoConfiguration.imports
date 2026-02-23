@@ -1,2 +1,3 @@
 com.eventlog.sdk.autoconfigure.EventLogAutoConfiguration
 com.eventlog.sdk.autoconfigure.EventLogRefreshAutoConfiguration
+com.eventlog.sdk.autoconfigure.EventLogMetricsAutoConfiguration

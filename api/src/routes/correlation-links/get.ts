@@ -22,12 +22,12 @@ export async function getCorrelationLinkRoute(app: FastifyInstance) {
       const link = await correlationLinkService.getCorrelationLink(correlationId);
 
       return reply.send({
-        correlation_id: link.correlationId,
-        account_id: link.accountId,
-        application_id: link.applicationId,
-        customer_id: link.customerId,
-        card_number_last4: link.cardNumberLast4,
-        linked_at: link.linkedAt.toISOString(),
+        correlationId: link.correlationId,
+        accountId: link.accountId,
+        applicationId: link.applicationId,
+        customerId: link.customerId,
+        cardNumberLast4: link.cardNumberLast4,
+        linkedAt: link.linkedAt.toISOString(),
       });
     },
   );

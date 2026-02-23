@@ -13,7 +13,8 @@ export async function byTraceRoutes(app: FastifyInstance) {
     {
       schema: {
         tags: ['Events'],
-        description: 'Get all events associated with a distributed trace',
+        summary: 'Get events by trace ID',
+        description: 'Returns paginated events for a distributed trace along with aggregate metadata: systems involved, total duration, per-status event counts, process name, account ID, and start/end timestamps. Designed for the dashboard trace-detail view.',
         params: z.object({ traceId: z.string().min(1) }),
         querystring: eventLogPaginationQuerySchema,
         response: { 200: getEventsByTraceResponseSchema },
@@ -21,19 +22,26 @@ export async function byTraceRoutes(app: FastifyInstance) {
     },
     async (request, reply) => {
       const { traceId } = request.params;
-      const { page, page_size } = request.query;
-      const { events, systemsInvolved, totalDurationMs, totalCount, hasMore } =
-        await eventLogService.getByTrace(traceId, { page, pageSize: page_size });
+      const { page, pageSize } = request.query;
+      const {
+        events, systemsInvolved, totalDurationMs, totalCount, hasMore,
+        statusCounts, processName, accountId, startTime, endTime,
+      } = await eventLogService.getByTrace(traceId, { page, pageSize });
 
       return reply.send({
-        trace_id: traceId,
+        traceId,
         events,
-        systems_involved: systemsInvolved,
-        total_duration_ms: totalDurationMs,
-        total_count: totalCount,
+        systemsInvolved,
+        totalDurationMs,
+        totalCount,
         page,
-        page_size,
-        has_more: hasMore,
+        pageSize,
+        hasMore,
+        statusCounts,
+        processName,
+        accountId,
+        startTime,
+        endTime,
       });
     },
   );

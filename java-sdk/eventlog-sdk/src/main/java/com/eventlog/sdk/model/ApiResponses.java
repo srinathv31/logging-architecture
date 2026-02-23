@@ -16,10 +16,10 @@ public class ApiResponses {
         @JsonProperty("success")
         private boolean success;
 
-        @JsonProperty("execution_ids")
+        @JsonProperty("executionIds")
         private List<String> executionIds;
 
-        @JsonProperty("correlation_id")
+        @JsonProperty("correlationId")
         private String correlationId;
 
         public boolean isSuccess() { return success; }
@@ -38,13 +38,13 @@ public class ApiResponses {
         @JsonProperty("success")
         private boolean success;
 
-        @JsonProperty("total_received")
+        @JsonProperty("totalReceived")
         private int totalReceived;
 
-        @JsonProperty("total_inserted")
+        @JsonProperty("totalInserted")
         private int totalInserted;
 
-        @JsonProperty("execution_ids")
+        @JsonProperty("executionIds")
         private List<String> executionIds;
 
         @JsonProperty("errors")
@@ -67,7 +67,7 @@ public class ApiResponses {
         @JsonProperty("error")
         private String error;
 
-        @JsonProperty("correlation_id")
+        @JsonProperty("correlationId")
         private String correlationId;
 
         public int getIndex() { return index; }
@@ -79,22 +79,22 @@ public class ApiResponses {
      * Response from GET /api/v1/events/account/{account_id}
      */
     public static class GetEventsByAccountResponse {
-        @JsonProperty("account_id")
+        @JsonProperty("accountId")
         private String accountId;
 
         @JsonProperty("events")
         private List<EventLogRecord> events;
 
-        @JsonProperty("total_count")
+        @JsonProperty("totalCount")
         private int totalCount;
 
         @JsonProperty("page")
         private int page;
 
-        @JsonProperty("page_size")
+        @JsonProperty("pageSize")
         private int pageSize;
 
-        @JsonProperty("has_more")
+        @JsonProperty("hasMore")
         private boolean hasMore;
 
         public String getAccountId() { return accountId; }
@@ -109,16 +109,16 @@ public class ApiResponses {
      * Response from GET /api/v1/events/correlation/{correlation_id}
      */
     public static class GetEventsByCorrelationResponse {
-        @JsonProperty("correlation_id")
+        @JsonProperty("correlationId")
         private String correlationId;
 
-        @JsonProperty("account_id")
+        @JsonProperty("accountId")
         private String accountId;
 
         @JsonProperty("events")
         private List<EventLogRecord> events;
 
-        @JsonProperty("is_linked")
+        @JsonProperty("isLinked")
         private boolean isLinked;
 
         public String getCorrelationId() { return correlationId; }
@@ -131,16 +131,16 @@ public class ApiResponses {
      * Response from GET /api/v1/events/trace/{trace_id}
      */
     public static class GetEventsByTraceResponse {
-        @JsonProperty("trace_id")
+        @JsonProperty("traceId")
         private String traceId;
 
         @JsonProperty("events")
         private List<EventLogRecord> events;
 
-        @JsonProperty("systems_involved")
+        @JsonProperty("systemsInvolved")
         private List<String> systemsInvolved;
 
-        @JsonProperty("total_duration_ms")
+        @JsonProperty("totalDurationMs")
         private Integer totalDurationMs;
 
         public String getTraceId() { return traceId; }
@@ -153,28 +153,28 @@ public class ApiResponses {
      * Response from GET /api/v1/events/batch/{batch_id}/summary
      */
     public static class BatchSummaryResponse {
-        @JsonProperty("batch_id")
+        @JsonProperty("batchId")
         private String batchId;
 
-        @JsonProperty("total_processes")
+        @JsonProperty("totalProcesses")
         private int totalProcesses;
 
         @JsonProperty("completed")
         private int completed;
 
-        @JsonProperty("in_progress")
+        @JsonProperty("inProgress")
         private int inProgress;
 
         @JsonProperty("failed")
         private int failed;
 
-        @JsonProperty("correlation_ids")
+        @JsonProperty("correlationIds")
         private List<String> correlationIds;
 
-        @JsonProperty("started_at")
+        @JsonProperty("startedAt")
         private String startedAt;
 
-        @JsonProperty("last_event_at")
+        @JsonProperty("lastEventAt")
         private String lastEventAt;
 
         public String getBatchId() { return batchId; }
@@ -194,13 +194,13 @@ public class ApiResponses {
         @JsonProperty("success")
         private boolean success;
 
-        @JsonProperty("correlation_id")
+        @JsonProperty("correlationId")
         private String correlationId;
 
-        @JsonProperty("account_id")
+        @JsonProperty("accountId")
         private String accountId;
 
-        @JsonProperty("linked_at")
+        @JsonProperty("linkedAt")
         private String linkedAt;
 
         public boolean isSuccess() { return success; }
@@ -213,16 +213,16 @@ public class ApiResponses {
      * Event record returned from the API (includes DB-generated fields)
      */
     public static class EventLogRecord extends EventLogEntry {
-        @JsonProperty("event_log_id")
+        @JsonProperty("eventLogId")
         private Long eventLogId;
 
-        @JsonProperty("execution_id")
+        @JsonProperty("executionId")
         private String executionId;
 
-        @JsonProperty("created_at")
+        @JsonProperty("createdAt")
         private String createdAt;
 
-        @JsonProperty("is_deleted")
+        @JsonProperty("isDeleted")
         private boolean isDeleted;
 
         public Long getEventLogId() { return eventLogId; }

@@ -14,7 +14,7 @@ class EventLogPropertiesTest {
     @Test
     void defaultValuesWhenAllNulls() {
         EventLogProperties props = new EventLogProperties(
-                null, null, null, null, null, null, null, null, null, null, null, null);
+                null, null, null, null, null, null, null, null, null, null, null, null, null);
         assertThat(props.isEnabled()).isFalse();
         assertThat(props.getConnectTimeout()).isEqualTo(Duration.ofSeconds(10));
         assertThat(props.getRequestTimeout()).isEqualTo(Duration.ofSeconds(30));
@@ -22,6 +22,7 @@ class EventLogPropertiesTest {
         assertThat(props.getRetryDelay()).isEqualTo(Duration.ofMillis(500));
         assertThat(props.getOauth()).isNotNull();
         assertThat(props.getAsync()).isNotNull();
+        assertThat(props.getMetrics()).isNotNull();
     }
 
     @Test
@@ -33,7 +34,7 @@ class EventLogPropertiesTest {
     @Test
     void enabledFalseWhenNull() {
         EventLogProperties props = new EventLogProperties(
-                null, null, null, null, null, null, null, null, null, null, null, null);
+                null, null, null, null, null, null, null, null, null, null, null, null, null);
         assertThat(props.isEnabled()).isFalse();
     }
 
@@ -49,7 +50,7 @@ class EventLogPropertiesTest {
         Duration rt = Duration.ofSeconds(15);
         Duration rd = Duration.ofMillis(200);
         EventLogProperties props = new EventLogProperties(
-                true, "http://api.test", "my-app", ct, rt, 5, rd, "my-key", "jdk", null, null, null);
+                true, "http://api.test", "my-app", ct, rt, 5, rd, "my-key", "jdk", null, null, null, null);
         assertThat(props.isEnabled()).isTrue();
         assertThat(props.getBaseUrl()).isEqualTo("http://api.test");
         assertThat(props.getApplicationId()).isEqualTo("my-app");
@@ -97,7 +98,7 @@ class EventLogPropertiesTest {
     void oauthValidWhenDisabled() {
         EventLogProperties props = new EventLogProperties(
                 false, null, null, null, null, null, null, null, null,
-                new EventLogProperties.OAuth("http://token", "id", null, null, null, null, null), null, null);
+                new EventLogProperties.OAuth("http://token", "id", null, null, null, null, null), null, null, null);
         assertThat(props.isOAuthValid()).isTrue();
     }
 
@@ -111,7 +112,7 @@ class EventLogPropertiesTest {
     void oauthInvalidWithOnlyTokenUrl() {
         EventLogProperties props = new EventLogProperties(
                 true, "http://localhost", null, null, null, null, null, null, null,
-                new EventLogProperties.OAuth("http://token", null, null, null, null, null, null), null, null);
+                new EventLogProperties.OAuth("http://token", null, null, null, null, null, null), null, null, null);
         assertThat(props.isOAuthValid()).isFalse();
     }
 
@@ -119,7 +120,7 @@ class EventLogPropertiesTest {
     void oauthInvalidWithOnlyClientId() {
         EventLogProperties props = new EventLogProperties(
                 true, "http://localhost", null, null, null, null, null, null, null,
-                new EventLogProperties.OAuth(null, "client-id", null, null, null, null, null), null, null);
+                new EventLogProperties.OAuth(null, "client-id", null, null, null, null, null), null, null, null);
         assertThat(props.isOAuthValid()).isFalse();
     }
 
@@ -127,49 +128,49 @@ class EventLogPropertiesTest {
     void oauthValidWhenAllFieldsSet() {
         EventLogProperties props = new EventLogProperties(
                 true, "http://localhost", null, null, null, null, null, null, null,
-                new EventLogProperties.OAuth("http://token", "id", "secret", "scope", null, null, null), null, null);
+                new EventLogProperties.OAuth("http://token", "id", "secret", "scope", null, null, null), null, null, null);
         assertThat(props.isOAuthValid()).isTrue();
     }
 
     @Test
     void transportValidForWebclient() {
         EventLogProperties props = new EventLogProperties(
-                true, "http://localhost", null, null, null, null, null, null, "webclient", null, null, null);
+                true, "http://localhost", null, null, null, null, null, null, "webclient", null, null, null, null);
         assertThat(props.isTransportValid()).isTrue();
     }
 
     @Test
     void transportValidForRestclient() {
         EventLogProperties props = new EventLogProperties(
-                true, "http://localhost", null, null, null, null, null, null, "restclient", null, null, null);
+                true, "http://localhost", null, null, null, null, null, null, "restclient", null, null, null, null);
         assertThat(props.isTransportValid()).isTrue();
     }
 
     @Test
     void transportValidForJdk() {
         EventLogProperties props = new EventLogProperties(
-                true, "http://localhost", null, null, null, null, null, null, "jdk", null, null, null);
+                true, "http://localhost", null, null, null, null, null, null, "jdk", null, null, null, null);
         assertThat(props.isTransportValid()).isTrue();
     }
 
     @Test
     void transportInvalidForUnknownValue() {
         EventLogProperties props = new EventLogProperties(
-                true, "http://localhost", null, null, null, null, null, null, "grpc", null, null, null);
+                true, "http://localhost", null, null, null, null, null, null, "grpc", null, null, null, null);
         assertThat(props.isTransportValid()).isFalse();
     }
 
     @Test
     void transportValidWhenNull() {
         EventLogProperties props = new EventLogProperties(
-                true, "http://localhost", null, null, null, null, null, null, null, null, null, null);
+                true, "http://localhost", null, null, null, null, null, null, null, null, null, null, null);
         assertThat(props.isTransportValid()).isTrue();
     }
 
     @Test
     void transportValidWhenBlank() {
         EventLogProperties props = new EventLogProperties(
-                true, "http://localhost", null, null, null, null, null, null, "  ", null, null, null);
+                true, "http://localhost", null, null, null, null, null, null, "  ", null, null, null, null);
         assertThat(props.isTransportValid()).isTrue();
     }
 
@@ -178,21 +179,21 @@ class EventLogPropertiesTest {
     @Test
     void normalizeTransportLowerCases() {
         EventLogProperties props = new EventLogProperties(
-                true, "http://localhost", null, null, null, null, null, null, "JDK", null, null, null);
+                true, "http://localhost", null, null, null, null, null, null, "JDK", null, null, null, null);
         assertThat(props.getTransport()).isEqualTo("jdk");
     }
 
     @Test
     void normalizeTransportTrims() {
         EventLogProperties props = new EventLogProperties(
-                true, "http://localhost", null, null, null, null, null, null, " restclient ", null, null, null);
+                true, "http://localhost", null, null, null, null, null, null, " restclient ", null, null, null, null);
         assertThat(props.getTransport()).isEqualTo("restclient");
     }
 
     @Test
     void normalizeTransportReturnsNullForBlank() {
         EventLogProperties props = new EventLogProperties(
-                true, "http://localhost", null, null, null, null, null, null, "  ", null, null, null);
+                true, "http://localhost", null, null, null, null, null, null, "  ", null, null, null, null);
         assertThat(props.getTransport()).isNull();
     }
 
@@ -309,10 +310,30 @@ class EventLogPropertiesTest {
         assertThat(async.getSpilloverPath()).isEqualTo(path);
     }
 
+    // --- Metrics nested class ---
+
+    @Test
+    void metricsDefaultsToEnabled() {
+        EventLogProperties.Metrics metrics = new EventLogProperties.Metrics(null);
+        assertThat(metrics.isEnabled()).isTrue();
+    }
+
+    @Test
+    void metricsEnabledWhenSetTrue() {
+        EventLogProperties.Metrics metrics = new EventLogProperties.Metrics(true);
+        assertThat(metrics.isEnabled()).isTrue();
+    }
+
+    @Test
+    void metricsDisabledWhenSetFalse() {
+        EventLogProperties.Metrics metrics = new EventLogProperties.Metrics(false);
+        assertThat(metrics.isEnabled()).isFalse();
+    }
+
     // --- Helpers ---
 
     private static EventLogProperties createProps(boolean enabled, String baseUrl) {
         return new EventLogProperties(
-                enabled, baseUrl, null, null, null, null, null, null, null, null, null, null);
+                enabled, baseUrl, null, null, null, null, null, null, null, null, null, null, null);
     }
 }

@@ -40,7 +40,7 @@ Think of it as structured logging for distributed systems, with built-in support
 <dependency>
     <groupId>com.eventlog</groupId>
     <artifactId>eventlog-spring-boot-starter</artifactId>
-    <version>1.4.0</version>
+    <version>1.0.0</version>
 </dependency>
 ```
 
@@ -436,7 +436,7 @@ Add the test dependency:
 <dependency>
     <groupId>com.eventlog</groupId>
     <artifactId>eventlog-test</artifactId>
-    <version>1.4.0</version>
+    <version>1.0.0</version>
     <scope>test</scope>
 </dependency>
 ```

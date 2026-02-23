@@ -46,7 +46,7 @@ class EventLogClientTest {
     @Test
     void throwsOnClientErrorWithoutRetry() {
         SequencedTransport transport = new SequencedTransport(
-                new EventLogResponse(400, "{\"error_code\":\"BAD_REQUEST\"}")
+                new EventLogResponse(400, "{\"error\":\"BAD_REQUEST\"}")
         );
 
         EventLogClient client = EventLogClient.builder()
@@ -94,7 +94,7 @@ class EventLogClientTest {
 
     @Test
     void createEventPostsAndParsesResponse() {
-        String responseBody = "{\"success\":true,\"execution_ids\":[\"exec-1\"],\"correlation_id\":\"corr-1\"}";
+        String responseBody = "{\"success\":true,\"executionIds\":[\"exec-1\"],\"correlationId\":\"corr-1\"}";
         SequencedTransport transport = new SequencedTransport(
                 new EventLogResponse(200, responseBody)
         );
@@ -118,7 +118,7 @@ class EventLogClientTest {
 
     @Test
     void createEventsPostsBatchResponse() {
-        String responseBody = "{\"success\":true,\"total_received\":2,\"total_inserted\":2,\"execution_ids\":[\"e1\",\"e2\"],\"errors\":[]}";
+        String responseBody = "{\"success\":true,\"totalReceived\":2,\"totalInserted\":2,\"executionIds\":[\"e1\",\"e2\"],\"errors\":[]}";
         SequencedTransport transport = new SequencedTransport(
                 new EventLogResponse(200, responseBody)
         );
@@ -141,7 +141,7 @@ class EventLogClientTest {
 
     @Test
     void createEventAsyncReturnsCompletableFuture() throws Exception {
-        String responseBody = "{\"success\":true,\"execution_ids\":[\"exec-async\"],\"correlation_id\":\"corr-async\"}";
+        String responseBody = "{\"success\":true,\"executionIds\":[\"exec-async\"],\"correlationId\":\"corr-async\"}";
         SequencedTransport transport = new SequencedTransport(
                 new EventLogResponse(200, responseBody)
         );
@@ -160,7 +160,7 @@ class EventLogClientTest {
 
     @Test
     void getEventsByCorrelationParsesResponse() {
-        String responseBody = "{\"correlation_id\":\"corr-1\",\"account_id\":\"acct-1\",\"events\":[],\"is_linked\":true}";
+        String responseBody = "{\"correlationId\":\"corr-1\",\"accountId\":\"acct-1\",\"events\":[],\"isLinked\":true}";
         SequencedTransport transport = new SequencedTransport(
                 new EventLogResponse(200, responseBody)
         );
@@ -184,7 +184,7 @@ class EventLogClientTest {
 
     @Test
     void getEventsByTraceParsesResponse() {
-        String responseBody = "{\"trace_id\":\"trace-1\",\"events\":[],\"systems_involved\":[\"sysA\",\"sysB\"],\"total_duration_ms\":1500}";
+        String responseBody = "{\"traceId\":\"trace-1\",\"events\":[],\"systemsInvolved\":[\"sysA\",\"sysB\"],\"totalDurationMs\":1500}";
         SequencedTransport transport = new SequencedTransport(
                 new EventLogResponse(200, responseBody)
         );
@@ -203,7 +203,7 @@ class EventLogClientTest {
 
     @Test
     void getBatchSummaryParsesResponse() {
-        String responseBody = "{\"batch_id\":\"batch-1\",\"total_processes\":10,\"completed\":8,\"in_progress\":1,\"failed\":1,\"correlation_ids\":[\"c1\"],\"started_at\":\"2024-01-01\",\"last_event_at\":\"2024-01-02\"}";
+        String responseBody = "{\"batchId\":\"batch-1\",\"totalProcesses\":10,\"completed\":8,\"inProgress\":1,\"failed\":1,\"correlationIds\":[\"c1\"],\"startedAt\":\"2024-01-01\",\"lastEventAt\":\"2024-01-02\"}";
         SequencedTransport transport = new SequencedTransport(
                 new EventLogResponse(200, responseBody)
         );
@@ -227,7 +227,7 @@ class EventLogClientTest {
 
     @Test
     void createCorrelationLinkPostsCorrectBody() {
-        String responseBody = "{\"success\":true,\"correlation_id\":\"corr-1\",\"account_id\":\"acct-1\",\"linked_at\":\"2024-01-01T00:00:00Z\"}";
+        String responseBody = "{\"success\":true,\"correlationId\":\"corr-1\",\"accountId\":\"acct-1\",\"linkedAt\":\"2024-01-01T00:00:00Z\"}";
         SequencedTransport transport = new SequencedTransport(
                 new EventLogResponse(200, responseBody)
         );
@@ -253,7 +253,7 @@ class EventLogClientTest {
 
     @Test
     void createCorrelationLinkFullOverloadIncludesAllFields() {
-        String responseBody = "{\"success\":true,\"correlation_id\":\"corr-2\",\"account_id\":\"acct-2\",\"linked_at\":\"2024-01-01T00:00:00Z\"}";
+        String responseBody = "{\"success\":true,\"correlationId\":\"corr-2\",\"accountId\":\"acct-2\",\"linkedAt\":\"2024-01-01T00:00:00Z\"}";
         SequencedTransport transport = new SequencedTransport(
                 new EventLogResponse(200, responseBody)
         );
@@ -319,7 +319,7 @@ class EventLogClientTest {
     @Test
     void retriesOnRateLimitThenSucceeds() {
         SequencedTransport transport = new SequencedTransport(
-                new EventLogResponse(429, "{\"error_code\":\"RATE_LIMITED\"}"),
+                new EventLogResponse(429, "{\"error\":\"RATE_LIMITED\"}"),
                 new EventLogResponse(200, successAccountResponse("acct"))
         );
 
@@ -398,7 +398,7 @@ class EventLogClientTest {
 
     @Test
     void createEventsAsyncReturnsCompletableFuture() throws Exception {
-        String responseBody = "{\"success\":true,\"total_received\":1,\"total_inserted\":1,\"execution_ids\":[\"e1\"],\"errors\":[]}";
+        String responseBody = "{\"success\":true,\"totalReceived\":1,\"totalInserted\":1,\"executionIds\":[\"e1\"],\"errors\":[]}";
         SequencedTransport transport = new SequencedTransport(
                 new EventLogResponse(200, responseBody)
         );
@@ -452,7 +452,7 @@ class EventLogClientTest {
 
     @Test
     void getEventsByAccountParsesAllFields() {
-        String responseBody = "{\"account_id\":\"acct\",\"events\":[],\"total_count\":42,\"page\":2,\"page_size\":25,\"has_more\":true}";
+        String responseBody = "{\"accountId\":\"acct\",\"events\":[],\"totalCount\":42,\"page\":2,\"pageSize\":25,\"hasMore\":true}";
         SequencedTransport transport = new SequencedTransport(
                 new EventLogResponse(200, responseBody)
         );
@@ -474,7 +474,7 @@ class EventLogClientTest {
 
     @Test
     void getBatchSummaryParsesAllFields() {
-        String responseBody = "{\"batch_id\":\"b1\",\"total_processes\":10,\"completed\":7,\"in_progress\":2,\"failed\":1,\"correlation_ids\":[\"c1\",\"c2\"],\"started_at\":\"2024-01-01\",\"last_event_at\":\"2024-01-02\"}";
+        String responseBody = "{\"batchId\":\"b1\",\"totalProcesses\":10,\"completed\":7,\"inProgress\":2,\"failed\":1,\"correlationIds\":[\"c1\",\"c2\"],\"startedAt\":\"2024-01-01\",\"lastEventAt\":\"2024-01-02\"}";
         SequencedTransport transport = new SequencedTransport(
                 new EventLogResponse(200, responseBody)
         );
@@ -517,12 +517,12 @@ class EventLogClientTest {
 
     private static String successAccountResponse(String accountId) {
         return "{" +
-                "\"account_id\":\"" + accountId + "\"," +
+                "\"accountId\":\"" + accountId + "\"," +
                 "\"events\":[]," +
-                "\"total_count\":0," +
+                "\"totalCount\":0," +
                 "\"page\":1," +
-                "\"page_size\":50," +
-                "\"has_more\":false" +
+                "\"pageSize\":50," +
+                "\"hasMore\":false" +
                 "}";
     }
 

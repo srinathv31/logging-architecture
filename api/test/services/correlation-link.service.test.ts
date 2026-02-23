@@ -170,8 +170,8 @@ describe('CorrelationLinkService', () => {
       mockDb._setTopResult([dbRecord]);
 
       const input = createCorrelationLinkFixture({
-        correlation_id: 'new-corr-id',
-        account_id: 'new-acc-id',
+        correlationId: 'new-corr-id',
+        accountId: 'new-acc-id',
       });
 
       const result = await createCorrelationLink(input);
@@ -188,8 +188,8 @@ describe('CorrelationLinkService', () => {
       mockDb._setTopResult([dbRecord]);
 
       const input = createCorrelationLinkFixture({
-        customer_id: 'cust-123',
-        card_number_last4: '9999',
+        customerId: 'cust-123',
+        cardNumberLast4: '9999',
       });
 
       const result = await createCorrelationLink(input);
@@ -206,8 +206,8 @@ describe('CorrelationLinkService', () => {
       mockDb._setTopResult([dbRecord]);
 
       const input = createCorrelationLinkFixture({
-        customer_id: undefined,
-        card_number_last4: undefined,
+        customerId: undefined,
+        cardNumberLast4: undefined,
       });
 
       const result = await createCorrelationLink(input);
@@ -216,7 +216,7 @@ describe('CorrelationLinkService', () => {
       expect(result.cardNumberLast4).toBeNull();
     });
 
-    it('should update existing record when correlation_id matches', async () => {
+    it('should update existing record when correlationId matches', async () => {
       const existingRecord = createCorrelationLinkDbRecord({
         correlationId: 'existing-corr',
         accountId: 'updated-acc-id',
@@ -224,8 +224,8 @@ describe('CorrelationLinkService', () => {
       mockDb._setTopResult([existingRecord]);
 
       const input = createCorrelationLinkFixture({
-        correlation_id: 'existing-corr',
-        account_id: 'updated-acc-id',
+        correlationId: 'existing-corr',
+        accountId: 'updated-acc-id',
       });
 
       const result = await createCorrelationLink(input);
@@ -300,29 +300,29 @@ describe('CorrelationLinkService - Test Fixtures', () => {
     it('should create a valid fixture with default values', () => {
       const fixture = createCorrelationLinkFixture();
 
-      expect(fixture.correlation_id).toBe('test-correlation-id');
-      expect(fixture.account_id).toBe('test-account-id');
-      expect(fixture.application_id).toBe('test-app');
-      expect(fixture.customer_id).toBe('test-customer-id');
-      expect(fixture.card_number_last4).toBe('1234');
+      expect(fixture.correlationId).toBe('test-correlation-id');
+      expect(fixture.accountId).toBe('test-account-id');
+      expect(fixture.applicationId).toBe('test-app');
+      expect(fixture.customerId).toBe('test-customer-id');
+      expect(fixture.cardNumberLast4).toBe('1234');
     });
 
     it('should allow overriding default values', () => {
       const fixture = createCorrelationLinkFixture({
-        correlation_id: 'custom-corr-id',
-        account_id: 'custom-acc-id',
+        correlationId: 'custom-corr-id',
+        accountId: 'custom-acc-id',
       });
 
-      expect(fixture.correlation_id).toBe('custom-corr-id');
-      expect(fixture.account_id).toBe('custom-acc-id');
-      expect(fixture.application_id).toBe('test-app');
+      expect(fixture.correlationId).toBe('custom-corr-id');
+      expect(fixture.accountId).toBe('custom-acc-id');
+      expect(fixture.applicationId).toBe('test-app');
     });
 
     it('should have required fields', () => {
       const fixture = createCorrelationLinkFixture();
 
-      expect(fixture).toHaveProperty('correlation_id');
-      expect(fixture).toHaveProperty('account_id');
+      expect(fixture).toHaveProperty('correlationId');
+      expect(fixture).toHaveProperty('accountId');
     });
   });
 
@@ -366,25 +366,25 @@ describe('CorrelationLinkService - createCorrelationLink behavior', () => {
   it('should use MERGE for upsert semantics (insert or update)', () => {
     const input = createCorrelationLinkFixture();
 
-    expect(input.correlation_id).toBeDefined();
-    expect(input.account_id).toBeDefined();
+    expect(input.correlationId).toBeDefined();
+    expect(input.accountId).toBeDefined();
   });
 
-  it('should map snake_case input to camelCase output', () => {
+  it('should map camelCase input to camelCase output', () => {
     const input = createCorrelationLinkFixture({
-      correlation_id: 'test-corr',
-      account_id: 'test-acc',
-      application_id: 'test-app',
-      customer_id: 'test-cust',
-      card_number_last4: '9999',
+      correlationId: 'test-corr',
+      accountId: 'test-acc',
+      applicationId: 'test-app',
+      customerId: 'test-cust',
+      cardNumberLast4: '9999',
     });
 
     const expectedOutput = {
-      correlationId: input.correlation_id,
-      accountId: input.account_id,
-      applicationId: input.application_id,
-      customerId: input.customer_id,
-      cardNumberLast4: input.card_number_last4,
+      correlationId: input.correlationId,
+      accountId: input.accountId,
+      applicationId: input.applicationId,
+      customerId: input.customerId,
+      cardNumberLast4: input.cardNumberLast4,
     };
 
     expect(expectedOutput.correlationId).toBe('test-corr');

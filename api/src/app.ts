@@ -9,10 +9,7 @@ import {
   jsonSchemaTransform,
   type ZodTypeProvider,
 } from "fastify-type-provider-zod";
-import { z } from "zod";
-import { sql } from "drizzle-orm";
 import { env } from "./config/env";
-import { getDb } from "./db/client";
 import { registerErrorHandler } from "./plugins/error-handler";
 import { registerRoutes } from "./routes/index";
 
@@ -21,6 +18,8 @@ export function buildApp() {
     logger: {
       level: env.LOG_LEVEL,
     },
+    requestTimeout: 30_000,
+    bodyLimit: 1_048_576,
   }).withTypeProvider<ZodTypeProvider>();
 
   app.setValidatorCompiler(validatorCompiler);
@@ -33,7 +32,7 @@ export function buildApp() {
         title: "Event Log API",
         description:
           "REST API for ingesting, querying, and managing event logs across distributed systems.",
-        version: "1.4.0",
+        version: "1.0.0",
       },
       servers: [
         {
@@ -43,6 +42,8 @@ export function buildApp() {
       ],
       tags: [
         { name: "Events", description: "Create and query event log entries" },
+        { name: "Traces", description: "List and filter traces grouped by trace_id — designed for dashboard trace-list views" },
+        { name: "Dashboard", description: "Aggregate statistics (trace counts, account counts, success rates, system names) for dashboard overview panels" },
         { name: "Processes", description: "Manage process definitions" },
         {
           name: "Correlation Links",
@@ -50,9 +51,17 @@ export function buildApp() {
         },
         {
           name: "Batch Operations",
-          description: "Batch upload, query, and summary endpoints (v1.4)",
+          description: "Batch upload, query, and summary endpoints",
         },
-        { name: "Health", description: "Health check endpoint" },
+        {
+          name: "Lookup",
+          description: "Fast structured event lookup for dashboard and agent workflows",
+        },
+        {
+          name: "Debug",
+          description: "Temporary debug and maintenance endpoints",
+        },
+        { name: "Health", description: "Health and version endpoints" },
       ],
     },
     transform: jsonSchemaTransform,
@@ -66,69 +75,6 @@ export function buildApp() {
   app.register(sensible);
 
   registerErrorHandler(app);
-
-  app.get(
-    "/healthcheck",
-    {
-      schema: {
-        tags: ["Health"],
-        description: "Returns API health status",
-        response: {
-          200: z.object({
-            status: z.literal("ok"),
-          }),
-        },
-      },
-    },
-    async () => ({ status: "ok" as const }),
-  );
-
-  app.get(
-    "/healthcheck/ready",
-    {
-      schema: {
-        tags: ["Health"],
-        description: "Returns DB readiness status",
-        response: {
-          200: z.object({
-            status: z.literal("ready"),
-            database: z.literal("connected"),
-            timestamp: z.string(),
-          }),
-          503: z.object({
-            status: z.literal("not_ready"),
-            database: z.literal("error"),
-            error: z.string(),
-            timestamp: z.string(),
-          }),
-        },
-      },
-    },
-    async (_request, reply) => {
-      try {
-        const db = await getDb();
-        await Promise.race([
-          db.execute(sql`SELECT 1`),
-          new Promise((_, reject) =>
-            setTimeout(() => reject(new Error("Database health check timed out")), 3000),
-          ),
-        ]);
-        return {
-          status: "ready" as const,
-          database: "connected" as const,
-          timestamp: new Date().toISOString(),
-        };
-      } catch (err) {
-        const message = err instanceof Error ? err.message : "Unknown error";
-        return reply.status(503).send({
-          status: "not_ready" as const,
-          database: "error" as const,
-          error: message,
-          timestamp: new Date().toISOString(),
-        });
-      }
-    },
-  );
 
   app.register(registerRoutes, { prefix: "/v1" });
 

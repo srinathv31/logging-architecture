@@ -28,6 +28,17 @@ export function registerErrorHandler(app: FastifyInstance) {
       });
     }
 
+    // Preserve Fastify-generated HTTP errors (e.g. body too large, bad media type)
+    if ('statusCode' in error && typeof (error as FastifyError).statusCode === 'number') {
+      const statusCode = (error as FastifyError).statusCode!;
+      if (statusCode >= 400 && statusCode < 600) {
+        return reply.status(statusCode).send({
+          error: error.name,
+          message: error.message,
+        });
+      }
+    }
+
     // MSSQL unique constraint / unique index violation
     if ('number' in error && ((error as { number?: number }).number === 2627 || (error as { number?: number }).number === 2601)) {
       return reply.status(409).send({

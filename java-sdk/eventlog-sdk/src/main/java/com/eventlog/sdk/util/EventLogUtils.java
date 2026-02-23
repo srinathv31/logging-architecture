@@ -11,7 +11,7 @@ import java.util.concurrent.ThreadLocalRandom;
  * Utility class for Event Log SDK operations
  * 
  * <p>Provides helper methods for generating IDs and creating typed events
- * following the Event Log API v1.4 schema conventions.</p>
+ * following the Event Log API v1 schema conventions.</p>
  */
 public final class EventLogUtils {
 

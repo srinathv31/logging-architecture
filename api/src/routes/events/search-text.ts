@@ -11,31 +11,31 @@ export async function searchTextRoutes(app: FastifyInstance) {
     {
       schema: {
         tags: ['Events'],
-        description: 'Full-text search across event log summaries',
+        description: 'Constrained text search with required account/process filters and bounded date windows',
         body: textSearchRequestSchema,
         response: { 200: textSearchResponseSchema },
       },
     },
     async (request, reply) => {
-      const { query, account_id, process_name, start_date, end_date, page, page_size } =
+      const { query, accountId, processName, startDate, endDate, page, pageSize } =
         request.body;
 
       const { events, totalCount } = await eventLogService.searchText({
         query,
-        accountId: account_id,
-        processName: process_name,
-        startDate: start_date,
-        endDate: end_date,
+        accountId,
+        processName,
+        startDate,
+        endDate,
         page,
-        pageSize: page_size,
+        pageSize,
       });
 
       return reply.send({
         query,
         events,
-        total_count: totalCount,
+        totalCount,
         page,
-        page_size,
+        pageSize,
       });
     },
   );

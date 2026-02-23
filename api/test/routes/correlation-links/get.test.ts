@@ -43,12 +43,12 @@ function buildTestApp() {
         const link = await mockGetCorrelationLink(correlationId);
 
         return reply.send({
-          correlation_id: link.correlationId,
-          account_id: link.accountId,
-          application_id: link.applicationId,
-          customer_id: link.customerId,
-          card_number_last4: link.cardNumberLast4,
-          linked_at: link.linkedAt.toISOString(),
+          correlationId: link.correlationId,
+          accountId: link.accountId,
+          applicationId: link.applicationId,
+          customerId: link.customerId,
+          cardNumberLast4: link.cardNumberLast4,
+          linkedAt: link.linkedAt.toISOString(),
         });
       }
     );
@@ -90,12 +90,12 @@ describe('GET /v1/correlation-links/:correlationId', () => {
 
       expect(response.statusCode).toBe(200);
       const body = response.json();
-      expect(body.correlation_id).toBe('corr-123');
-      expect(body.account_id).toBe('acc-456');
-      expect(body.application_id).toBe('app-789');
-      expect(body.customer_id).toBe('cust-000');
-      expect(body.card_number_last4).toBe('1234');
-      expect(body.linked_at).toBeDefined();
+      expect(body.correlationId).toBe('corr-123');
+      expect(body.accountId).toBe('acc-456');
+      expect(body.applicationId).toBe('app-789');
+      expect(body.customerId).toBe('cust-000');
+      expect(body.cardNumberLast4).toBe('1234');
+      expect(body.linkedAt).toBeDefined();
     });
 
     it('should return null for optional fields when not set', async () => {
@@ -112,12 +112,12 @@ describe('GET /v1/correlation-links/:correlationId', () => {
 
       expect(response.statusCode).toBe(200);
       const body = response.json();
-      expect(body.application_id).toBeNull();
-      expect(body.customer_id).toBeNull();
-      expect(body.card_number_last4).toBeNull();
+      expect(body.applicationId).toBeNull();
+      expect(body.customerId).toBeNull();
+      expect(body.cardNumberLast4).toBeNull();
     });
 
-    it('should return ISO timestamp for linked_at', async () => {
+    it('should return ISO timestamp for linkedAt', async () => {
       const fixedDate = new Date('2024-01-15T12:00:00Z');
       mockGetCorrelationLink = async () => createCorrelationLinkDbRecord({
         linkedAt: fixedDate,
@@ -130,7 +130,7 @@ describe('GET /v1/correlation-links/:correlationId', () => {
 
       expect(response.statusCode).toBe(200);
       const body = response.json();
-      expect(body.linked_at).toBe('2024-01-15T12:00:00.000Z');
+      expect(body.linkedAt).toBe('2024-01-15T12:00:00.000Z');
     });
   });
 

@@ -13,10 +13,10 @@
  *   - Database migrated
  *
  * Environment:
- *   BASE_URL — override the default http://localhost:3000/v1
+ *   BASE_URL — override the default http://localhost:8080/v1
  */
 
-const BASE_URL = process.env.BASE_URL ?? "http://localhost:8000/v1";
+const BASE_URL = process.env.BASE_URL ?? "http://localhost:8080/v1";
 
 // ---------------------------------------------------------------------------
 // Helper
@@ -91,11 +91,11 @@ async function singleEmployeeOrigination() {
   section("Section 1: Single Employee Origination (EMP-456) — 6 Events");
 
   const baseEvent = {
-    correlation_id: CORRELATION_ID,
-    trace_id: TRACE_ID,
-    application_id: APP_ID,
-    process_name: PROCESS_NAME,
-    account_id: null, // origination — no account yet
+    correlationId: CORRELATION_ID,
+    traceId: TRACE_ID,
+    applicationId: APP_ID,
+    processName: PROCESS_NAME,
+    accountId: null, // origination — no account yet
   };
 
   // Event 1 — Process Start
@@ -103,19 +103,19 @@ async function singleEmployeeOrigination() {
   await apiCall("POST", "/events", {
     events: {
       ...baseEvent,
-      span_id: "a1b2c3d4e5f60001",
-      originating_system: "HR_PORTAL",
-      target_system: "EMPLOYEE_ORIGINATION_SERVICE",
-      step_sequence: 0,
-      event_type: "PROCESS_START",
-      event_status: "SUCCESS",
+      spanId: "a1b2c3d4e5f60001",
+      originatingSystem: "HR_PORTAL",
+      targetSystem: "EMPLOYEE_ORIGINATION_SERVICE",
+      stepSequence: 0,
+      eventType: "PROCESS_START",
+      eventStatus: "SUCCESS",
       identifiers: { employee_id: "EMP-456", session_id: "sess-xyz" },
       summary:
         "Employee card origination initiated for employee EMP-456 via HR portal",
       result: "INITIATED",
       endpoint: "/api/v1/employee/apply",
-      http_method: "POST",
-      event_timestamp: ts(0),
+      httpMethod: "POST",
+      eventTimestamp: ts(0),
     },
   });
 
@@ -124,23 +124,23 @@ async function singleEmployeeOrigination() {
   await apiCall("POST", "/events", {
     events: {
       ...baseEvent,
-      span_id: "a1b2c3d4e5f60002",
-      parent_span_id: "a1b2c3d4e5f60001",
-      originating_system: "EMPLOYEE_ORIGINATION_SERVICE",
-      target_system: "WORKDAY",
-      step_sequence: 1,
-      step_name: "HR Validation",
-      event_type: "STEP",
-      event_status: "SUCCESS",
+      spanId: "a1b2c3d4e5f60002",
+      parentSpanId: "a1b2c3d4e5f60001",
+      originatingSystem: "EMPLOYEE_ORIGINATION_SERVICE",
+      targetSystem: "WORKDAY",
+      stepSequence: 1,
+      stepName: "HR Validation",
+      eventType: "STEP",
+      eventStatus: "SUCCESS",
       identifiers: { employee_id: "EMP-456", workday_ref: "WD-789012" },
       summary:
         "Validated employee EMP-456 exists in Workday - active status confirmed, hire date 2022-03-15, department: Engineering",
       result: "EMPLOYEE_VERIFIED",
       endpoint: "/api/v1/employees/EMP-456/verify",
-      http_method: "GET",
-      http_status_code: 200,
-      execution_time_ms: 245,
-      event_timestamp: ts(250),
+      httpMethod: "GET",
+      httpStatusCode: 200,
+      executionTimeMs: 245,
+      eventTimestamp: ts(250),
     },
   });
 
@@ -149,23 +149,23 @@ async function singleEmployeeOrigination() {
   await apiCall("POST", "/events", {
     events: {
       ...baseEvent,
-      span_id: "a1b2c3d4e5f60003",
-      parent_span_id: "a1b2c3d4e5f60002",
-      originating_system: "EMPLOYEE_ORIGINATION_SERVICE",
-      target_system: "ODS",
-      step_sequence: 2,
-      step_name: "Create ODS Entry",
-      event_type: "STEP",
-      event_status: "SUCCESS",
+      spanId: "a1b2c3d4e5f60003",
+      parentSpanId: "a1b2c3d4e5f60002",
+      originatingSystem: "EMPLOYEE_ORIGINATION_SERVICE",
+      targetSystem: "ODS",
+      stepSequence: 2,
+      stepName: "Create ODS Entry",
+      eventType: "STEP",
+      eventStatus: "SUCCESS",
       identifiers: { employee_id: "EMP-456", ods_record_id: "ODS-334455" },
       summary:
         "Created ODS record ODS-334455 for employee EMP-456 - applicant profile initialized",
       result: "ODS_RECORD_CREATED",
       endpoint: "/api/v1/applicants",
-      http_method: "POST",
-      http_status_code: 201,
-      execution_time_ms: 180,
-      event_timestamp: ts(500),
+      httpMethod: "POST",
+      httpStatusCode: 201,
+      executionTimeMs: 180,
+      eventTimestamp: ts(500),
     },
   });
 
@@ -176,14 +176,14 @@ async function singleEmployeeOrigination() {
   await apiCall("POST", "/events", {
     events: {
       ...baseEvent,
-      span_id: "a1b2c3d4e5f60004",
-      parent_span_id: "a1b2c3d4e5f60002",
-      originating_system: "EMPLOYEE_ORIGINATION_SERVICE",
-      target_system: "COMPLIANCE_SERVICE",
-      step_sequence: 2,
-      step_name: "Initialize Regulatory Controls",
-      event_type: "STEP",
-      event_status: "SUCCESS",
+      spanId: "a1b2c3d4e5f60004",
+      parentSpanId: "a1b2c3d4e5f60002",
+      originatingSystem: "EMPLOYEE_ORIGINATION_SERVICE",
+      targetSystem: "COMPLIANCE_SERVICE",
+      stepSequence: 2,
+      stepName: "Initialize Regulatory Controls",
+      eventType: "STEP",
+      eventStatus: "SUCCESS",
       identifiers: {
         employee_id: "EMP-456",
         compliance_case_id: "COMP-667788",
@@ -192,16 +192,16 @@ async function singleEmployeeOrigination() {
         "Initialized regulatory controls case COMP-667788 for employee EMP-456 - OFAC/KYC checks queued",
       result: "CONTROLS_INITIALIZED",
       endpoint: "/api/v1/compliance/initialize",
-      http_method: "POST",
-      http_status_code: 201,
-      execution_time_ms: 95,
-      request_payload: JSON.stringify({
+      httpMethod: "POST",
+      httpStatusCode: 201,
+      executionTimeMs: 95,
+      requestPayload: JSON.stringify({
         employee_id: "EMP-456",
         check_types: ["OFAC", "KYC", "AML"],
         priority: "STANDARD",
         source_system: "EMPLOYEE_ORIGINATION_SERVICE",
       }),
-      response_payload: JSON.stringify({
+      responsePayload: JSON.stringify({
         compliance_case_id: "COMP-667788",
         status: "QUEUED",
         queued_checks: [
@@ -211,7 +211,7 @@ async function singleEmployeeOrigination() {
         ],
         created_at: ts(500),
       }),
-      event_timestamp: ts(500),
+      eventTimestamp: ts(500),
     },
   });
 
@@ -220,15 +220,15 @@ async function singleEmployeeOrigination() {
   await apiCall("POST", "/events", {
     events: {
       ...baseEvent,
-      span_id: "a1b2c3d4e5f60005",
-      parent_span_id: "a1b2c3d4e5f60002",
-      span_links: ["a1b2c3d4e5f60003", "a1b2c3d4e5f60004"],
-      originating_system: "EMPLOYEE_ORIGINATION_SERVICE",
-      target_system: "BACKGROUND_CHECK_VENDOR",
-      step_sequence: 3,
-      step_name: "Background and Regulatory Checks",
-      event_type: "STEP",
-      event_status: "SUCCESS",
+      spanId: "a1b2c3d4e5f60005",
+      parentSpanId: "a1b2c3d4e5f60002",
+      spanLinks: ["a1b2c3d4e5f60003", "a1b2c3d4e5f60004"],
+      originatingSystem: "EMPLOYEE_ORIGINATION_SERVICE",
+      targetSystem: "BACKGROUND_CHECK_VENDOR",
+      stepSequence: 3,
+      stepName: "Background and Regulatory Checks",
+      eventType: "STEP",
+      eventStatus: "SUCCESS",
       identifiers: {
         employee_id: "EMP-456",
         compliance_case_id: "COMP-667788",
@@ -238,10 +238,10 @@ async function singleEmployeeOrigination() {
         "Background and regulatory checks completed for employee EMP-456 - OFAC clear, no adverse findings, risk score: LOW",
       result: "CHECKS_PASSED",
       endpoint: "/api/v2/background-check/execute",
-      http_method: "POST",
-      http_status_code: 200,
-      execution_time_ms: 1850,
-      request_payload: JSON.stringify({
+      httpMethod: "POST",
+      httpStatusCode: 200,
+      executionTimeMs: 1850,
+      requestPayload: JSON.stringify({
         employee_id: "EMP-456",
         compliance_case_id: "COMP-667788",
         vendor_reference_id: "BGC-112233",
@@ -256,7 +256,7 @@ async function singleEmployeeOrigination() {
         ],
         applicant_consent_ref: "CONSENT-EMP456-20250126",
       }),
-      response_payload: JSON.stringify({
+      responsePayload: JSON.stringify({
         vendor_reference_id: "BGC-112233",
         overall_status: "CLEAR",
         results: [
@@ -279,7 +279,7 @@ async function singleEmployeeOrigination() {
         risk_score: "LOW",
         completed_at: ts(2550),
       }),
-      event_timestamp: ts(2550),
+      eventTimestamp: ts(2550),
     },
   });
 
@@ -288,29 +288,29 @@ async function singleEmployeeOrigination() {
   await apiCall("POST", "/events", {
     events: {
       ...baseEvent,
-      account_id: "AC-EMP-001234",
-      span_id: "a1b2c3d4e5f60006",
-      parent_span_id: "a1b2c3d4e5f60005",
-      originating_system: "EMPLOYEE_ORIGINATION_SERVICE",
-      target_system: "ACE_DECISION_MATRIX",
-      step_sequence: 4,
-      step_name: "ADM Decision",
-      event_type: "STEP",
-      event_status: "SUCCESS",
+      accountId: "AC-EMP-001234",
+      spanId: "a1b2c3d4e5f60006",
+      parentSpanId: "a1b2c3d4e5f60005",
+      originatingSystem: "EMPLOYEE_ORIGINATION_SERVICE",
+      targetSystem: "ACE_DECISION_MATRIX",
+      stepSequence: 4,
+      stepName: "ADM Decision",
+      eventType: "STEP",
+      eventStatus: "SUCCESS",
       identifiers: {
         employee_id: "EMP-456",
-        application_id: "APP-998877",
+        applicationId: "APP-998877",
         adm_decision_id: "DEC-445566",
       },
       summary:
         "Submitted application APP-998877 to Ace Decision Matrix for employee EMP-456 - decision rendered: APPROVED, credit limit $10,000",
       result: "APPROVED",
       endpoint: "/api/v1/decisions/evaluate",
-      http_method: "POST",
-      http_status_code: 200,
-      execution_time_ms: 620,
-      request_payload: JSON.stringify({
-        application_id: "APP-998877",
+      httpMethod: "POST",
+      httpStatusCode: 200,
+      executionTimeMs: 620,
+      requestPayload: JSON.stringify({
+        applicationId: "APP-998877",
         employee_id: "EMP-456",
         risk_score: "LOW",
         employment_status: "ACTIVE",
@@ -319,17 +319,17 @@ async function singleEmployeeOrigination() {
         background_check_ref: "BGC-112233",
         compliance_case_ref: "COMP-667788",
       }),
-      response_payload: JSON.stringify({
+      responsePayload: JSON.stringify({
         decision_id: "DEC-445566",
-        application_id: "APP-998877",
+        applicationId: "APP-998877",
         decision: "APPROVED",
         credit_limit: 10000,
         card_type: "EMPLOYEE_CORPORATE",
-        account_id: "AC-EMP-001234",
+        accountId: "AC-EMP-001234",
         conditions: [],
         decided_at: ts(3200),
       }),
-      event_timestamp: ts(3200),
+      eventTimestamp: ts(3200),
     },
   });
 
@@ -338,26 +338,26 @@ async function singleEmployeeOrigination() {
   await apiCall("POST", "/events", {
     events: {
       ...baseEvent,
-      account_id: "AC-EMP-001234",
-      span_id: "a1b2c3d4e5f60007",
-      parent_span_id: "a1b2c3d4e5f60001",
-      originating_system: "EMPLOYEE_ORIGINATION_SERVICE",
-      target_system: "HR_PORTAL",
-      step_sequence: 5,
-      step_name: "Return Decision",
-      event_type: "PROCESS_END",
-      event_status: "SUCCESS",
+      accountId: "AC-EMP-001234",
+      spanId: "a1b2c3d4e5f60007",
+      parentSpanId: "a1b2c3d4e5f60001",
+      originatingSystem: "EMPLOYEE_ORIGINATION_SERVICE",
+      targetSystem: "HR_PORTAL",
+      stepSequence: 5,
+      stepName: "Return Decision",
+      eventType: "PROCESS_END",
+      eventStatus: "SUCCESS",
       identifiers: {
         employee_id: "EMP-456",
-        application_id: "APP-998877",
+        applicationId: "APP-998877",
         adm_decision_id: "DEC-445566",
       },
       summary:
         "Employee card origination completed for EMP-456 - APPROVED with $10,000 limit, card to be issued to office address",
       result: "COMPLETED_APPROVED",
-      http_status_code: 200,
-      execution_time_ms: 3200,
-      event_timestamp: ts(3250),
+      httpStatusCode: 200,
+      executionTimeMs: 3200,
+      eventTimestamp: ts(3250),
     },
   });
 }
@@ -370,10 +370,10 @@ async function createCorrelationLink() {
   section("Section 2: Create Correlation Link");
 
   await apiCall("POST", "/correlation-links", {
-    correlation_id: CORRELATION_ID,
-    account_id: "AC-EMP-001234",
-    application_id: "APP-998877",
-    customer_id: "EMP-456",
+    correlationId: CORRELATION_ID,
+    accountId: "AC-EMP-001234",
+    applicationId: "APP-998877",
+    customerId: "EMP-456",
   });
 }
 
@@ -388,8 +388,8 @@ async function queryByCorrelation() {
     "GET",
     `/events/correlation/${CORRELATION_ID}`,
   )) as {
-    correlation_id: string;
-    account_id: string | null;
+    correlationId: string;
+    accountId: string | null;
     events: Array<{
       eventType: string;
       eventStatus: string;
@@ -397,7 +397,7 @@ async function queryByCorrelation() {
       eventTimestamp: string;
       summary: string;
     }>;
-    is_linked: boolean;
+    isLinked: boolean;
   };
 
   if (data?.events) {
@@ -407,7 +407,7 @@ async function queryByCorrelation() {
         `  [${e.eventTimestamp}] ${e.eventType} / ${e.eventStatus} — ${e.stepName ?? "(process)"}: ${e.summary.slice(0, 80)}...`,
       );
     }
-    console.log(`\n  Linked: ${data.is_linked}, Account: ${data.account_id}`);
+    console.log(`\n  Linked: ${data.isLinked}, Account: ${data.accountId}`);
   }
 }
 
@@ -419,16 +419,16 @@ async function queryByTrace() {
   section("Section 4: Query by Trace");
 
   const data = (await apiCall("GET", `/events/trace/${TRACE_ID}`)) as {
-    trace_id: string;
+    traceId: string;
     events: unknown[];
-    systems_involved: string[];
-    total_duration_ms: number | null;
+    systemsInvolved: string[];
+    totalDurationMs: number | null;
   };
 
-  if (data?.systems_involved) {
+  if (data?.systemsInvolved) {
     console.log("\n--- Trace Summary ---");
-    console.log(`  Systems involved: ${data.systems_involved.join(", ")}`);
-    console.log(`  Total duration:   ${data.total_duration_ms ?? "N/A"} ms`);
+    console.log(`  Systems involved: ${data.systemsInvolved.join(", ")}`);
+    console.log(`  Total duration:   ${data.totalDurationMs ?? "N/A"} ms`);
     console.log(`  Event count:      ${data.events.length}`);
   }
 }
@@ -449,23 +449,23 @@ async function batchUpload() {
     spanId: string,
   ) {
     return {
-      correlation_id: correlationId,
-      trace_id: traceId,
-      span_id: spanId,
-      account_id: null,
-      application_id: APP_ID,
-      originating_system: "HR_PORTAL",
-      target_system: "EMPLOYEE_ORIGINATION_SERVICE",
-      process_name: PROCESS_NAME,
-      step_sequence: 0,
-      event_type: "PROCESS_START" as const,
-      event_status: "SUCCESS" as const,
+      correlationId: correlationId,
+      traceId: traceId,
+      spanId: spanId,
+      accountId: null,
+      applicationId: APP_ID,
+      originatingSystem: "HR_PORTAL",
+      targetSystem: "EMPLOYEE_ORIGINATION_SERVICE",
+      processName: PROCESS_NAME,
+      stepSequence: 0,
+      eventType: "PROCESS_START" as const,
+      eventStatus: "SUCCESS" as const,
       identifiers: { employee_id: empId },
       summary: `Employee card origination initiated for employee ${empId} via batch upload`,
       result: "INITIATED",
       endpoint: "/api/v1/employee/apply",
-      http_method: "POST" as const,
-      event_timestamp: ts(3_600_000),
+      httpMethod: "POST" as const,
+      eventTimestamp: ts(3_600_000),
     };
   }
 
@@ -477,25 +477,25 @@ async function batchUpload() {
     parentSpanId: string,
   ) {
     return {
-      correlation_id: correlationId,
-      trace_id: traceId,
-      span_id: spanId,
-      parent_span_id: parentSpanId,
-      account_id: null,
-      application_id: APP_ID,
-      originating_system: "EMPLOYEE_ORIGINATION_SERVICE",
-      target_system: "HR_PORTAL",
-      process_name: PROCESS_NAME,
-      step_sequence: 5,
-      step_name: "Return Decision",
-      event_type: "PROCESS_END" as const,
-      event_status: "SUCCESS" as const,
+      correlationId: correlationId,
+      traceId: traceId,
+      spanId: spanId,
+      parentSpanId: parentSpanId,
+      accountId: null,
+      applicationId: APP_ID,
+      originatingSystem: "EMPLOYEE_ORIGINATION_SERVICE",
+      targetSystem: "HR_PORTAL",
+      processName: PROCESS_NAME,
+      stepSequence: 5,
+      stepName: "Return Decision",
+      eventType: "PROCESS_END" as const,
+      eventStatus: "SUCCESS" as const,
       identifiers: { employee_id: empId },
       summary: `Employee card origination completed for ${empId} - APPROVED`,
       result: "COMPLETED_APPROVED",
-      http_status_code: 200,
-      execution_time_ms: 2800,
-      event_timestamp: ts(3_603_000),
+      httpStatusCode: 200,
+      executionTimeMs: 2800,
+      eventTimestamp: ts(3_603_000),
     };
   }
 
@@ -507,30 +507,30 @@ async function batchUpload() {
     parentSpanId: string,
   ) {
     return {
-      correlation_id: correlationId,
-      trace_id: traceId,
-      span_id: spanId,
-      parent_span_id: parentSpanId,
-      account_id: null,
-      application_id: APP_ID,
-      originating_system: "EMPLOYEE_ORIGINATION_SERVICE",
-      target_system: "BACKGROUND_CHECK_VENDOR",
-      process_name: PROCESS_NAME,
-      step_sequence: 3,
-      step_name: "Background and Regulatory Checks",
-      event_type: "ERROR" as const,
-      event_status: "FAILURE" as const,
+      correlationId: correlationId,
+      traceId: traceId,
+      spanId: spanId,
+      parentSpanId: parentSpanId,
+      accountId: null,
+      applicationId: APP_ID,
+      originatingSystem: "EMPLOYEE_ORIGINATION_SERVICE",
+      targetSystem: "BACKGROUND_CHECK_VENDOR",
+      processName: PROCESS_NAME,
+      stepSequence: 3,
+      stepName: "Background and Regulatory Checks",
+      eventType: "ERROR" as const,
+      eventStatus: "FAILURE" as const,
       identifiers: { employee_id: empId },
       summary: `Background check failed for ${empId} - adverse findings, risk score: HIGH`,
       result: "CHECKS_FAILED",
-      error_code: "BGC_ADVERSE_FINDINGS",
-      error_message:
+      errorCode: "BGC_ADVERSE_FINDINGS",
+      errorMessage:
         "Background check returned adverse findings — manual review required",
       endpoint: "/api/v2/background-check/execute",
-      http_method: "POST" as const,
-      http_status_code: 200,
-      execution_time_ms: 1500,
-      event_timestamp: ts(3_602_000),
+      httpMethod: "POST" as const,
+      httpStatusCode: 200,
+      executionTimeMs: 1500,
+      eventTimestamp: ts(3_602_000),
     };
   }
 
@@ -580,7 +580,7 @@ async function batchUpload() {
   ];
 
   await apiCall("POST", "/events/batch/upload", {
-    batch_id: BATCH_ID,
+    batchId: BATCH_ID,
     events: batchEvents,
   });
 }
@@ -594,29 +594,29 @@ async function queryBatchEvents() {
 
   const data = (await apiCall(
     "GET",
-    `/events/batch/${BATCH_ID}?page=1&page_size=20`,
+    `/events/batch/${BATCH_ID}?page=1&pageSize=20`,
   )) as {
-    batch_id: string;
+    batchId: string;
     events: Array<{
       eventType: string;
       eventStatus: string;
       correlationId: string;
       summary: string;
     }>;
-    total_count: number;
-    unique_correlation_ids: number;
-    success_count: number;
-    failure_count: number;
-    has_more: boolean;
+    totalCount: number;
+    uniqueCorrelationIds: number;
+    successCount: number;
+    failureCount: number;
+    hasMore: boolean;
   };
 
   if (data?.events) {
     console.log("\n--- Batch Events ---");
-    console.log(`  Total events:          ${data.total_count}`);
-    console.log(`  Unique correlations:   ${data.unique_correlation_ids}`);
-    console.log(`  Success count:         ${data.success_count}`);
-    console.log(`  Failure count:         ${data.failure_count}`);
-    console.log(`  Has more pages:        ${data.has_more}`);
+    console.log(`  Total events:          ${data.totalCount}`);
+    console.log(`  Unique correlations:   ${data.uniqueCorrelationIds}`);
+    console.log(`  Success count:         ${data.successCount}`);
+    console.log(`  Failure count:         ${data.failureCount}`);
+    console.log(`  Has more pages:        ${data.hasMore}`);
     for (const e of data.events) {
       console.log(
         `  [${e.correlationId}] ${e.eventType} / ${e.eventStatus} — ${e.summary.slice(0, 60)}...`,
@@ -633,26 +633,26 @@ async function queryBatchSummary() {
   section("Section 7: Batch Summary");
 
   const data = (await apiCall("GET", `/events/batch/${BATCH_ID}/summary`)) as {
-    batch_id: string;
-    total_processes: number;
+    batchId: string;
+    totalProcesses: number;
     completed: number;
-    in_progress: number;
+    inProgress: number;
     failed: number;
-    correlation_ids: string[];
-    started_at: string | null;
-    last_event_at: string | null;
+    correlationIds: string[];
+    startedAt: string | null;
+    lastEventAt: string | null;
   };
 
   if (data) {
     console.log("\n--- Batch Summary ---");
-    console.log(`  Batch ID:          ${data.batch_id}`);
-    console.log(`  Total processes:   ${data.total_processes}`);
+    console.log(`  Batch ID:          ${data.batchId}`);
+    console.log(`  Total processes:   ${data.totalProcesses}`);
     console.log(`  Completed:         ${data.completed}`);
-    console.log(`  In progress:       ${data.in_progress}`);
+    console.log(`  In progress:       ${data.inProgress}`);
     console.log(`  Failed:            ${data.failed}`);
-    console.log(`  Correlation IDs:   ${data.correlation_ids?.join(", ")}`);
-    console.log(`  Started at:        ${data.started_at}`);
-    console.log(`  Last event at:     ${data.last_event_at}`);
+    console.log(`  Correlation IDs:   ${data.correlationIds?.join(", ")}`);
+    console.log(`  Started at:        ${data.startedAt}`);
+    console.log(`  Last event at:     ${data.lastEventAt}`);
   }
 }
 
@@ -707,13 +707,13 @@ async function main() {
   }
 
   console.log("\n" + "=".repeat(70));
-  console.log("  Done! Check Swagger UI at http://localhost:3000/docs");
+  console.log("  Done! Check Swagger UI at http://localhost:8080/docs");
   console.log("=".repeat(70));
 }
 
 async function clearDatabase() {
   section("Clearing Database");
-  await apiCall("DELETE", "/events");
+  await apiCall("POST", "/debug/events/clear", { confirm: true });
 }
 
 // clearDatabase();

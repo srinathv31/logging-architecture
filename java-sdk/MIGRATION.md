@@ -10,7 +10,7 @@ Replace the core dependency with the starter in your Spring Boot application:
 <dependency>
     <groupId>com.yourcompany.eventlog</groupId>
     <artifactId>eventlog-spring-boot-starter</artifactId>
-    <version>1.4.0</version>
+    <version>1.0.0</version>
 </dependency>
 ```
 

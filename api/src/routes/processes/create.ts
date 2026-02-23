@@ -17,16 +17,16 @@ export async function createProcessRoute(app: FastifyInstance) {
       },
     },
     async (request, reply) => {
-      const { process_name, display_name, description, owning_team, expected_steps, sla_ms } =
+      const { processName, displayName, description, owningTeam, expectedSteps, slaMs } =
         request.body;
 
       const result = await processDefinitionService.createProcess({
-        processName: process_name,
-        displayName: display_name,
+        processName,
+        displayName,
         description,
-        owningTeam: owning_team,
-        expectedSteps: expected_steps,
-        slaMs: sla_ms,
+        owningTeam,
+        expectedSteps,
+        slaMs,
       });
 
       return reply.status(201).send(result);
