@@ -498,12 +498,12 @@ async function executeRequest(
       durationMs: elapsedMs,
       ok: response.ok,
       totalCount:
-        typeof parsed?.total_count === "number"
-          ? (parsed.total_count as number)
+        typeof parsed?.totalCount === "number"
+          ? (parsed.totalCount as number)
           : null,
       hasMore:
-        typeof parsed?.has_more === "boolean"
-          ? (parsed.has_more as boolean)
+        typeof parsed?.hasMore === "boolean"
+          ? (parsed.hasMore as boolean)
           : null,
       eventsLength: events ? events.length : null,
       error: response.ok
@@ -572,7 +572,7 @@ function buildCoreSpec(
       return {
         request: {
           method: "GET",
-          path: `/v1/events/account/${encodeURIComponent(samples.accountId)}?page=${page}&page_size=${pageSize}`,
+          path: `/v1/events/account/${encodeURIComponent(samples.accountId)}?page=${page}&pageSize=${pageSize}`,
         },
         expectedTotal: samples.totals.account,
         scenarioGroup: "account",
@@ -582,7 +582,7 @@ function buildCoreSpec(
       return {
         request: {
           method: "GET",
-          path: `/v1/events/correlation/${encodeURIComponent(samples.correlationId)}?page=${page}&page_size=${pageSize}`,
+          path: `/v1/events/correlation/${encodeURIComponent(samples.correlationId)}?page=${page}&pageSize=${pageSize}`,
         },
         expectedTotal: samples.totals.correlation,
         scenarioGroup: "correlation",
@@ -592,7 +592,7 @@ function buildCoreSpec(
       return {
         request: {
           method: "GET",
-          path: `/v1/events/trace/${encodeURIComponent(samples.traceId)}?page=${page}&page_size=${pageSize}`,
+          path: `/v1/events/trace/${encodeURIComponent(samples.traceId)}?page=${page}&pageSize=${pageSize}`,
         },
         expectedTotal: samples.totals.trace,
         scenarioGroup: "trace",
@@ -602,7 +602,7 @@ function buildCoreSpec(
       return {
         request: {
           method: "GET",
-          path: `/v1/events/batch/${encodeURIComponent(samples.batchId)}?page=${page}&page_size=${pageSize}`,
+          path: `/v1/events/batch/${encodeURIComponent(samples.batchId)}?page=${page}&pageSize=${pageSize}`,
         },
         expectedTotal: samples.totals.batch,
         scenarioGroup: "batch",
@@ -614,9 +614,9 @@ function buildCoreSpec(
           method: "POST",
           path: "/v1/events/lookup",
           body: {
-            account_id: samples.accountId,
+            accountId: samples.accountId,
             page,
-            page_size: pageSize,
+            pageSize,
           },
         },
         expectedTotal: samples.totals.account,
@@ -645,37 +645,37 @@ function buildSearchScenarios(samples: SampleIds): SearchScenario[] {
   return [
     {
       name: "account_baseline",
-      baseBody: { query: samples.searchQuery, account_id: samples.accountId },
+      baseBody: { query: samples.searchQuery, accountId: samples.accountId },
     },
     {
       name: "process_baseline",
-      baseBody: { query: samples.searchQuery, process_name: samples.processName },
+      baseBody: { query: samples.searchQuery, processName: samples.processName },
     },
     {
       name: "account_1d",
       baseBody: {
         query: samples.searchQuery,
-        account_id: samples.accountId,
-        start_date: d1.start,
-        end_date: d1.end,
+        accountId: samples.accountId,
+        startDate: d1.start,
+        endDate: d1.end,
       },
     },
     {
       name: "account_7d",
       baseBody: {
         query: samples.searchQuery,
-        account_id: samples.accountId,
-        start_date: d7.start,
-        end_date: d7.end,
+        accountId: samples.accountId,
+        startDate: d7.start,
+        endDate: d7.end,
       },
     },
     {
       name: "account_30d",
       baseBody: {
         query: samples.searchQuery,
-        account_id: samples.accountId,
-        start_date: d30.start,
-        end_date: d30.end,
+        accountId: samples.accountId,
+        startDate: d30.start,
+        endDate: d30.end,
       },
     },
   ];
@@ -694,7 +694,7 @@ async function probeSearchTotal(
       body: {
         ...scenario.baseBody,
         page: 1,
-        page_size: 1,
+        pageSize: 1,
       },
     },
     timeoutMs,
@@ -786,11 +786,11 @@ function buildMarkdown(
 
   lines.push("## Samples");
   lines.push("");
-  lines.push(`- account_id: \`${samples.accountId}\` (total ${samples.totals.account})`);
-  lines.push(`- correlation_id: \`${samples.correlationId}\` (total ${samples.totals.correlation})`);
-  lines.push(`- trace_id: \`${samples.traceId}\` (total ${samples.totals.trace})`);
-  lines.push(`- batch_id: \`${samples.batchId}\` (total ${samples.totals.batch})`);
-  lines.push(`- process_name: \`${samples.processName}\` (total ${samples.totals.process})`);
+  lines.push(`- accountId: \`${samples.accountId}\` (total ${samples.totals.account})`);
+  lines.push(`- correlationId: \`${samples.correlationId}\` (total ${samples.totals.correlation})`);
+  lines.push(`- traceId: \`${samples.traceId}\` (total ${samples.totals.trace})`);
+  lines.push(`- batchId: \`${samples.batchId}\` (total ${samples.totals.batch})`);
+  lines.push(`- processName: \`${samples.processName}\` (total ${samples.totals.process})`);
   lines.push("");
 
   lines.push("## Summary");
@@ -891,7 +891,7 @@ async function runCoreSuite(
         const spec = buildCoreSpec(endpoint, samples, pageSize, scenario.page);
 
         console.log(
-          `Running [core] ${endpoint} [${scenario.name}] page_size=${pageSize} page=${scenario.page}`,
+          `Running [core] ${endpoint} [${scenario.name}] pageSize=${pageSize} page=${scenario.page}`,
         );
 
         const snapshots = await runCurrentMode(options.baseUrl, spec.request, options);
@@ -952,12 +952,12 @@ async function runSearchSuite(
           body: {
             ...scenarioGroup.baseBody,
             page: scenario.page,
-            page_size: pageSize,
+            pageSize,
           },
         };
 
         console.log(
-          `Running [search] ${scenarioGroup.name} [${scenario.name}] page_size=${pageSize} page=${scenario.page}`,
+          `Running [search] ${scenarioGroup.name} [${scenario.name}] pageSize=${pageSize} page=${scenario.page}`,
         );
 
         const snapshots = await runCurrentMode(options.baseUrl, request, options);
