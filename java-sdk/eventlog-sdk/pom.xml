@@ -6,7 +6,7 @@
 
     <groupId>com.yourcompany.eventlog</groupId>
     <artifactId>eventlog-sdk</artifactId>
-    <version>1.4.0</version>
+    <version>1.0.0</version>
     <packaging>jar</packaging>
 
     <name>Event Log SDK</name>
@@ -172,7 +172,7 @@
             <plugin>
                 <groupId>org.jacoco</groupId>
                 <artifactId>jacoco-maven-plugin</artifactId>
-                <version>0.8.12</version>
+                <version>0.8.13</version>
                 <configuration>
                     <excludes>
                         <exclude>com/eventlog/sdk/examples/**</exclude>

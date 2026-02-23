@@ -1,6 +1,6 @@
 # Event Log SDK for Java
 
-Java SDK for the Event Log API v1.4 - Centralized event logging for Credit Card Technology.
+Java SDK for the Event Log API v1 - Centralized event logging for Credit Card Technology.
 
 ## Requirements
 
@@ -31,7 +31,7 @@ Add the Spring Boot starter to enable auto-wiring:
 <dependency>
     <groupId>com.yourcompany.eventlog</groupId>
     <artifactId>eventlog-spring-boot-starter</artifactId>
-    <version>1.4.0</version>
+    <version>1.0.0</version>
 </dependency>
 ```
 
@@ -239,14 +239,14 @@ Add to your `pom.xml`:
 <dependency>
     <groupId>com.yourcompany.eventlog</groupId>
     <artifactId>eventlog-sdk</artifactId>
-    <version>1.4.0</version>
+    <version>1.0.0</version>
 </dependency>
 ```
 
 ### Gradle
 
 ```groovy
-implementation 'com.yourcompany.eventlog:eventlog-sdk:1.4.0'
+implementation 'com.yourcompany.eventlog:eventlog-sdk:1.0.0'
 ```
 
 ## Quick Start (Recommended: Real-Time Async Logging)
@@ -592,7 +592,7 @@ Use `eventlog-test` to capture events in-memory during tests:
 <dependency>
     <groupId>com.yourcompany.eventlog</groupId>
     <artifactId>eventlog-test</artifactId>
-    <version>1.4.0</version>
+    <version>1.0.0</version>
     <scope>test</scope>
 </dependency>
 ```
@@ -665,7 +665,7 @@ See [Sonatype OSSRH Guide](https://central.sonatype.org/publish/publish-guide/) 
 
 | SDK Version | API Version | Java Version |
 |-------------|-------------|--------------|
-| 1.4.x       | v1.4        | 21+          |
+| 1.0.x       | v1          | 21+          |
 | 1.3.x and below | v1.3 and below | EOL (not supported) |
 
 ## License

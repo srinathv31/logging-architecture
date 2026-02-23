@@ -1,5 +1,7 @@
 # Event Log API - Complete Schema & Interfaces
-## Version 1.5 (lookup endpoint, search guardrails, pagination on all query endpoints)
+## Technical schema reference for API v1
+
+Release history is maintained in `CHANGELOG.md`.
 
 ---
 

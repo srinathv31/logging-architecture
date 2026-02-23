@@ -3,7 +3,7 @@ package com.eventlog.sdk.model;
 import com.fasterxml.jackson.annotation.JsonValue;
 
 /**
- * Event type enumeration following the Event Log API schema v1.4
+ * Event type enumeration following the Event Log API schema v1
  */
 public enum EventType {
     PROCESS_START("PROCESS_START"),

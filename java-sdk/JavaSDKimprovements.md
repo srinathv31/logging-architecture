@@ -372,7 +372,7 @@ public class EventLogHealthIndicator implements HealthIndicator {
 <dependency>
     <groupId>com.yourcompany.eventlog</groupId>
     <artifactId>eventlog-test</artifactId>
-    <version>1.4.0</version>
+    <version>1.0.0</version>
     <scope>test</scope>
 </dependency>
 ```

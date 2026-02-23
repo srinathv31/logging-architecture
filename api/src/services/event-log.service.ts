@@ -14,7 +14,12 @@ import {
   type SQL,
 } from "drizzle-orm";
 import { getDb } from "../db/client";
-import { eventLogs, correlationLinks } from "../db/schema/index";
+import {
+  eventLogs,
+  correlationLinks,
+  processDefinitions,
+  accountTimelineSummary,
+} from "../db/schema/index";
 import type { EventLogEntry } from "../types/api";
 import { chunkArray } from "../utils/array";
 import { formatFullTextQuery } from "../utils/search";
@@ -835,5 +840,12 @@ export async function getBatchSummary(batchId: string) {
 
 export async function deleteAll() {
   const db = await getDb();
-  await db.delete(eventLogs);
+
+  // TODO: Remove full-database debug purge before production staging deployment.
+  await db.transaction(async (tx) => {
+    await tx.delete(accountTimelineSummary);
+    await tx.delete(correlationLinks);
+    await tx.delete(processDefinitions);
+    await tx.delete(eventLogs);
+  });
 }

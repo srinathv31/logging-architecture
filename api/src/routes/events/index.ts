@@ -7,7 +7,6 @@ import { byTraceRoutes } from "./by-trace";
 import { searchTextRoutes } from "./search-text";
 import { lookupRoutes } from "./lookup";
 import { batchRoutes } from "./batch";
-import { clearEventsRoute } from "./clear";
 
 export async function eventRoutes(app: FastifyInstance) {
   app.register(createEventRoutes);
@@ -18,5 +17,4 @@ export async function eventRoutes(app: FastifyInstance) {
   app.register(searchTextRoutes);
   app.register(lookupRoutes);
   app.register(batchRoutes);
-  app.register(clearEventsRoute);
 }

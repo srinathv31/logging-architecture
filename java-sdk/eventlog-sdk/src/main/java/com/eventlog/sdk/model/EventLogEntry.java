@@ -10,7 +10,7 @@ import java.util.Map;
 import java.util.Objects;
 
 /**
- * Event Log Entry - Core model for the Event Log API v1.4
+ * Event Log Entry - Core model for the Event Log API v1
  * 
  * <p>Represents a single event in the event log system. Events capture business process
  * steps, API calls, errors, and other significant occurrences for AI context retrieval

@@ -1,6 +1,8 @@
 # Event Log API — Database & Endpoint Technical Design
 
-## Version 1.5 | February 2026
+## Technical design reference for API v1
+
+Release history is maintained in `CHANGELOG.md`.
 
 ---
 

@@ -244,10 +244,11 @@ describe('EventLogService', () => {
   });
 
   describe('deleteAll', () => {
-    it('should call db.delete', async () => {
+    it('should hard-delete all tables inside a transaction', async () => {
       await deleteAll();
 
-      expect(mockDb.delete).toHaveBeenCalled();
+      expect(mockDb.transaction).toHaveBeenCalledTimes(1);
+      expect(mockDb.delete).toHaveBeenCalledTimes(4);
     });
   });
 });

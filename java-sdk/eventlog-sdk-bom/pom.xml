@@ -6,14 +6,14 @@
 
     <groupId>com.yourcompany.eventlog</groupId>
     <artifactId>eventlog-sdk-bom</artifactId>
-    <version>1.4.0</version>
+    <version>1.0.0</version>
     <packaging>pom</packaging>
 
     <name>Event Log SDK BOM</name>
     <description>Bill of Materials for Event Log Java SDK modules</description>
 
     <properties>
-        <eventlog.version>1.4.0</eventlog.version>
+        <eventlog.version>1.0.0</eventlog.version>
     </properties>
 
     <dependencyManagement>

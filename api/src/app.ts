@@ -18,6 +18,8 @@ export function buildApp() {
     logger: {
       level: env.LOG_LEVEL,
     },
+    requestTimeout: 30_000,
+    bodyLimit: 1_048_576,
   }).withTypeProvider<ZodTypeProvider>();
 
   app.setValidatorCompiler(validatorCompiler);
@@ -30,7 +32,7 @@ export function buildApp() {
         title: "Event Log API",
         description:
           "REST API for ingesting, querying, and managing event logs across distributed systems.",
-        version: "1.5.0",
+        version: "1.0.0",
       },
       servers: [
         {
@@ -49,11 +51,15 @@ export function buildApp() {
         },
         {
           name: "Batch Operations",
-          description: "Batch upload, query, and summary endpoints (v1.4)",
+          description: "Batch upload, query, and summary endpoints",
         },
         {
           name: "Lookup",
           description: "Fast structured event lookup for dashboard and agent workflows",
+        },
+        {
+          name: "Debug",
+          description: "Temporary debug and maintenance endpoints",
         },
         { name: "Health", description: "Health and version endpoints" },
       ],
