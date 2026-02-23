@@ -33,51 +33,51 @@ import java.util.Objects;
 public class EventLogEntry {
 
     // Core identifiers
-    @JsonProperty("correlation_id")
+    @JsonProperty("correlationId")
     private String correlationId;
 
-    @JsonProperty("account_id")
+    @JsonProperty("accountId")
     private String accountId;
 
-    @JsonProperty("trace_id")
+    @JsonProperty("traceId")
     private String traceId;
 
-    @JsonProperty("span_id")
+    @JsonProperty("spanId")
     private String spanId;
 
-    @JsonProperty("parent_span_id")
+    @JsonProperty("parentSpanId")
     private String parentSpanId;
 
-    @JsonProperty("span_links")
+    @JsonProperty("spanLinks")
     private List<String> spanLinks;
 
-    @JsonProperty("batch_id")
+    @JsonProperty("batchId")
     private String batchId;
 
     // System context
-    @JsonProperty("application_id")
+    @JsonProperty("applicationId")
     private String applicationId;
 
-    @JsonProperty("target_system")
+    @JsonProperty("targetSystem")
     private String targetSystem;
 
-    @JsonProperty("originating_system")
+    @JsonProperty("originatingSystem")
     private String originatingSystem;
 
     // Process details
-    @JsonProperty("process_name")
+    @JsonProperty("processName")
     private String processName;
 
-    @JsonProperty("step_sequence")
+    @JsonProperty("stepSequence")
     private Integer stepSequence;
 
-    @JsonProperty("step_name")
+    @JsonProperty("stepName")
     private String stepName;
 
-    @JsonProperty("event_type")
+    @JsonProperty("eventType")
     private EventType eventType;
 
-    @JsonProperty("event_status")
+    @JsonProperty("eventStatus")
     private EventStatus eventStatus;
 
     // Business data
@@ -94,38 +94,38 @@ public class EventLogEntry {
     private Map<String, Object> metadata;
 
     // Timing
-    @JsonProperty("event_timestamp")
+    @JsonProperty("eventTimestamp")
     private Instant eventTimestamp;
 
-    @JsonProperty("execution_time_ms")
+    @JsonProperty("executionTimeMs")
     private Integer executionTimeMs;
 
     // HTTP details
     @JsonProperty("endpoint")
     private String endpoint;
 
-    @JsonProperty("http_method")
+    @JsonProperty("httpMethod")
     private HttpMethod httpMethod;
 
-    @JsonProperty("http_status_code")
+    @JsonProperty("httpStatusCode")
     private Integer httpStatusCode;
 
     // Error tracking
-    @JsonProperty("error_code")
+    @JsonProperty("errorCode")
     private String errorCode;
 
-    @JsonProperty("error_message")
+    @JsonProperty("errorMessage")
     private String errorMessage;
 
     // Payloads (sanitized - no PII)
-    @JsonProperty("request_payload")
+    @JsonProperty("requestPayload")
     private String requestPayload;
 
-    @JsonProperty("response_payload")
+    @JsonProperty("responsePayload")
     private String responsePayload;
 
     // Deduplication
-    @JsonProperty("idempotency_key")
+    @JsonProperty("idempotencyKey")
     private String idempotencyKey;
 
     // Default constructor for Jackson

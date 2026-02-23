@@ -42,25 +42,25 @@ function buildTestApp() {
         },
       },
       async (request, reply) => {
-        const { query, account_id, process_name, start_date, end_date, page, page_size } =
+        const { query, accountId, processName, startDate, endDate, page, pageSize } =
           request.body;
 
         const { events, totalCount } = await mockSearchText({
           query,
-          accountId: account_id,
-          processName: process_name,
-          startDate: start_date,
-          endDate: end_date,
+          accountId,
+          processName,
+          startDate,
+          endDate,
           page,
-          pageSize: page_size,
+          pageSize,
         });
 
         return reply.send({
           query,
           events,
-          total_count: totalCount,
+          totalCount,
           page,
-          page_size,
+          pageSize,
         });
       }
     );
@@ -102,7 +102,7 @@ describe('POST /v1/events/search/text', () => {
         url: '/v1/events/search/text',
         payload: {
           query: 'payment',
-          account_id: 'acc-123',
+          accountId: 'acc-123',
         },
       });
 
@@ -110,7 +110,7 @@ describe('POST /v1/events/search/text', () => {
       const body = response.json();
       expect(body.query).toBe('payment');
       expect(body.events).toHaveLength(1);
-      expect(body.total_count).toBe(1);
+      expect(body.totalCount).toBe(1);
     });
 
     it('should return empty results for no matches', async () => {
@@ -124,17 +124,17 @@ describe('POST /v1/events/search/text', () => {
         url: '/v1/events/search/text',
         payload: {
           query: 'nonexistent-query',
-          account_id: 'acc-123',
+          accountId: 'acc-123',
         },
       });
 
       expect(response.statusCode).toBe(200);
       const body = response.json();
       expect(body.events).toHaveLength(0);
-      expect(body.total_count).toBe(0);
+      expect(body.totalCount).toBe(0);
     });
 
-    it('should pass account_id filter correctly', async () => {
+    it('should pass accountId filter correctly', async () => {
       let capturedFilters: { accountId?: string } | null = null;
       mockSearchText = async (filters) => {
         capturedFilters = filters;
@@ -146,7 +146,7 @@ describe('POST /v1/events/search/text', () => {
         url: '/v1/events/search/text',
         payload: {
           query: 'test',
-          account_id: 'acc-123',
+          accountId: 'acc-123',
         },
       });
 
@@ -154,7 +154,7 @@ describe('POST /v1/events/search/text', () => {
       expect(capturedFilters?.accountId).toBe('acc-123');
     });
 
-    it('should pass process_name filter correctly', async () => {
+    it('should pass processName filter correctly', async () => {
       let capturedFilters: { processName?: string } | null = null;
       mockSearchText = async (filters) => {
         capturedFilters = filters;
@@ -166,7 +166,7 @@ describe('POST /v1/events/search/text', () => {
         url: '/v1/events/search/text',
         payload: {
           query: 'test',
-          process_name: 'payment-process',
+          processName: 'payment-process',
         },
       });
 
@@ -186,9 +186,9 @@ describe('POST /v1/events/search/text', () => {
         url: '/v1/events/search/text',
         payload: {
           query: 'test',
-          account_id: 'acc-123',
-          start_date: '2024-01-01T00:00:00Z',
-          end_date: '2024-01-30T00:00:00Z',
+          accountId: 'acc-123',
+          startDate: '2024-01-01T00:00:00Z',
+          endDate: '2024-01-30T00:00:00Z',
         },
       });
 
@@ -209,9 +209,9 @@ describe('POST /v1/events/search/text', () => {
         url: '/v1/events/search/text',
         payload: {
           query: 'test',
-          account_id: 'acc-123',
+          accountId: 'acc-123',
           page: 3,
-          page_size: 50,
+          pageSize: 50,
         },
       });
 
@@ -232,7 +232,7 @@ describe('POST /v1/events/search/text', () => {
         url: '/v1/events/search/text',
         payload: {
           query: 'test',
-          process_name: 'payment-process',
+          processName: 'payment-process',
         },
       });
 
@@ -271,7 +271,7 @@ describe('POST /v1/events/search/text', () => {
         url: '/v1/events/search/text',
         payload: {
           query: 'test',
-          account_id: 'acc-123',
+          accountId: 'acc-123',
           page: 0,
         },
       });
@@ -279,7 +279,7 @@ describe('POST /v1/events/search/text', () => {
       expect(response.statusCode).toBe(400);
     });
 
-    it('should require account_id or process_name', async () => {
+    it('should require accountId or processName', async () => {
       const response = await app.inject({
         method: 'POST',
         url: '/v1/events/search/text',
@@ -297,23 +297,23 @@ describe('POST /v1/events/search/text', () => {
         url: '/v1/events/search/text',
         payload: {
           query: 'test',
-          account_id: 'acc-123',
-          start_date: '2024-01-01T00:00:00Z',
-          end_date: '2024-02-15T00:00:00Z',
+          accountId: 'acc-123',
+          startDate: '2024-01-01T00:00:00Z',
+          endDate: '2024-02-15T00:00:00Z',
         },
       });
 
       expect(response.statusCode).toBe(400);
     });
 
-    it('should reject page_size above 50', async () => {
+    it('should reject pageSize above 50', async () => {
       const response = await app.inject({
         method: 'POST',
         url: '/v1/events/search/text',
         payload: {
           query: 'test',
-          account_id: 'acc-123',
-          page_size: 100,
+          accountId: 'acc-123',
+          pageSize: 100,
         },
       });
 
@@ -332,7 +332,7 @@ describe('POST /v1/events/search/text', () => {
         url: '/v1/events/search/text',
         payload: {
           query: 'test',
-          account_id: 'acc-123',
+          accountId: 'acc-123',
         },
       });
 

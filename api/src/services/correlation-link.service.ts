@@ -11,17 +11,17 @@ export async function createCorrelationLink(
   // MSSQL doesn't have onConflictDoUpdate, use MERGE via raw SQL
   await db.execute(sql`
     MERGE ${correlationLinks} AS target
-    USING (SELECT ${data.correlation_id} AS correlation_id) AS source
+    USING (SELECT ${data.correlationId} AS correlation_id) AS source
     ON target.correlation_id = source.correlation_id
     WHEN MATCHED THEN
       UPDATE SET
-        account_id = ${data.account_id},
-        application_id = ${data.application_id ?? null},
-        customer_id = ${data.customer_id ?? null},
-        card_number_last4 = ${data.card_number_last4 ?? null}
+        account_id = ${data.accountId},
+        application_id = ${data.applicationId ?? null},
+        customer_id = ${data.customerId ?? null},
+        card_number_last4 = ${data.cardNumberLast4 ?? null}
     WHEN NOT MATCHED THEN
       INSERT (correlation_id, account_id, application_id, customer_id, card_number_last4)
-      VALUES (${data.correlation_id}, ${data.account_id}, ${data.application_id ?? null}, ${data.customer_id ?? null}, ${data.card_number_last4 ?? null});
+      VALUES (${data.correlationId}, ${data.accountId}, ${data.applicationId ?? null}, ${data.customerId ?? null}, ${data.cardNumberLast4 ?? null});
   `);
 
   // Fetch and return the result
@@ -29,7 +29,7 @@ export async function createCorrelationLink(
     .select()
     .top(1)
     .from(correlationLinks)
-    .where(eq(correlationLinks.correlationId, data.correlation_id));
+    .where(eq(correlationLinks.correlationId, data.correlationId));
 
   return result;
 }

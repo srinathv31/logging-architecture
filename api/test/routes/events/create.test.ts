@@ -52,13 +52,13 @@ function buildTestApp() {
 
         if (Array.isArray(events)) {
           const { executionIds, errors } = await mockCreateEvents(events);
-          const correlationIds = [...new Set(events.map((e: { correlation_id: string }) => e.correlation_id))];
+          const correlationIds = [...new Set(events.map((e: { correlationId: string }) => e.correlationId))];
           return reply.status(201).send({
             success: errors.length === 0,
-            total_received: events.length,
-            total_inserted: executionIds.length,
-            execution_ids: executionIds,
-            correlation_ids: correlationIds,
+            totalReceived: events.length,
+            totalInserted: executionIds.length,
+            executionIds: executionIds,
+            correlationIds: correlationIds,
             errors: errors.length > 0 ? errors : undefined,
           });
         }
@@ -66,8 +66,8 @@ function buildTestApp() {
         const result = await mockCreateEvent(events);
         return reply.status(201).send({
           success: true,
-          execution_ids: [result.executionId],
-          correlation_id: events.correlation_id,
+          executionIds: [result.executionId],
+          correlationId: events.correlationId,
         });
       }
     );
@@ -88,9 +88,9 @@ function buildTestApp() {
 
         return reply.status(201).send({
           success: errors.length === 0,
-          total_received: events.length,
-          total_inserted: executionIds.length,
-          execution_ids: executionIds,
+          totalReceived: events.length,
+          totalInserted: executionIds.length,
+          executionIds: executionIds,
           errors: errors.length > 0 ? errors : undefined,
         });
       }
@@ -123,7 +123,7 @@ describe('POST /v1/events', () => {
       const eventFixture = createEventFixture();
       mockCreateEvent = async () => ({
         executionId: 'test-execution-id',
-        correlationId: eventFixture.correlation_id,
+        correlationId: eventFixture.correlationId,
       });
 
       const response = await app.inject({
@@ -135,8 +135,8 @@ describe('POST /v1/events', () => {
       expect(response.statusCode).toBe(201);
       expect(response.json()).toEqual({
         success: true,
-        execution_ids: ['test-execution-id'],
-        correlation_id: eventFixture.correlation_id,
+        executionIds: ['test-execution-id'],
+        correlationId: eventFixture.correlationId,
       });
     });
 
@@ -150,9 +150,9 @@ describe('POST /v1/events', () => {
       expect(response.statusCode).toBe(400);
     });
 
-    it('should require correlation_id', async () => {
+    it('should require correlationId', async () => {
       const invalidEvent = { ...createEventFixture() };
-      delete (invalidEvent as unknown as { correlation_id?: string }).correlation_id;
+      delete (invalidEvent as unknown as { correlationId?: string }).correlationId;
 
       const response = await app.inject({
         method: 'POST',
@@ -163,9 +163,9 @@ describe('POST /v1/events', () => {
       expect(response.statusCode).toBe(400);
     });
 
-    it('should require trace_id', async () => {
+    it('should require traceId', async () => {
       const invalidEvent = { ...createEventFixture() };
-      delete (invalidEvent as unknown as { trace_id?: string }).trace_id;
+      delete (invalidEvent as unknown as { traceId?: string }).traceId;
 
       const response = await app.inject({
         method: 'POST',
@@ -180,8 +180,8 @@ describe('POST /v1/events', () => {
   describe('array event creation', () => {
     it('should create multiple events in an array', async () => {
       const events = [
-        createEventFixture({ step_sequence: 1 }),
-        createEventFixture({ step_sequence: 2 }),
+        createEventFixture({ stepSequence: 1 }),
+        createEventFixture({ stepSequence: 2 }),
       ];
 
       mockCreateEvents = async () => ({
@@ -198,17 +198,17 @@ describe('POST /v1/events', () => {
       expect(response.statusCode).toBe(201);
       const body = response.json();
       expect(body.success).toBe(true);
-      expect(body.total_received).toBe(2);
-      expect(body.total_inserted).toBe(2);
-      expect(body.execution_ids).toEqual(['exec-1', 'exec-2']);
-      expect(body.correlation_ids).toEqual([events[0].correlation_id]);
+      expect(body.totalReceived).toBe(2);
+      expect(body.totalInserted).toBe(2);
+      expect(body.executionIds).toEqual(['exec-1', 'exec-2']);
+      expect(body.correlationIds).toEqual([events[0].correlationId]);
     });
 
-    it('should return multiple correlation_ids when events have different ones', async () => {
+    it('should return multiple correlationIds when events have different ones', async () => {
       const events = [
-        createEventFixture({ correlation_id: 'corr-A' }),
-        createEventFixture({ correlation_id: 'corr-B' }),
-        createEventFixture({ correlation_id: 'corr-A' }),
+        createEventFixture({ correlationId: 'corr-A' }),
+        createEventFixture({ correlationId: 'corr-B' }),
+        createEventFixture({ correlationId: 'corr-A' }),
       ];
 
       mockCreateEvents = async () => ({
@@ -224,13 +224,13 @@ describe('POST /v1/events', () => {
 
       expect(response.statusCode).toBe(201);
       const body = response.json();
-      expect(body.correlation_ids).toEqual(['corr-A', 'corr-B']);
+      expect(body.correlationIds).toEqual(['corr-A', 'corr-B']);
     });
 
     it('should report partial failures with errors array', async () => {
       const events = [
-        createEventFixture({ step_sequence: 1 }),
-        createEventFixture({ step_sequence: 2 }),
+        createEventFixture({ stepSequence: 1 }),
+        createEventFixture({ stepSequence: 2 }),
       ];
 
       mockCreateEvents = async () => ({
@@ -247,8 +247,8 @@ describe('POST /v1/events', () => {
       expect(response.statusCode).toBe(201);
       const body = response.json();
       expect(body.success).toBe(false);
-      expect(body.total_received).toBe(2);
-      expect(body.total_inserted).toBe(1);
+      expect(body.totalReceived).toBe(2);
+      expect(body.totalInserted).toBe(1);
       expect(body.errors).toEqual([{ index: 1, error: 'Duplicate key' }]);
     });
   });
@@ -290,8 +290,8 @@ describe('POST /v1/events/batch', () => {
 
   it('should batch create events successfully', async () => {
     const events = [
-      createEventFixture({ correlation_id: 'batch-1' }),
-      createEventFixture({ correlation_id: 'batch-2' }),
+      createEventFixture({ correlationId: 'batch-1' }),
+      createEventFixture({ correlationId: 'batch-2' }),
     ];
 
     mockCreateEvents = async () => ({
@@ -308,16 +308,16 @@ describe('POST /v1/events/batch', () => {
     expect(response.statusCode).toBe(201);
     expect(response.json()).toEqual({
       success: true,
-      total_received: 2,
-      total_inserted: 2,
-      execution_ids: ['exec-1', 'exec-2'],
+      totalReceived: 2,
+      totalInserted: 2,
+      executionIds: ['exec-1', 'exec-2'],
     });
   });
 
   it('should report partial failures', async () => {
     const events = [
-      createEventFixture({ correlation_id: 'batch-1' }),
-      createEventFixture({ correlation_id: 'batch-2' }),
+      createEventFixture({ correlationId: 'batch-1' }),
+      createEventFixture({ correlationId: 'batch-2' }),
     ];
 
     mockCreateEvents = async () => ({
@@ -334,8 +334,8 @@ describe('POST /v1/events/batch', () => {
     expect(response.statusCode).toBe(201);
     const body = response.json();
     expect(body.success).toBe(false);
-    expect(body.total_received).toBe(2);
-    expect(body.total_inserted).toBe(1);
+    expect(body.totalReceived).toBe(2);
+    expect(body.totalInserted).toBe(1);
     expect(body.errors).toHaveLength(1);
     expect(body.errors[0]).toEqual({ index: 1, error: 'Duplicate key error' });
   });

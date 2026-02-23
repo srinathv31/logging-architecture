@@ -232,11 +232,11 @@ public class EventLogClient implements AutoCloseable {
             String cardNumberLast4) {
         
         Map<String, String> body = new HashMap<>();
-        body.put("correlation_id", correlationId);
-        body.put("account_id", accountId);
-        if (applicationId != null) body.put("application_id", applicationId);
-        if (customerId != null) body.put("customer_id", customerId);
-        if (cardNumberLast4 != null) body.put("card_number_last4", cardNumberLast4);
+        body.put("correlationId", correlationId);
+        body.put("accountId", accountId);
+        if (applicationId != null) body.put("applicationId", applicationId);
+        if (customerId != null) body.put("customerId", customerId);
+        if (cardNumberLast4 != null) body.put("cardNumberLast4", cardNumberLast4);
         
         return post("/v1/correlation-links", body, CreateCorrelationLinkResponse.class);
     }
@@ -441,8 +441,8 @@ public class EventLogClient implements AutoCloseable {
     private String extractErrorCode(String responseBody) {
         try {
             var node = objectMapper.readTree(responseBody);
-            if (node.has("error_code")) {
-                return node.get("error_code").asText();
+            if (node.has("error")) {
+                return node.get("error").asText();
             }
         } catch (Exception ignored) {}
         return null;

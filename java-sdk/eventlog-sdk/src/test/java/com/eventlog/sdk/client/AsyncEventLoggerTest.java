@@ -26,7 +26,7 @@ import static org.junit.jupiter.api.Assertions.*;
 
 class AsyncEventLoggerTest {
 
-    private static final String SUCCESS_BODY = "{\"success\":true,\"execution_ids\":[\"id1\"],\"correlation_id\":\"corr\"}";
+    private static final String SUCCESS_BODY = "{\"success\":true,\"executionIds\":[\"id1\"],\"correlationId\":\"corr\"}";
     private static final String ERROR_BODY = "{\"error\":\"boom\"}";
 
     @Test
@@ -172,8 +172,8 @@ class AsyncEventLoggerTest {
         }
         String json = Files.readString(spillFile);
 
-        assertTrue(json.contains("\"trace_id\":\"trace\""));
-        assertTrue(json.contains("\"event_type\":\"STEP\""));
+        assertTrue(json.contains("\"traceId\":\"trace\""));
+        assertTrue(json.contains("\"eventType\":\"STEP\""));
         assertTrue(json.contains("\"endpoint\":\"/v1/orders\""));
         assertTrue(json.contains("\"identifiers\":{\"order_id\":\"ORD-123\"}"));
         assertTrue(json.contains("\"metadata\":{\"source\":\"test\"}"));
@@ -745,7 +745,7 @@ class AsyncEventLoggerTest {
     // ========================================================================
 
     private static final String BATCH_SUCCESS_BODY =
-            "{\"success\":true,\"total_received\":5,\"total_inserted\":5,\"execution_ids\":[\"id1\",\"id2\",\"id3\",\"id4\",\"id5\"],\"errors\":[]}";
+            "{\"success\":true,\"totalReceived\":5,\"totalInserted\":5,\"executionIds\":[\"id1\",\"id2\",\"id3\",\"id4\",\"id5\"],\"errors\":[]}";
 
     @Test
     void batchSizeOneSendsIndividually() throws Exception {

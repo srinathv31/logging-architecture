@@ -3,21 +3,21 @@
  */
 export function createProcessFixture(
   overrides: Partial<{
-    process_name: string;
-    display_name: string;
+    processName: string;
+    displayName: string;
     description: string;
-    owning_team: string;
-    expected_steps?: number;
-    sla_ms?: number;
+    owningTeam: string;
+    expectedSteps?: number;
+    slaMs?: number;
   }> = {}
 ) {
   return {
-    process_name: 'test-process',
-    display_name: 'Test Process',
+    processName: 'test-process',
+    displayName: 'Test Process',
     description: 'A test process for unit testing',
-    owning_team: 'test-team',
-    expected_steps: 5,
-    sla_ms: 30000,
+    owningTeam: 'test-team',
+    expectedSteps: 5,
+    slaMs: 30000,
     ...overrides,
   };
 }

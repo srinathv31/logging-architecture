@@ -20,26 +20,26 @@ export async function byAccountRoutes(app: FastifyInstance) {
     },
     async (request, reply) => {
       const { accountId } = request.params;
-      const { page, page_size, start_date, end_date, process_name, event_status, include_linked } =
+      const { page, pageSize, startDate, endDate, processName, eventStatus, includeLinked } =
         request.query;
 
       const { events, totalCount, hasMore } = await eventLogService.getByAccount(accountId, {
-        startDate: start_date,
-        endDate: end_date,
-        processName: process_name,
-        eventStatus: event_status,
-        includeLinked: include_linked,
+        startDate,
+        endDate,
+        processName,
+        eventStatus,
+        includeLinked,
         page,
-        pageSize: page_size,
+        pageSize,
       });
 
       return reply.send({
-        account_id: accountId,
+        accountId,
         events,
-        total_count: totalCount,
+        totalCount,
         page,
-        page_size,
-        has_more: hasMore,
+        pageSize,
+        hasMore,
       });
     },
   );

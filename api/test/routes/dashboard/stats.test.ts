@@ -42,19 +42,19 @@ function buildTestApp() {
         },
       },
       async (request, reply) => {
-        const { start_date, end_date } = request.query;
+        const { startDate, endDate } = request.query;
 
         const stats = await mockGetDashboardStats({
-          startDate: start_date,
-          endDate: end_date,
+          startDate,
+          endDate,
         });
 
         return reply.send({
-          total_traces: stats.totalTraces,
-          total_accounts: stats.totalAccounts,
-          total_events: stats.totalEvents,
-          success_rate: stats.successRate,
-          system_names: stats.systemNames,
+          totalTraces: stats.totalTraces,
+          totalAccounts: stats.totalAccounts,
+          totalEvents: stats.totalEvents,
+          successRate: stats.successRate,
+          systemNames: stats.systemNames,
         });
       },
     );
@@ -102,11 +102,11 @@ describe('GET /v1/dashboard/stats', () => {
 
       expect(response.statusCode).toBe(200);
       const body = response.json();
-      expect(body.total_traces).toBe(500);
-      expect(body.total_accounts).toBe(120);
-      expect(body.total_events).toBe(15000);
-      expect(body.success_rate).toBe(95.5);
-      expect(body.system_names).toEqual(['system-a', 'system-b']);
+      expect(body.totalTraces).toBe(500);
+      expect(body.totalAccounts).toBe(120);
+      expect(body.totalEvents).toBe(15000);
+      expect(body.successRate).toBe(95.5);
+      expect(body.systemNames).toEqual(['system-a', 'system-b']);
     });
 
     it('should return defaults for zero traces', async () => {
@@ -117,11 +117,11 @@ describe('GET /v1/dashboard/stats', () => {
 
       expect(response.statusCode).toBe(200);
       const body = response.json();
-      expect(body.total_traces).toBe(0);
-      expect(body.total_accounts).toBe(0);
-      expect(body.total_events).toBe(0);
-      expect(body.success_rate).toBe(100);
-      expect(body.system_names).toEqual([]);
+      expect(body.totalTraces).toBe(0);
+      expect(body.totalAccounts).toBe(0);
+      expect(body.totalEvents).toBe(0);
+      expect(body.successRate).toBe(100);
+      expect(body.systemNames).toEqual([]);
     });
   });
 
@@ -141,7 +141,7 @@ describe('GET /v1/dashboard/stats', () => {
 
       await app.inject({
         method: 'GET',
-        url: '/v1/dashboard/stats?start_date=2024-01-01T00:00:00.000Z&end_date=2024-01-31T23:59:59.000Z',
+        url: '/v1/dashboard/stats?startDate=2024-01-01T00:00:00.000Z&endDate=2024-01-31T23:59:59.000Z',
       });
 
       expect(capturedFilters.startDate).toBe('2024-01-01T00:00:00.000Z');
@@ -164,7 +164,7 @@ describe('GET /v1/dashboard/stats', () => {
 
       expect(response.statusCode).toBe(200);
       const body = response.json();
-      expect(body.total_traces).toBe(100);
+      expect(body.totalTraces).toBe(100);
     });
   });
 

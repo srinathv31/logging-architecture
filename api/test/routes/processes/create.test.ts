@@ -41,16 +41,16 @@ function buildTestApp() {
         },
       },
       async (request, reply) => {
-        const { process_name, display_name, description, owning_team, expected_steps, sla_ms } =
+        const { processName, displayName, description, owningTeam, expectedSteps, slaMs } =
           request.body;
 
         const result = await mockCreateProcess({
-          processName: process_name,
-          displayName: display_name,
+          processName,
+          displayName,
           description,
-          owningTeam: owning_team,
-          expectedSteps: expected_steps,
-          slaMs: sla_ms,
+          owningTeam,
+          expectedSteps,
+          slaMs,
         });
 
         return reply.status(201).send(result);
@@ -91,25 +91,25 @@ describe('POST /v1/processes', () => {
         method: 'POST',
         url: '/v1/processes',
         payload: {
-          process_name: fixture.process_name,
-          display_name: fixture.display_name,
+          processName: fixture.processName,
+          displayName: fixture.displayName,
           description: fixture.description,
-          owning_team: fixture.owning_team,
+          owningTeam: fixture.owningTeam,
         },
       });
 
       expect(response.statusCode).toBe(201);
       const body = response.json();
-      expect(body.processName).toBe(fixture.process_name);
-      expect(body.displayName).toBe(fixture.display_name);
+      expect(body.processName).toBe(fixture.processName);
+      expect(body.displayName).toBe(fixture.displayName);
       expect(body.description).toBe(fixture.description);
-      expect(body.owningTeam).toBe(fixture.owning_team);
+      expect(body.owningTeam).toBe(fixture.owningTeam);
     });
 
     it('should create a process with all optional fields', async () => {
       const fixture = createProcessFixture({
-        expected_steps: 10,
-        sla_ms: 60000,
+        expectedSteps: 10,
+        slaMs: 60000,
       });
 
       mockCreateProcess = async (data) => createProcessDbRecord({
@@ -163,28 +163,28 @@ describe('POST /v1/processes', () => {
   });
 
   describe('validation errors', () => {
-    it('should require process_name', async () => {
+    it('should require processName', async () => {
       const response = await app.inject({
         method: 'POST',
         url: '/v1/processes',
         payload: {
-          display_name: 'Test Process',
+          displayName: 'Test Process',
           description: 'A test process',
-          owning_team: 'test-team',
+          owningTeam: 'test-team',
         },
       });
 
       expect(response.statusCode).toBe(400);
     });
 
-    it('should require display_name', async () => {
+    it('should require displayName', async () => {
       const response = await app.inject({
         method: 'POST',
         url: '/v1/processes',
         payload: {
-          process_name: 'test-process',
+          processName: 'test-process',
           description: 'A test process',
-          owning_team: 'test-team',
+          owningTeam: 'test-team',
         },
       });
 
@@ -196,22 +196,22 @@ describe('POST /v1/processes', () => {
         method: 'POST',
         url: '/v1/processes',
         payload: {
-          process_name: 'test-process',
-          display_name: 'Test Process',
-          owning_team: 'test-team',
+          processName: 'test-process',
+          displayName: 'Test Process',
+          owningTeam: 'test-team',
         },
       });
 
       expect(response.statusCode).toBe(400);
     });
 
-    it('should require owning_team', async () => {
+    it('should require owningTeam', async () => {
       const response = await app.inject({
         method: 'POST',
         url: '/v1/processes',
         payload: {
-          process_name: 'test-process',
-          display_name: 'Test Process',
+          processName: 'test-process',
+          displayName: 'Test Process',
           description: 'A test process',
         },
       });
@@ -219,31 +219,31 @@ describe('POST /v1/processes', () => {
       expect(response.statusCode).toBe(400);
     });
 
-    it('should reject empty process_name', async () => {
+    it('should reject empty processName', async () => {
       const response = await app.inject({
         method: 'POST',
         url: '/v1/processes',
         payload: {
-          process_name: '',
-          display_name: 'Test Process',
+          processName: '',
+          displayName: 'Test Process',
           description: 'A test process',
-          owning_team: 'test-team',
+          owningTeam: 'test-team',
         },
       });
 
       expect(response.statusCode).toBe(400);
     });
 
-    it('should reject non-positive expected_steps', async () => {
+    it('should reject non-positive expectedSteps', async () => {
       const response = await app.inject({
         method: 'POST',
         url: '/v1/processes',
         payload: {
-          process_name: 'test-process',
-          display_name: 'Test Process',
+          processName: 'test-process',
+          displayName: 'Test Process',
           description: 'A test process',
-          owning_team: 'test-team',
-          expected_steps: 0,
+          owningTeam: 'test-team',
+          expectedSteps: 0,
         },
       });
 

@@ -19,19 +19,19 @@ export async function dashboardStatsRoute(app: FastifyInstance) {
       },
     },
     async (request, reply) => {
-      const { start_date, end_date } = request.query;
+      const { startDate, endDate } = request.query;
 
       const stats = await eventLogService.getDashboardStats({
-        startDate: start_date,
-        endDate: end_date,
+        startDate,
+        endDate,
       });
 
       return reply.send({
-        total_traces: stats.totalTraces,
-        total_accounts: stats.totalAccounts,
-        total_events: stats.totalEvents,
-        success_rate: stats.successRate,
-        system_names: stats.systemNames,
+        totalTraces: stats.totalTraces,
+        totalAccounts: stats.totalAccounts,
+        totalEvents: stats.totalEvents,
+        successRate: stats.successRate,
+        systemNames: stats.systemNames,
       });
     },
   );

@@ -189,7 +189,7 @@ describe('EventLogService', () => {
   });
 
   describe('createEvent', () => {
-    it('should return existing record when idempotency_key matches', async () => {
+    it('should return existing record when idempotencyKey matches', async () => {
       const existingRecord = createEventLogDbRecord({
         executionId: 'existing-exec-id',
         idempotencyKey: 'idem-key-123',
@@ -198,7 +198,7 @@ describe('EventLogService', () => {
       mockDb._setTopResult([existingRecord]);
 
       const entry = createEventFixture({
-        idempotency_key: 'idem-key-123',
+        idempotencyKey: 'idem-key-123',
       });
 
       const result = await createEvent(entry);
@@ -207,7 +207,7 @@ describe('EventLogService', () => {
       expect(mockDb.insert).not.toHaveBeenCalled();
     });
 
-    it('should insert new record when no idempotency_key match', async () => {
+    it('should insert new record when no idempotencyKey match', async () => {
       const newRecord = createEventLogDbRecord({
         executionId: 'new-exec-id',
       });
@@ -216,7 +216,7 @@ describe('EventLogService', () => {
       mockDb._setInsertResult([newRecord]);
 
       const entry = createEventFixture({
-        idempotency_key: 'new-idem-key',
+        idempotencyKey: 'new-idem-key',
       });
 
       const result = await createEvent(entry);
@@ -225,7 +225,7 @@ describe('EventLogService', () => {
       expect(mockDb.insert).toHaveBeenCalled();
     });
 
-    it('should insert without idempotency check when no idempotency_key provided', async () => {
+    it('should insert without idempotency check when no idempotencyKey provided', async () => {
       const newRecord = createEventLogDbRecord({
         executionId: 'direct-insert-id',
       });
@@ -233,7 +233,7 @@ describe('EventLogService', () => {
       mockDb._setInsertResult([newRecord]);
 
       const entry = createEventFixture();
-      delete entry.idempotency_key;
+      delete entry.idempotencyKey;
 
       const result = await createEvent(entry);
 
@@ -348,44 +348,44 @@ describe('EventLogService - Test Fixtures', () => {
     it('should create a valid event fixture with default values', () => {
       const fixture = createEventFixture();
 
-      expect(fixture.correlation_id).toBe('test-correlation-id');
-      expect(fixture.trace_id).toBe('test-trace-id');
-      expect(fixture.application_id).toBe('test-app');
-      expect(fixture.event_type).toBe('PROCESS_START');
-      expect(fixture.event_status).toBe('SUCCESS');
+      expect(fixture.correlationId).toBe('test-correlation-id');
+      expect(fixture.traceId).toBe('test-trace-id');
+      expect(fixture.applicationId).toBe('test-app');
+      expect(fixture.eventType).toBe('PROCESS_START');
+      expect(fixture.eventStatus).toBe('SUCCESS');
     });
 
     it('should allow overriding default values', () => {
       const fixture = createEventFixture({
-        correlation_id: 'custom-id',
-        event_status: 'FAILURE',
+        correlationId: 'custom-id',
+        eventStatus: 'FAILURE',
       });
 
-      expect(fixture.correlation_id).toBe('custom-id');
-      expect(fixture.event_status).toBe('FAILURE');
-      expect(fixture.trace_id).toBe('test-trace-id');
+      expect(fixture.correlationId).toBe('custom-id');
+      expect(fixture.eventStatus).toBe('FAILURE');
+      expect(fixture.traceId).toBe('test-trace-id');
     });
 
     it('should have required fields', () => {
       const fixture = createEventFixture();
 
-      expect(fixture).toHaveProperty('correlation_id');
-      expect(fixture).toHaveProperty('trace_id');
-      expect(fixture).toHaveProperty('application_id');
-      expect(fixture).toHaveProperty('target_system');
-      expect(fixture).toHaveProperty('originating_system');
-      expect(fixture).toHaveProperty('process_name');
-      expect(fixture).toHaveProperty('event_type');
-      expect(fixture).toHaveProperty('event_status');
+      expect(fixture).toHaveProperty('correlationId');
+      expect(fixture).toHaveProperty('traceId');
+      expect(fixture).toHaveProperty('applicationId');
+      expect(fixture).toHaveProperty('targetSystem');
+      expect(fixture).toHaveProperty('originatingSystem');
+      expect(fixture).toHaveProperty('processName');
+      expect(fixture).toHaveProperty('eventType');
+      expect(fixture).toHaveProperty('eventStatus');
       expect(fixture).toHaveProperty('identifiers');
       expect(fixture).toHaveProperty('summary');
       expect(fixture).toHaveProperty('result');
-      expect(fixture).toHaveProperty('event_timestamp');
+      expect(fixture).toHaveProperty('eventTimestamp');
     });
 
     it('should have valid timestamp', () => {
       const fixture = createEventFixture();
-      const timestamp = new Date(fixture.event_timestamp);
+      const timestamp = new Date(fixture.eventTimestamp);
 
       expect(timestamp).toBeInstanceOf(Date);
       expect(isNaN(timestamp.getTime())).toBe(false);
@@ -427,79 +427,79 @@ describe('EventLogService - Test Fixtures', () => {
 
     it('should have unique correlation IDs per event', () => {
       const batch = createEventBatchFixture(3);
-      const correlationIds = batch.map((e) => e.correlation_id);
+      const correlationIds = batch.map((e) => e.correlationId);
       const uniqueIds = new Set(correlationIds);
       expect(uniqueIds.size).toBe(3);
     });
 
     it('should increment step sequence', () => {
       const batch = createEventBatchFixture(3);
-      expect(batch[0].step_sequence).toBe(1);
-      expect(batch[1].step_sequence).toBe(2);
-      expect(batch[2].step_sequence).toBe(3);
+      expect(batch[0].stepSequence).toBe(1);
+      expect(batch[1].stepSequence).toBe(2);
+      expect(batch[2].stepSequence).toBe(3);
     });
   });
 });
 
 describe('EventLogService - Entry to Insert Mapping', () => {
-  it('should map snake_case API fields to camelCase DB fields', () => {
+  it('should map camelCase API fields to camelCase DB fields', () => {
     const entry = createEventFixture({
-      correlation_id: 'test-corr',
-      account_id: 'test-account',
-      trace_id: 'test-trace',
-      span_id: 'test-span',
-      parent_span_id: 'parent-span',
-      batch_id: 'batch-1',
-      application_id: 'app-1',
-      target_system: 'target-sys',
-      originating_system: 'origin-sys',
-      process_name: 'process-1',
-      step_sequence: 5,
-      step_name: 'step-5',
-      event_type: 'STEP',
-      event_status: 'SUCCESS',
-      execution_time_ms: 250,
-      http_method: 'POST',
-      http_status_code: 201,
-      error_code: 'ERR001',
-      error_message: 'Test error',
-      idempotency_key: 'idem-key',
+      correlationId: 'test-corr',
+      accountId: 'test-account',
+      traceId: 'test-trace',
+      spanId: 'test-span',
+      parentSpanId: 'parent-span',
+      batchId: 'batch-1',
+      applicationId: 'app-1',
+      targetSystem: 'target-sys',
+      originatingSystem: 'origin-sys',
+      processName: 'process-1',
+      stepSequence: 5,
+      stepName: 'step-5',
+      eventType: 'STEP',
+      eventStatus: 'SUCCESS',
+      executionTimeMs: 250,
+      httpMethod: 'POST',
+      httpStatusCode: 201,
+      errorCode: 'ERR001',
+      errorMessage: 'Test error',
+      idempotencyKey: 'idem-key',
     });
 
     // Verify field mapping matches what the service expects
-    expect(entry.correlation_id).toBe('test-corr');
-    expect(entry.account_id).toBe('test-account');
-    expect(entry.trace_id).toBe('test-trace');
-    expect(entry.span_id).toBe('test-span');
-    expect(entry.parent_span_id).toBe('parent-span');
-    expect(entry.batch_id).toBe('batch-1');
-    expect(entry.application_id).toBe('app-1');
-    expect(entry.target_system).toBe('target-sys');
-    expect(entry.originating_system).toBe('origin-sys');
-    expect(entry.process_name).toBe('process-1');
-    expect(entry.step_sequence).toBe(5);
-    expect(entry.step_name).toBe('step-5');
-    expect(entry.event_type).toBe('STEP');
-    expect(entry.event_status).toBe('SUCCESS');
-    expect(entry.execution_time_ms).toBe(250);
-    expect(entry.http_method).toBe('POST');
-    expect(entry.http_status_code).toBe(201);
-    expect(entry.error_code).toBe('ERR001');
-    expect(entry.error_message).toBe('Test error');
-    expect(entry.idempotency_key).toBe('idem-key');
+    expect(entry.correlationId).toBe('test-corr');
+    expect(entry.accountId).toBe('test-account');
+    expect(entry.traceId).toBe('test-trace');
+    expect(entry.spanId).toBe('test-span');
+    expect(entry.parentSpanId).toBe('parent-span');
+    expect(entry.batchId).toBe('batch-1');
+    expect(entry.applicationId).toBe('app-1');
+    expect(entry.targetSystem).toBe('target-sys');
+    expect(entry.originatingSystem).toBe('origin-sys');
+    expect(entry.processName).toBe('process-1');
+    expect(entry.stepSequence).toBe(5);
+    expect(entry.stepName).toBe('step-5');
+    expect(entry.eventType).toBe('STEP');
+    expect(entry.eventStatus).toBe('SUCCESS');
+    expect(entry.executionTimeMs).toBe(250);
+    expect(entry.httpMethod).toBe('POST');
+    expect(entry.httpStatusCode).toBe(201);
+    expect(entry.errorCode).toBe('ERR001');
+    expect(entry.errorMessage).toBe('Test error');
+    expect(entry.idempotencyKey).toBe('idem-key');
   });
 
   it('should handle optional fields as null/undefined', () => {
     const entry = createEventFixture();
 
     // Optional fields should have defaults or be undefined
-    expect(entry.parent_span_id).toBeUndefined();
-    expect(entry.batch_id).toBeUndefined();
-    expect(entry.http_method).toBeUndefined();
-    expect(entry.http_status_code).toBeUndefined();
-    expect(entry.error_code).toBeUndefined();
-    expect(entry.error_message).toBeUndefined();
-    expect(entry.idempotency_key).toBeUndefined();
+    expect(entry.parentSpanId).toBeUndefined();
+    expect(entry.batchId).toBeUndefined();
+    expect(entry.httpMethod).toBeUndefined();
+    expect(entry.httpStatusCode).toBeUndefined();
+    expect(entry.errorCode).toBeUndefined();
+    expect(entry.errorMessage).toBeUndefined();
+    expect(entry.idempotencyKey).toBeUndefined();
   });
 });
 
@@ -533,7 +533,7 @@ describe('createEvents', () => {
   });
 
   it('should process entries within a transaction', async () => {
-    const entries = [createEventFixture({ correlation_id: 'corr-1' })];
+    const entries = [createEventFixture({ correlationId: 'corr-1' })];
 
     // Setup mock for transaction flow
     let transactionCalled = false;
@@ -564,7 +564,7 @@ describe('createEvents', () => {
 
   it('should return existing executionId for duplicate idempotency keys', async () => {
     const entries = [
-      createEventFixture({ idempotency_key: 'idem-1', correlation_id: 'corr-1' }),
+      createEventFixture({ idempotencyKey: 'idem-1', correlationId: 'corr-1' }),
     ];
 
     mockDb.transaction.mockImplementation(async (callback: (tx: typeof mockDb) => Promise<void>) => {
@@ -588,8 +588,8 @@ describe('createEvents', () => {
   });
 
   it('should handle entries without idempotency keys', async () => {
-    const entry = createEventFixture({ correlation_id: 'corr-1' });
-    delete entry.idempotency_key;
+    const entry = createEventFixture({ correlationId: 'corr-1' });
+    delete entry.idempotencyKey;
     const entries = [entry];
 
     mockDb.transaction.mockImplementation(async (callback: (tx: typeof mockDb) => Promise<void>) => {
@@ -616,8 +616,8 @@ describe('createEvents', () => {
 
   it('should collect multiple idempotency keys from entries', async () => {
     const entries = [
-      createEventFixture({ idempotency_key: 'idem-1', correlation_id: 'corr-1' }),
-      createEventFixture({ idempotency_key: 'idem-2', correlation_id: 'corr-2' }),
+      createEventFixture({ idempotencyKey: 'idem-1', correlationId: 'corr-1' }),
+      createEventFixture({ idempotencyKey: 'idem-2', correlationId: 'corr-2' }),
     ];
 
     let selectCallCount = 0;
@@ -651,8 +651,8 @@ describe('createEvents', () => {
 
   it('should fall back to individual inserts on batch failure', async () => {
     const entries = [
-      createEventFixture({ correlation_id: 'corr-1' }),
-      createEventFixture({ correlation_id: 'corr-2' }),
+      createEventFixture({ correlationId: 'corr-1' }),
+      createEventFixture({ correlationId: 'corr-2' }),
     ];
 
     let batchAttempted = false;
@@ -692,7 +692,7 @@ describe('createEvents', () => {
   });
 
   it('should track per-entry errors when individual inserts fail', async () => {
-    const entries = [createEventFixture({ correlation_id: 'corr-1' })];
+    const entries = [createEventFixture({ correlationId: 'corr-1' })];
 
     mockDb.transaction.mockImplementation(async (callback: (tx: typeof mockDb) => Promise<void>) => {
       const txMock = {
@@ -720,9 +720,9 @@ describe('createEvents', () => {
 
   it('should return all executionIds in order', async () => {
     const entries = [
-      createEventFixture({ correlation_id: 'corr-1' }),
-      createEventFixture({ correlation_id: 'corr-2' }),
-      createEventFixture({ correlation_id: 'corr-3' }),
+      createEventFixture({ correlationId: 'corr-1' }),
+      createEventFixture({ correlationId: 'corr-2' }),
+      createEventFixture({ correlationId: 'corr-3' }),
     ];
 
     mockDb.transaction.mockImplementation(async (callback: (tx: typeof mockDb) => Promise<void>) => {
@@ -1184,13 +1184,13 @@ describe('listTraces', () => {
     const result = await listTraces({ page: 1, pageSize: 20 });
 
     expect(result.traces).toHaveLength(1);
-    expect(result.traces[0].trace_id).toBe('trace-1');
-    expect(result.traces[0].event_count).toBe(5);
-    expect(result.traces[0].has_errors).toBe(true);
-    expect(result.traces[0].latest_status).toBe('FAILURE');
-    expect(result.traces[0].duration_ms).toBe(5000);
-    expect(result.traces[0].process_name).toBe('Onboarding');
-    expect(result.traces[0].account_id).toBe('ACC-1');
+    expect(result.traces[0].traceId).toBe('trace-1');
+    expect(result.traces[0].eventCount).toBe(5);
+    expect(result.traces[0].hasErrors).toBe(true);
+    expect(result.traces[0].latestStatus).toBe('FAILURE');
+    expect(result.traces[0].durationMs).toBe(5000);
+    expect(result.traces[0].processName).toBe('Onboarding');
+    expect(result.traces[0].accountId).toBe('ACC-1');
     expect(result.totalCount).toBe(1);
     expect(result.hasMore).toBe(false);
   });
@@ -1274,9 +1274,9 @@ describe('listTraces', () => {
 
     const result = await listTraces({ page: 1, pageSize: 20 });
 
-    expect(result.traces[0].has_errors).toBe(false);
-    expect(result.traces[0].process_name).toBeNull();
-    expect(result.traces[0].account_id).toBeNull();
+    expect(result.traces[0].hasErrors).toBe(false);
+    expect(result.traces[0].processName).toBeNull();
+    expect(result.traces[0].accountId).toBeNull();
   });
 });
 
@@ -1477,7 +1477,7 @@ describe('createBatchUpload', () => {
   });
 
   it('should associate batchId with entries', async () => {
-    const entries = [createEventFixture({ correlation_id: 'corr-1' })];
+    const entries = [createEventFixture({ correlationId: 'corr-1' })];
 
     mockDb.transaction.mockImplementation(async (callback: (tx: typeof mockDb) => Promise<void>) => {
       const txMock = {
@@ -1500,7 +1500,7 @@ describe('createBatchUpload', () => {
 
   it('should handle idempotency deduplication', async () => {
     const entries = [
-      createEventFixture({ idempotency_key: 'existing-key', correlation_id: 'corr-1' }),
+      createEventFixture({ idempotencyKey: 'existing-key', correlationId: 'corr-1' }),
     ];
 
     mockDb.transaction.mockImplementation(async (callback: (tx: typeof mockDb) => Promise<void>) => {
@@ -1523,9 +1523,9 @@ describe('createBatchUpload', () => {
 
   it('should return unique correlationIds', async () => {
     const entries = [
-      createEventFixture({ correlation_id: 'corr-1' }),
-      createEventFixture({ correlation_id: 'corr-1' }),
-      createEventFixture({ correlation_id: 'corr-2' }),
+      createEventFixture({ correlationId: 'corr-1' }),
+      createEventFixture({ correlationId: 'corr-1' }),
+      createEventFixture({ correlationId: 'corr-2' }),
     ];
 
     mockDb.transaction.mockImplementation(async (callback: (tx: typeof mockDb) => Promise<void>) => {
@@ -1551,8 +1551,8 @@ describe('createBatchUpload', () => {
 
   it('should track inserted count', async () => {
     const entries = [
-      createEventFixture({ correlation_id: 'corr-1' }),
-      createEventFixture({ correlation_id: 'corr-2' }),
+      createEventFixture({ correlationId: 'corr-1' }),
+      createEventFixture({ correlationId: 'corr-2' }),
     ];
 
     mockDb.transaction.mockImplementation(async (callback: (tx: typeof mockDb) => Promise<void>) => {
@@ -1575,7 +1575,7 @@ describe('createBatchUpload', () => {
   });
 
   it('should handle partial failures with errors array', async () => {
-    const entries = [createEventFixture({ correlation_id: 'corr-1' })];
+    const entries = [createEventFixture({ correlationId: 'corr-1' })];
 
     mockDb.transaction.mockImplementation(async (callback: (tx: typeof mockDb) => Promise<void>) => {
       const txMock = {

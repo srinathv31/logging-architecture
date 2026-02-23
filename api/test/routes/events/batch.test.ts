@@ -69,16 +69,16 @@ function buildTestApp() {
         },
       },
       async (request, reply) => {
-        const { batch_id, events } = request.body;
+        const { batchId, events } = request.body;
         const { correlationIds, totalInserted, errors } =
-          await mockCreateBatchUpload(batch_id, events);
+          await mockCreateBatchUpload(batchId, events);
 
         return reply.status(201).send({
           success: errors.length === 0,
-          batch_id,
-          total_received: events.length,
-          total_inserted: totalInserted,
-          correlation_ids: correlationIds,
+          batchId,
+          totalReceived: events.length,
+          totalInserted,
+          correlationIds,
           errors: errors.length > 0 ? errors : undefined,
         });
       }
@@ -96,24 +96,24 @@ function buildTestApp() {
       },
       async (request, reply) => {
         const { batchId } = request.params;
-        const { page, page_size, event_status } = request.query;
+        const { page, pageSize, eventStatus } = request.query;
 
         const result = await mockGetByBatch(batchId, {
-          eventStatus: event_status,
+          eventStatus,
           page,
-          pageSize: page_size,
+          pageSize,
         });
 
         return reply.send({
-          batch_id: batchId,
+          batchId,
           events: result.events,
-          total_count: result.totalCount,
-          unique_correlation_ids: result.uniqueCorrelationIds,
-          success_count: result.successCount,
-          failure_count: result.failureCount,
+          totalCount: result.totalCount,
+          uniqueCorrelationIds: result.uniqueCorrelationIds,
+          successCount: result.successCount,
+          failureCount: result.failureCount,
           page,
-          page_size,
-          has_more: result.hasMore,
+          pageSize,
+          hasMore: result.hasMore,
         });
       }
     );
@@ -132,14 +132,14 @@ function buildTestApp() {
         const summary = await mockGetBatchSummary(batchId);
 
         return reply.send({
-          batch_id: batchId,
-          total_processes: summary.totalProcesses,
+          batchId,
+          totalProcesses: summary.totalProcesses,
           completed: summary.completed,
-          in_progress: summary.inProgress,
+          inProgress: summary.inProgress,
           failed: summary.failed,
-          correlation_ids: summary.correlationIds,
-          started_at: summary.startedAt,
-          last_event_at: summary.lastEventAt,
+          correlationIds: summary.correlationIds,
+          startedAt: summary.startedAt,
+          lastEventAt: summary.lastEventAt,
         });
       }
     );
@@ -194,15 +194,15 @@ describe('Batch Routes', () => {
       });
 
       const events = [
-        createEventFixture({ correlation_id: 'corr-1' }),
-        createEventFixture({ correlation_id: 'corr-2' }),
+        createEventFixture({ correlationId: 'corr-1' }),
+        createEventFixture({ correlationId: 'corr-2' }),
       ];
 
       const response = await app.inject({
         method: 'POST',
         url: '/v1/events/batch/upload',
         payload: {
-          batch_id: 'batch-123',
+          batchId: 'batch-123',
           events,
         },
       });
@@ -210,10 +210,10 @@ describe('Batch Routes', () => {
       expect(response.statusCode).toBe(201);
       const body = response.json();
       expect(body.success).toBe(true);
-      expect(body.batch_id).toBe('batch-123');
-      expect(body.total_received).toBe(2);
-      expect(body.total_inserted).toBe(2);
-      expect(body.correlation_ids).toHaveLength(2);
+      expect(body.batchId).toBe('batch-123');
+      expect(body.totalReceived).toBe(2);
+      expect(body.totalInserted).toBe(2);
+      expect(body.correlationIds).toHaveLength(2);
       expect(body.errors).toBeUndefined();
     });
 
@@ -225,15 +225,15 @@ describe('Batch Routes', () => {
       });
 
       const events = [
-        createEventFixture({ correlation_id: 'corr-1' }),
-        createEventFixture({ correlation_id: 'corr-2' }),
+        createEventFixture({ correlationId: 'corr-1' }),
+        createEventFixture({ correlationId: 'corr-2' }),
       ];
 
       const response = await app.inject({
         method: 'POST',
         url: '/v1/events/batch/upload',
         payload: {
-          batch_id: 'batch-123',
+          batchId: 'batch-123',
           events,
         },
       });
@@ -241,12 +241,12 @@ describe('Batch Routes', () => {
       expect(response.statusCode).toBe(201);
       const body = response.json();
       expect(body.success).toBe(false);
-      expect(body.total_inserted).toBe(1);
+      expect(body.totalInserted).toBe(1);
       expect(body.errors).toHaveLength(1);
       expect(body.errors[0].index).toBe(1);
     });
 
-    it('should require batch_id', async () => {
+    it('should require batchId', async () => {
       const response = await app.inject({
         method: 'POST',
         url: '/v1/events/batch/upload',
@@ -263,7 +263,7 @@ describe('Batch Routes', () => {
         method: 'POST',
         url: '/v1/events/batch/upload',
         payload: {
-          batch_id: 'batch-123',
+          batchId: 'batch-123',
           events: [],
         },
       });
@@ -280,7 +280,7 @@ describe('Batch Routes', () => {
         method: 'POST',
         url: '/v1/events/batch/upload',
         payload: {
-          batch_id: 'batch-123',
+          batchId: 'batch-123',
           events: [createEventFixture()],
         },
       });
@@ -307,15 +307,15 @@ describe('Batch Routes', () => {
 
       expect(response.statusCode).toBe(200);
       const body = response.json();
-      expect(body.batch_id).toBe('batch-123');
+      expect(body.batchId).toBe('batch-123');
       expect(body.events).toHaveLength(1);
-      expect(body.total_count).toBe(1);
-      expect(body.unique_correlation_ids).toBe(1);
-      expect(body.success_count).toBe(1);
-      expect(body.failure_count).toBe(0);
+      expect(body.totalCount).toBe(1);
+      expect(body.uniqueCorrelationIds).toBe(1);
+      expect(body.successCount).toBe(1);
+      expect(body.failureCount).toBe(0);
     });
 
-    it('should filter by event_status', async () => {
+    it('should filter by eventStatus', async () => {
       let capturedFilters: { eventStatus?: string } | null = null;
       mockGetByBatch = async (_, filters) => {
         capturedFilters = filters;
@@ -331,7 +331,7 @@ describe('Batch Routes', () => {
 
       const response = await app.inject({
         method: 'GET',
-        url: '/v1/events/batch/batch-123?event_status=FAILURE',
+        url: '/v1/events/batch/batch-123?eventStatus=FAILURE',
       });
 
       expect(response.statusCode).toBe(200);
@@ -354,7 +354,7 @@ describe('Batch Routes', () => {
 
       const response = await app.inject({
         method: 'GET',
-        url: '/v1/events/batch/batch-123?page=2&page_size=25',
+        url: '/v1/events/batch/batch-123?page=2&pageSize=25',
       });
 
       expect(response.statusCode).toBe(200);
@@ -362,7 +362,7 @@ describe('Batch Routes', () => {
       expect(capturedFilters?.pageSize).toBe(25);
     });
 
-    it('should indicate has_more when more pages exist', async () => {
+    it('should indicate hasMore when more pages exist', async () => {
       mockGetByBatch = async () => ({
         events: [createEventLogDbRecord()],
         totalCount: 100,
@@ -379,7 +379,7 @@ describe('Batch Routes', () => {
 
       expect(response.statusCode).toBe(200);
       const body = response.json();
-      expect(body.has_more).toBe(true);
+      expect(body.hasMore).toBe(true);
     });
 
     it('should handle service errors gracefully', async () => {
@@ -415,14 +415,14 @@ describe('Batch Routes', () => {
 
       expect(response.statusCode).toBe(200);
       const body = response.json();
-      expect(body.batch_id).toBe('batch-123');
-      expect(body.total_processes).toBe(10);
+      expect(body.batchId).toBe('batch-123');
+      expect(body.totalProcesses).toBe(10);
       expect(body.completed).toBe(7);
-      expect(body.in_progress).toBe(2);
+      expect(body.inProgress).toBe(2);
       expect(body.failed).toBe(1);
-      expect(body.correlation_ids).toHaveLength(3);
-      expect(body.started_at).toBe('2024-01-01T00:00:00.000Z');
-      expect(body.last_event_at).toBe('2024-01-01T01:00:00.000Z');
+      expect(body.correlationIds).toHaveLength(3);
+      expect(body.startedAt).toBe('2024-01-01T00:00:00.000Z');
+      expect(body.lastEventAt).toBe('2024-01-01T01:00:00.000Z');
     });
 
     it('should handle null timestamps', async () => {
@@ -443,8 +443,8 @@ describe('Batch Routes', () => {
 
       expect(response.statusCode).toBe(200);
       const body = response.json();
-      expect(body.started_at).toBeNull();
-      expect(body.last_event_at).toBeNull();
+      expect(body.startedAt).toBeNull();
+      expect(body.lastEventAt).toBeNull();
     });
 
     it('should handle empty batch', async () => {
@@ -465,7 +465,7 @@ describe('Batch Routes', () => {
 
       expect(response.statusCode).toBe(200);
       const body = response.json();
-      expect(body.total_processes).toBe(0);
+      expect(body.totalProcesses).toBe(0);
     });
 
     it('should handle service errors gracefully', async () => {

@@ -413,47 +413,47 @@ describe('AccountSummaryService - Response formatting', () => {
     });
 
     const response = {
-      account_id: summary.accountId,
-      first_event_at: summary.firstEventAt.toISOString(),
-      last_event_at: summary.lastEventAt.toISOString(),
-      total_events: summary.totalEvents,
-      total_processes: summary.totalProcesses,
-      error_count: summary.errorCount,
-      last_process: summary.lastProcess,
-      systems_touched: summary.systemsTouched,
-      correlation_ids: summary.correlationIds,
-      updated_at: summary.updatedAt.toISOString(),
+      accountId: summary.accountId,
+      firstEventAt: summary.firstEventAt.toISOString(),
+      lastEventAt: summary.lastEventAt.toISOString(),
+      totalEvents: summary.totalEvents,
+      totalProcesses: summary.totalProcesses,
+      errorCount: summary.errorCount,
+      lastProcess: summary.lastProcess,
+      systemsTouched: summary.systemsTouched,
+      correlationIds: summary.correlationIds,
+      updatedAt: summary.updatedAt.toISOString(),
     };
 
-    expect(response.first_event_at).toBe('2024-01-01T00:00:00.000Z');
-    expect(response.last_event_at).toBe('2024-01-15T12:00:00.000Z');
-    expect(response.updated_at).toBe('2024-01-15T12:30:00.000Z');
+    expect(response.firstEventAt).toBe('2024-01-01T00:00:00.000Z');
+    expect(response.lastEventAt).toBe('2024-01-15T12:00:00.000Z');
+    expect(response.updatedAt).toBe('2024-01-15T12:30:00.000Z');
   });
 
-  it('should use snake_case for API response fields', () => {
+  it('should use camelCase for API response fields', () => {
     const summary = createAccountSummaryDbRecord();
 
     const response = {
-      account_id: summary.accountId,
-      first_event_at: summary.firstEventAt.toISOString(),
-      last_event_at: summary.lastEventAt.toISOString(),
-      total_events: summary.totalEvents,
-      total_processes: summary.totalProcesses,
-      error_count: summary.errorCount,
-      last_process: summary.lastProcess,
-      systems_touched: summary.systemsTouched,
-      correlation_ids: summary.correlationIds,
-      updated_at: summary.updatedAt.toISOString(),
+      accountId: summary.accountId,
+      firstEventAt: summary.firstEventAt.toISOString(),
+      lastEventAt: summary.lastEventAt.toISOString(),
+      totalEvents: summary.totalEvents,
+      totalProcesses: summary.totalProcesses,
+      errorCount: summary.errorCount,
+      lastProcess: summary.lastProcess,
+      systemsTouched: summary.systemsTouched,
+      correlationIds: summary.correlationIds,
+      updatedAt: summary.updatedAt.toISOString(),
     };
 
-    expect(response).toHaveProperty('account_id');
-    expect(response).toHaveProperty('first_event_at');
-    expect(response).toHaveProperty('last_event_at');
-    expect(response).toHaveProperty('total_events');
-    expect(response).toHaveProperty('total_processes');
-    expect(response).toHaveProperty('error_count');
-    expect(response).toHaveProperty('systems_touched');
-    expect(response).toHaveProperty('correlation_ids');
-    expect(response).toHaveProperty('updated_at');
+    expect(response).toHaveProperty('accountId');
+    expect(response).toHaveProperty('firstEventAt');
+    expect(response).toHaveProperty('lastEventAt');
+    expect(response).toHaveProperty('totalEvents');
+    expect(response).toHaveProperty('totalProcesses');
+    expect(response).toHaveProperty('errorCount');
+    expect(response).toHaveProperty('systemsTouched');
+    expect(response).toHaveProperty('correlationIds');
+    expect(response).toHaveProperty('updatedAt');
   });
 });

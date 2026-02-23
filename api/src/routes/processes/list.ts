@@ -17,8 +17,8 @@ export async function listProcessesRoute(app: FastifyInstance) {
       },
     },
     async (request, reply) => {
-      const { is_active } = request.query;
-      const processes = await processDefinitionService.listProcesses(is_active ?? undefined);
+      const { isActive } = request.query;
+      const processes = await processDefinitionService.listProcesses(isActive ?? undefined);
       return reply.send({ processes });
     },
   );

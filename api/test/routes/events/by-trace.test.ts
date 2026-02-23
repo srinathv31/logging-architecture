@@ -49,31 +49,31 @@ function buildTestApp() {
       },
       async (request, reply) => {
         const { traceId } = request.params;
-        const { page, page_size } = request.query;
+        const { page, pageSize } = request.query;
         const {
           events, systemsInvolved, totalDurationMs, totalCount, hasMore,
           statusCounts, processName, accountId, startTime, endTime,
-        } = await mockGetByTrace(traceId, { page, pageSize: page_size });
+        } = await mockGetByTrace(traceId, { page, pageSize });
 
         return reply.send({
-          trace_id: traceId,
+          traceId,
           events,
-          systems_involved: systemsInvolved,
-          total_duration_ms: totalDurationMs,
-          total_count: totalCount,
+          systemsInvolved,
+          totalDurationMs,
+          totalCount,
           page,
-          page_size,
-          has_more: hasMore,
-          status_counts: {
+          pageSize,
+          hasMore,
+          statusCounts: {
             success: statusCounts.success,
             failure: statusCounts.failure,
-            in_progress: statusCounts.inProgress,
+            inProgress: statusCounts.inProgress,
             skipped: statusCounts.skipped,
           },
-          process_name: processName,
-          account_id: accountId,
-          start_time: startTime,
-          end_time: endTime,
+          processName,
+          accountId,
+          startTime,
+          endTime,
         });
       }
     );
@@ -136,19 +136,19 @@ describe('GET /v1/events/trace/:traceId', () => {
 
       expect(response.statusCode).toBe(200);
       const body = response.json();
-      expect(body.trace_id).toBe('trace-123');
+      expect(body.traceId).toBe('trace-123');
       expect(body.events).toHaveLength(2);
-      expect(body.systems_involved).toEqual(['system-a', 'system-b']);
-      expect(body.total_duration_ms).toBe(5000);
-      expect(body.total_count).toBe(2);
+      expect(body.systemsInvolved).toEqual(['system-a', 'system-b']);
+      expect(body.totalDurationMs).toBe(5000);
+      expect(body.totalCount).toBe(2);
       expect(body.page).toBe(1);
-      expect(body.page_size).toBe(200);
-      expect(body.has_more).toBe(false);
-      expect(body.status_counts).toEqual({ success: 2, failure: 0, in_progress: 0, skipped: 0 });
-      expect(body.process_name).toBe('test-process');
-      expect(body.account_id).toBe('test-account-id');
-      expect(body.start_time).toBe('2024-01-01T10:00:00.000Z');
-      expect(body.end_time).toBe('2024-01-01T10:00:05.000Z');
+      expect(body.pageSize).toBe(200);
+      expect(body.hasMore).toBe(false);
+      expect(body.statusCounts).toEqual({ success: 2, failure: 0, inProgress: 0, skipped: 0 });
+      expect(body.processName).toBe('test-process');
+      expect(body.accountId).toBe('test-account-id');
+      expect(body.startTime).toBe('2024-01-01T10:00:00.000Z');
+      expect(body.endTime).toBe('2024-01-01T10:00:05.000Z');
     });
 
     it('should return null duration when no events exist', async () => {
@@ -173,11 +173,11 @@ describe('GET /v1/events/trace/:traceId', () => {
       expect(response.statusCode).toBe(200);
       const body = response.json();
       expect(body.events).toHaveLength(0);
-      expect(body.total_duration_ms).toBeNull();
-      expect(body.systems_involved).toEqual([]);
+      expect(body.totalDurationMs).toBeNull();
+      expect(body.systemsInvolved).toEqual([]);
     });
 
-    it('should deduplicate systems in systems_involved', async () => {
+    it('should deduplicate systems in systemsInvolved', async () => {
       mockGetByTrace = async () => ({
         events: [createEventLogDbRecord()],
         systemsInvolved: ['system-a', 'system-b', 'system-a'],
@@ -199,7 +199,7 @@ describe('GET /v1/events/trace/:traceId', () => {
       expect(response.statusCode).toBe(200);
       // Note: The service should deduplicate, but we pass whatever the mock returns
       const body = response.json();
-      expect(body.systems_involved).toHaveLength(3); // Testing the route, not the service logic
+      expect(body.systemsInvolved).toHaveLength(3); // Testing the route, not the service logic
     });
 
     it('should handle single event traces', async () => {
@@ -224,12 +224,12 @@ describe('GET /v1/events/trace/:traceId', () => {
       expect(response.statusCode).toBe(200);
       const body = response.json();
       expect(body.events).toHaveLength(1);
-      expect(body.total_duration_ms).toBe(0);
+      expect(body.totalDurationMs).toBe(0);
     });
   });
 
   describe('pagination', () => {
-    it('should accept page and page_size query params', async () => {
+    it('should accept page and pageSize query params', async () => {
       mockGetByTrace = async (_id, pagination) => ({
         events: [createEventLogDbRecord()],
         systemsInvolved: ['system-a'],
@@ -245,15 +245,15 @@ describe('GET /v1/events/trace/:traceId', () => {
 
       const response = await app.inject({
         method: 'GET',
-        url: '/v1/events/trace/trace-123?page=2&page_size=5',
+        url: '/v1/events/trace/trace-123?page=2&pageSize=5',
       });
 
       expect(response.statusCode).toBe(200);
       const body = response.json();
       expect(body.page).toBe(2);
-      expect(body.page_size).toBe(5);
-      expect(body.total_count).toBe(10);
-      expect(body.has_more).toBe(true);
+      expect(body.pageSize).toBe(5);
+      expect(body.totalCount).toBe(10);
+      expect(body.hasMore).toBe(true);
     });
   });
 

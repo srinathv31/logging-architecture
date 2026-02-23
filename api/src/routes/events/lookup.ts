@@ -22,31 +22,31 @@ export async function lookupRoutes(app: FastifyInstance) {
     },
     async (request, reply) => {
       const {
-        account_id,
-        process_name,
-        event_status,
-        start_date,
-        end_date,
+        accountId,
+        processName,
+        eventStatus,
+        startDate,
+        endDate,
         page,
-        page_size,
+        pageSize,
       } = request.body;
 
       const { events, totalCount, hasMore } = await eventLogService.lookupEvents({
-        accountId: account_id,
-        processName: process_name,
-        eventStatus: event_status,
-        startDate: start_date,
-        endDate: end_date,
+        accountId,
+        processName,
+        eventStatus,
+        startDate,
+        endDate,
         page,
-        pageSize: page_size,
+        pageSize,
       });
 
       return reply.send({
         events,
-        total_count: totalCount,
+        totalCount,
         page,
-        page_size,
-        has_more: hasMore,
+        pageSize,
+        hasMore,
       });
     },
   );

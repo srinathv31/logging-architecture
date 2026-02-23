@@ -44,19 +44,19 @@ function buildTestApp() {
       },
       async (request, reply) => {
         const { correlationId } = request.params;
-        const { page, page_size } = request.query;
+        const { page, pageSize } = request.query;
         const { events, accountId, isLinked, totalCount, hasMore } =
-          await mockGetByCorrelation(correlationId, { page, pageSize: page_size });
+          await mockGetByCorrelation(correlationId, { page, pageSize });
 
         return reply.send({
-          correlation_id: correlationId,
-          account_id: accountId,
+          correlationId,
+          accountId,
           events,
-          is_linked: isLinked,
-          total_count: totalCount,
+          isLinked,
+          totalCount,
           page,
-          page_size,
-          has_more: hasMore,
+          pageSize,
+          hasMore,
         });
       }
     );
@@ -109,14 +109,14 @@ describe('GET /v1/events/correlation/:correlationId', () => {
 
       expect(response.statusCode).toBe(200);
       const body = response.json();
-      expect(body.correlation_id).toBe('corr-123');
+      expect(body.correlationId).toBe('corr-123');
       expect(body.events).toHaveLength(2);
-      expect(body.account_id).toBe('acc-123');
-      expect(body.is_linked).toBe(true);
-      expect(body.total_count).toBe(2);
+      expect(body.accountId).toBe('acc-123');
+      expect(body.isLinked).toBe(true);
+      expect(body.totalCount).toBe(2);
       expect(body.page).toBe(1);
-      expect(body.page_size).toBe(200);
-      expect(body.has_more).toBe(false);
+      expect(body.pageSize).toBe(200);
+      expect(body.hasMore).toBe(false);
     });
 
     it('should return empty events for unknown correlation ID', async () => {
@@ -136,10 +136,10 @@ describe('GET /v1/events/correlation/:correlationId', () => {
       expect(response.statusCode).toBe(200);
       const body = response.json();
       expect(body.events).toHaveLength(0);
-      expect(body.is_linked).toBe(false);
+      expect(body.isLinked).toBe(false);
     });
 
-    it('should return null account_id when not linked', async () => {
+    it('should return null accountId when not linked', async () => {
       mockGetByCorrelation = async () => ({
         events: [createEventLogDbRecord()],
         accountId: null,
@@ -155,8 +155,8 @@ describe('GET /v1/events/correlation/:correlationId', () => {
 
       expect(response.statusCode).toBe(200);
       const body = response.json();
-      expect(body.account_id).toBeNull();
-      expect(body.is_linked).toBe(false);
+      expect(body.accountId).toBeNull();
+      expect(body.isLinked).toBe(false);
     });
 
     it('should handle complex correlation IDs', async () => {
@@ -175,12 +175,12 @@ describe('GET /v1/events/correlation/:correlationId', () => {
 
       expect(response.statusCode).toBe(200);
       const body = response.json();
-      expect(body.correlation_id).toBe('corr-123-abc-456');
+      expect(body.correlationId).toBe('corr-123-abc-456');
     });
   });
 
   describe('pagination', () => {
-    it('should accept page and page_size query params', async () => {
+    it('should accept page and pageSize query params', async () => {
       mockGetByCorrelation = async (_id, pagination) => ({
         events: [createEventLogDbRecord()],
         accountId: null,
@@ -191,15 +191,15 @@ describe('GET /v1/events/correlation/:correlationId', () => {
 
       const response = await app.inject({
         method: 'GET',
-        url: '/v1/events/correlation/corr-123?page=2&page_size=5',
+        url: '/v1/events/correlation/corr-123?page=2&pageSize=5',
       });
 
       expect(response.statusCode).toBe(200);
       const body = response.json();
       expect(body.page).toBe(2);
-      expect(body.page_size).toBe(5);
-      expect(body.total_count).toBe(10);
-      expect(body.has_more).toBe(true);
+      expect(body.pageSize).toBe(5);
+      expect(body.totalCount).toBe(10);
+      expect(body.hasMore).toBe(true);
     });
   });
 

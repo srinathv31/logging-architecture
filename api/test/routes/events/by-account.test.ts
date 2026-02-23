@@ -48,26 +48,26 @@ function buildTestApp() {
       },
       async (request, reply) => {
         const { accountId } = request.params;
-        const { page, page_size, start_date, end_date, process_name, event_status, include_linked } =
+        const { page, pageSize, startDate, endDate, processName, eventStatus, includeLinked } =
           request.query;
 
         const { events, totalCount, hasMore } = await mockGetByAccount(accountId, {
-          startDate: start_date,
-          endDate: end_date,
-          processName: process_name,
-          eventStatus: event_status,
-          includeLinked: include_linked,
+          startDate,
+          endDate,
+          processName,
+          eventStatus,
+          includeLinked,
           page,
-          pageSize: page_size,
+          pageSize,
         });
 
         return reply.send({
-          account_id: accountId,
+          accountId,
           events,
-          total_count: totalCount,
+          totalCount,
           page,
-          page_size,
-          has_more: hasMore,
+          pageSize,
+          hasMore,
         });
       }
     );
@@ -112,12 +112,12 @@ describe('GET /v1/events/account/:accountId', () => {
 
       expect(response.statusCode).toBe(200);
       const body = response.json();
-      expect(body.account_id).toBe('acc-123');
+      expect(body.accountId).toBe('acc-123');
       expect(body.events).toHaveLength(1);
-      expect(body.total_count).toBe(1);
-      expect(body.has_more).toBe(false);
+      expect(body.totalCount).toBe(1);
+      expect(body.hasMore).toBe(false);
       expect(body.page).toBe(1);
-      expect(body.page_size).toBe(20);
+      expect(body.pageSize).toBe(20);
     });
 
     it('should return empty array when no events exist', async () => {
@@ -135,7 +135,7 @@ describe('GET /v1/events/account/:accountId', () => {
       expect(response.statusCode).toBe(200);
       const body = response.json();
       expect(body.events).toHaveLength(0);
-      expect(body.total_count).toBe(0);
+      expect(body.totalCount).toBe(0);
     });
 
     it('should pass pagination parameters correctly', async () => {
@@ -147,7 +147,7 @@ describe('GET /v1/events/account/:accountId', () => {
 
       const response = await app.inject({
         method: 'GET',
-        url: '/v1/events/account/acc-123?page=3&page_size=50',
+        url: '/v1/events/account/acc-123?page=3&pageSize=50',
       });
 
       expect(response.statusCode).toBe(200);
@@ -164,7 +164,7 @@ describe('GET /v1/events/account/:accountId', () => {
 
       const response = await app.inject({
         method: 'GET',
-        url: '/v1/events/account/acc-123?start_date=2024-01-01T00:00:00Z&end_date=2024-01-31T23:59:59Z',
+        url: '/v1/events/account/acc-123?startDate=2024-01-01T00:00:00Z&endDate=2024-01-31T23:59:59Z',
       });
 
       expect(response.statusCode).toBe(200);
@@ -172,7 +172,7 @@ describe('GET /v1/events/account/:accountId', () => {
       expect(capturedFilters?.endDate).toBe('2024-01-31T23:59:59Z');
     });
 
-    it('should pass process_name filter correctly', async () => {
+    it('should pass processName filter correctly', async () => {
       let capturedFilters: { processName?: string } | null = null;
       mockGetByAccount = async (_, filters) => {
         capturedFilters = filters;
@@ -181,14 +181,14 @@ describe('GET /v1/events/account/:accountId', () => {
 
       const response = await app.inject({
         method: 'GET',
-        url: '/v1/events/account/acc-123?process_name=payment-process',
+        url: '/v1/events/account/acc-123?processName=payment-process',
       });
 
       expect(response.statusCode).toBe(200);
       expect(capturedFilters?.processName).toBe('payment-process');
     });
 
-    it('should pass event_status filter correctly', async () => {
+    it('should pass eventStatus filter correctly', async () => {
       let capturedFilters: { eventStatus?: string } | null = null;
       mockGetByAccount = async (_, filters) => {
         capturedFilters = filters;
@@ -197,14 +197,14 @@ describe('GET /v1/events/account/:accountId', () => {
 
       const response = await app.inject({
         method: 'GET',
-        url: '/v1/events/account/acc-123?event_status=FAILURE',
+        url: '/v1/events/account/acc-123?eventStatus=FAILURE',
       });
 
       expect(response.statusCode).toBe(200);
       expect(capturedFilters?.eventStatus).toBe('FAILURE');
     });
 
-    it('should pass include_linked=true correctly', async () => {
+    it('should pass includeLinked=true correctly', async () => {
       let capturedFilters: { includeLinked?: boolean } | null = null;
       mockGetByAccount = async (_, filters) => {
         capturedFilters = filters;
@@ -213,14 +213,14 @@ describe('GET /v1/events/account/:accountId', () => {
 
       const response = await app.inject({
         method: 'GET',
-        url: '/v1/events/account/acc-123?include_linked=true',
+        url: '/v1/events/account/acc-123?includeLinked=true',
       });
 
       expect(response.statusCode).toBe(200);
       expect(capturedFilters?.includeLinked).toBe(true);
     });
 
-    it('should indicate has_more when more pages exist', async () => {
+    it('should indicate hasMore when more pages exist', async () => {
       mockGetByAccount = async () => ({
         events: [createEventLogDbRecord()],
         totalCount: 100,
@@ -229,13 +229,13 @@ describe('GET /v1/events/account/:accountId', () => {
 
       const response = await app.inject({
         method: 'GET',
-        url: '/v1/events/account/acc-123?page_size=10',
+        url: '/v1/events/account/acc-123?pageSize=10',
       });
 
       expect(response.statusCode).toBe(200);
       const body = response.json();
-      expect(body.has_more).toBe(true);
-      expect(body.total_count).toBe(100);
+      expect(body.hasMore).toBe(true);
+      expect(body.totalCount).toBe(100);
     });
   });
 
@@ -259,19 +259,19 @@ describe('GET /v1/events/account/:accountId', () => {
       expect(response.statusCode).toBe(400);
     });
 
-    it('should return 400 for invalid page_size', async () => {
+    it('should return 400 for invalid pageSize', async () => {
       const response = await app.inject({
         method: 'GET',
-        url: '/v1/events/account/acc-123?page_size=0',
+        url: '/v1/events/account/acc-123?pageSize=0',
       });
 
       expect(response.statusCode).toBe(400);
     });
 
-    it('should return 400 for invalid event_status', async () => {
+    it('should return 400 for invalid eventStatus', async () => {
       const response = await app.inject({
         method: 'GET',
-        url: '/v1/events/account/acc-123?event_status=INVALID',
+        url: '/v1/events/account/acc-123?eventStatus=INVALID',
       });
 
       expect(response.statusCode).toBe(400);

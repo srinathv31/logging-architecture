@@ -49,19 +49,19 @@ function buildTestApp() {
 
         return reply.send({
           summary: {
-            account_id: summary.accountId,
-            first_event_at: summary.firstEventAt.toISOString(),
-            last_event_at: summary.lastEventAt.toISOString(),
-            total_events: summary.totalEvents,
-            total_processes: summary.totalProcesses,
-            error_count: summary.errorCount,
-            last_process: summary.lastProcess,
-            systems_touched: summary.systemsTouched,
-            correlation_ids: summary.correlationIds,
-            updated_at: summary.updatedAt.toISOString(),
+            accountId: summary.accountId,
+            firstEventAt: summary.firstEventAt.toISOString(),
+            lastEventAt: summary.lastEventAt.toISOString(),
+            totalEvents: summary.totalEvents,
+            totalProcesses: summary.totalProcesses,
+            errorCount: summary.errorCount,
+            lastProcess: summary.lastProcess,
+            systemsTouched: summary.systemsTouched,
+            correlationIds: summary.correlationIds,
+            updatedAt: summary.updatedAt.toISOString(),
           },
-          recent_events: recentEvents,
-          recent_errors: recentErrors,
+          recentEvents,
+          recentErrors,
         });
       }
     );
@@ -110,14 +110,14 @@ describe('GET /v1/events/account/:accountId/summary', () => {
       expect(response.statusCode).toBe(200);
       const body = response.json();
 
-      expect(body.summary.account_id).toBe('acc-123');
-      expect(body.summary.total_events).toBe(100);
-      expect(body.summary.total_processes).toBe(10);
-      expect(body.summary.error_count).toBe(5);
-      expect(body.summary.last_process).toBe('test-process');
-      expect(body.summary.systems_touched).toEqual(['system-a', 'system-b', 'system-c']);
-      expect(body.recent_events).toHaveLength(1);
-      expect(body.recent_errors).toHaveLength(1);
+      expect(body.summary.accountId).toBe('acc-123');
+      expect(body.summary.totalEvents).toBe(100);
+      expect(body.summary.totalProcesses).toBe(10);
+      expect(body.summary.errorCount).toBe(5);
+      expect(body.summary.lastProcess).toBe('test-process');
+      expect(body.summary.systemsTouched).toEqual(['system-a', 'system-b', 'system-c']);
+      expect(body.recentEvents).toHaveLength(1);
+      expect(body.recentErrors).toHaveLength(1);
     });
 
     it('should return timestamps as ISO strings', async () => {
@@ -140,8 +140,8 @@ describe('GET /v1/events/account/:accountId/summary', () => {
       expect(response.statusCode).toBe(200);
       const body = response.json();
 
-      expect(body.summary.first_event_at).toBe('2024-01-01T00:00:00.000Z');
-      expect(body.summary.last_event_at).toBe('2024-01-15T12:00:00.000Z');
+      expect(body.summary.firstEventAt).toBe('2024-01-01T00:00:00.000Z');
+      expect(body.summary.lastEventAt).toBe('2024-01-15T12:00:00.000Z');
     });
 
     it('should handle empty recent events and errors', async () => {
@@ -159,11 +159,11 @@ describe('GET /v1/events/account/:accountId/summary', () => {
       expect(response.statusCode).toBe(200);
       const body = response.json();
 
-      expect(body.recent_events).toHaveLength(0);
-      expect(body.recent_errors).toHaveLength(0);
+      expect(body.recentEvents).toHaveLength(0);
+      expect(body.recentErrors).toHaveLength(0);
     });
 
-    it('should handle null correlation_ids', async () => {
+    it('should handle null correlationIds', async () => {
       mockGetAccountSummary = async () => ({
         summary: createAccountSummaryDbRecord({ correlationIds: null }),
         recentEvents: [],
@@ -178,14 +178,14 @@ describe('GET /v1/events/account/:accountId/summary', () => {
       expect(response.statusCode).toBe(200);
       const body = response.json();
 
-      expect(body.summary.correlation_ids).toBeNull();
+      expect(body.summary.correlationIds).toBeNull();
     });
   });
 
   describe('error handling', () => {
     it('should return 404 when account not found', async () => {
       mockGetAccountSummary = async (accountId) => {
-        throw new NotFoundError(`Account summary not found for account_id: ${accountId}`);
+        throw new NotFoundError(`Account summary not found for accountId: ${accountId}`);
       };
 
       const response = await app.inject({

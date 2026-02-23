@@ -21,9 +21,9 @@ export async function createCorrelationLinkRoute(app: FastifyInstance) {
 
       return reply.status(201).send({
         success: true,
-        correlation_id: result.correlationId,
-        account_id: result.accountId,
-        linked_at: result.linkedAt.toISOString(),
+        correlationId: result.correlationId,
+        accountId: result.accountId,
+        linkedAt: result.linkedAt.toISOString(),
       });
     },
   );

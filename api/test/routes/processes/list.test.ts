@@ -34,8 +34,8 @@ function buildTestApp() {
         },
       },
       async (request, reply) => {
-        const { is_active } = request.query;
-        const processes = await mockListProcesses(is_active ?? undefined);
+        const { isActive } = request.query;
+        const processes = await mockListProcesses(isActive ?? undefined);
         return reply.send({ processes });
       }
     );
@@ -92,7 +92,7 @@ describe('GET /v1/processes', () => {
       expect(body.processes).toHaveLength(0);
     });
 
-    it('should filter by is_active=true', async () => {
+    it('should filter by isActive=true', async () => {
       let capturedIsActive: boolean | undefined;
       mockListProcesses = async (isActive) => {
         capturedIsActive = isActive;
@@ -101,14 +101,14 @@ describe('GET /v1/processes', () => {
 
       const response = await app.inject({
         method: 'GET',
-        url: '/v1/processes?is_active=true',
+        url: '/v1/processes?isActive=true',
       });
 
       expect(response.statusCode).toBe(200);
       expect(capturedIsActive).toBe(true);
     });
 
-    it('should filter by is_active=false', async () => {
+    it('should filter by isActive=false', async () => {
       let capturedIsActive: boolean | undefined;
       mockListProcesses = async (isActive) => {
         capturedIsActive = isActive;
@@ -117,7 +117,7 @@ describe('GET /v1/processes', () => {
 
       const response = await app.inject({
         method: 'GET',
-        url: '/v1/processes?is_active=false',
+        url: '/v1/processes?isActive=false',
       });
 
       expect(response.statusCode).toBe(200);

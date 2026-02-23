@@ -27,13 +27,13 @@ export async function createEventRoutes(app: FastifyInstance) {
 
       if (Array.isArray(events)) {
         const { executionIds, errors } = await eventLogService.createEvents(events);
-        const correlationIds = [...new Set(events.map((e) => e.correlation_id))];
+        const correlationIds = [...new Set(events.map((e) => e.correlationId))];
         return reply.status(201).send({
           success: errors.length === 0,
-          total_received: events.length,
-          total_inserted: executionIds.length,
-          execution_ids: executionIds,
-          correlation_ids: correlationIds,
+          totalReceived: events.length,
+          totalInserted: executionIds.length,
+          executionIds,
+          correlationIds,
           errors: errors.length > 0 ? errors : undefined,
         });
       }
@@ -41,8 +41,8 @@ export async function createEventRoutes(app: FastifyInstance) {
       const result = await eventLogService.createEvent(events);
       return reply.status(201).send({
         success: true,
-        execution_ids: [result.executionId],
-        correlation_id: events.correlation_id,
+        executionIds: [result.executionId],
+        correlationId: events.correlationId,
       });
     },
   );
@@ -64,9 +64,9 @@ export async function createEventRoutes(app: FastifyInstance) {
 
       return reply.status(201).send({
         success: errors.length === 0,
-        total_received: events.length,
-        total_inserted: executionIds.length,
-        execution_ids: executionIds,
+        totalReceived: events.length,
+        totalInserted: executionIds.length,
+        executionIds,
         errors: errors.length > 0 ? errors : undefined,
       });
     },

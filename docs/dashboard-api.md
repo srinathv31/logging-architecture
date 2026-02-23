@@ -8,19 +8,19 @@ API endpoints designed for the dashboard frontend. These endpoints provide pre-a
 
 ## GET /v1/traces
 
-List traces grouped by `trace_id` with aggregate summaries. Powers the dashboard's trace list view.
+List traces grouped by `traceId` with aggregate summaries. Powers the dashboard's trace list view.
 
 ### Query Parameters
 
 | Parameter | Type | Default | Description |
 |-----------|------|---------|-------------|
 | `page` | integer | `1` | Page number (1-based) |
-| `page_size` | integer | `20` | Results per page (max 100) |
-| `start_date` | ISO 8601 datetime | — | Filter traces with events on or after this time |
-| `end_date` | ISO 8601 datetime | — | Filter traces with events on or before this time |
-| `process_name` | string | — | Filter by process name |
-| `event_status` | enum | — | Filter by event status (`SUCCESS`, `FAILURE`, `IN_PROGRESS`, `SKIPPED`) |
-| `account_id` | string | — | Filter by account ID |
+| `pageSize` | integer | `20` | Results per page (max 100) |
+| `startDate` | ISO 8601 datetime | — | Filter traces with events on or after this time |
+| `endDate` | ISO 8601 datetime | — | Filter traces with events on or before this time |
+| `processName` | string | — | Filter by process name |
+| `eventStatus` | enum | — | Filter by event status (`SUCCESS`, `FAILURE`, `IN_PROGRESS`, `SKIPPED`) |
+| `accountId` | string | — | Filter by account ID |
 
 ### Response
 
@@ -28,21 +28,21 @@ List traces grouped by `trace_id` with aggregate summaries. Powers the dashboard
 {
   "traces": [
     {
-      "trace_id": "abc-123",
-      "event_count": 12,
-      "has_errors": false,
-      "latest_status": "SUCCESS",
-      "duration_ms": 5000,
-      "process_name": "Onboarding",
-      "account_id": "ACC-123",
-      "start_time": "2024-01-01T10:00:00.000Z",
-      "end_time": "2024-01-01T10:00:05.000Z"
+      "traceId": "abc-123",
+      "eventCount": 12,
+      "hasErrors": false,
+      "latestStatus": "SUCCESS",
+      "durationMs": 5000,
+      "processName": "Onboarding",
+      "accountId": "ACC-123",
+      "startTime": "2024-01-01T10:00:00.000Z",
+      "endTime": "2024-01-01T10:00:05.000Z"
     }
   ],
-  "total_count": 42,
+  "totalCount": 42,
   "page": 1,
-  "page_size": 20,
-  "has_more": true
+  "pageSize": 20,
+  "hasMore": true
 }
 ```
 
@@ -50,14 +50,14 @@ List traces grouped by `trace_id` with aggregate summaries. Powers the dashboard
 
 | Field | Description |
 |-------|-------------|
-| `event_count` | Total number of events in the trace |
-| `has_errors` | `true` if any event has `event_status = 'FAILURE'` |
-| `latest_status` | Status of the most recent event by timestamp |
-| `duration_ms` | Milliseconds between first and last event (`null` if single event) |
-| `process_name` | From the first `PROCESS_START` event, or `null` if none |
-| `account_id` | First non-null `account_id` across all events in the trace |
-| `start_time` | Timestamp of the earliest event |
-| `end_time` | Timestamp of the latest event |
+| `eventCount` | Total number of events in the trace |
+| `hasErrors` | `true` if any event has `event_status = 'FAILURE'` |
+| `latestStatus` | Status of the most recent event by timestamp |
+| `durationMs` | Milliseconds between first and last event (`null` if single event) |
+| `processName` | From the first `PROCESS_START` event, or `null` if none |
+| `accountId` | First non-null `accountId` across all events in the trace |
+| `startTime` | Timestamp of the earliest event |
+| `endTime` | Timestamp of the latest event |
 
 ---
 
@@ -69,18 +69,18 @@ Aggregate statistics for the dashboard overview panel.
 
 | Parameter | Type | Default | Description |
 |-----------|------|---------|-------------|
-| `start_date` | ISO 8601 datetime | — | Only include events on or after this time |
-| `end_date` | ISO 8601 datetime | — | Only include events on or before this time |
+| `startDate` | ISO 8601 datetime | — | Only include events on or after this time |
+| `endDate` | ISO 8601 datetime | — | Only include events on or before this time |
 
 ### Response
 
 ```json
 {
-  "total_traces": 500,
-  "total_accounts": 120,
-  "total_events": 15000,
-  "success_rate": 95.5,
-  "system_names": ["system-a", "system-b"]
+  "totalTraces": 500,
+  "totalAccounts": 120,
+  "totalEvents": 15000,
+  "successRate": 95.5,
+  "systemNames": ["system-a", "system-b"]
 }
 ```
 
@@ -88,11 +88,11 @@ Aggregate statistics for the dashboard overview panel.
 
 | Field | Description |
 |-------|-------------|
-| `total_traces` | Count of distinct `trace_id` values |
-| `total_accounts` | Count of distinct non-null `account_id` values |
-| `total_events` | Total event count |
-| `success_rate` | Percentage of traces with zero `FAILURE` events, rounded to 2 decimal places. Returns `100` when there are no traces |
-| `system_names` | Distinct `target_system` values across all matching events |
+| `totalTraces` | Count of distinct `traceId` values |
+| `totalAccounts` | Count of distinct non-null `accountId` values |
+| `totalEvents` | Total event count |
+| `successRate` | Percentage of traces with zero `FAILURE` events, rounded to 2 decimal places. Returns `100` when there are no traces |
+| `systemNames` | Distinct `targetSystem` values across all matching events |
 
 ---
 
@@ -104,34 +104,34 @@ The existing trace-detail endpoint now returns additional aggregate metadata alo
 
 ```json
 {
-  "trace_id": "abc-123",
+  "traceId": "abc-123",
   "events": [],
-  "systems_involved": ["system-a"],
-  "total_duration_ms": 5000,
-  "total_count": 12,
+  "systemsInvolved": ["system-a"],
+  "totalDurationMs": 5000,
+  "totalCount": 12,
   "page": 1,
-  "page_size": 200,
-  "has_more": false,
-  "status_counts": {
+  "pageSize": 200,
+  "hasMore": false,
+  "statusCounts": {
     "success": 8,
     "failure": 1,
-    "in_progress": 2,
+    "inProgress": 2,
     "skipped": 1
   },
-  "process_name": "Onboarding",
-  "account_id": "ACC-123",
-  "start_time": "2024-01-01T10:00:00.000Z",
-  "end_time": "2024-01-01T10:00:05.000Z"
+  "processName": "Onboarding",
+  "accountId": "ACC-123",
+  "startTime": "2024-01-01T10:00:00.000Z",
+  "endTime": "2024-01-01T10:00:05.000Z"
 }
 ```
 
 | Field | Description |
 |-------|-------------|
-| `status_counts` | Breakdown of events by status across the entire trace (not just the current page) |
-| `process_name` | From the first `PROCESS_START` event, or `null` |
-| `account_id` | First non-null `account_id` in the trace |
-| `start_time` | ISO timestamp of the earliest event, or `null` if no events |
-| `end_time` | ISO timestamp of the latest event, or `null` if no events |
+| `statusCounts` | Breakdown of events by status across the entire trace (not just the current page) |
+| `processName` | From the first `PROCESS_START` event, or `null` |
+| `accountId` | First non-null `accountId` in the trace |
+| `startTime` | ISO timestamp of the earliest event, or `null` if no events |
+| `endTime` | ISO timestamp of the latest event, or `null` if no events |
 
 ---
 

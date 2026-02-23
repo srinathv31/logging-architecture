@@ -46,31 +46,31 @@ function buildTestApp() {
         },
         async (request, reply) => {
           const {
-            account_id,
-            process_name,
-            event_status,
-            start_date,
-            end_date,
+            accountId,
+            processName,
+            eventStatus,
+            startDate,
+            endDate,
             page,
-            page_size,
+            pageSize,
           } = request.body;
 
           const { events, totalCount, hasMore } = await mockLookupEvents({
-            accountId: account_id,
-            processName: process_name,
-            eventStatus: event_status,
-            startDate: start_date,
-            endDate: end_date,
+            accountId,
+            processName,
+            eventStatus,
+            startDate,
+            endDate,
             page,
-            pageSize: page_size,
+            pageSize,
           });
 
           return reply.send({
             events,
-            total_count: totalCount,
+            totalCount,
             page,
-            page_size,
-            has_more: hasMore,
+            pageSize,
+            hasMore,
           });
         },
       );
@@ -101,7 +101,7 @@ describe("POST /v1/events/lookup", () => {
     });
   });
 
-  it("returns events with account_id filter", async () => {
+  it("returns events with accountId filter", async () => {
     const mockEvents = [createEventLogDbRecord({ accountId: "acc-1" })];
     mockLookupEvents = async () => ({
       events: mockEvents,
@@ -113,15 +113,15 @@ describe("POST /v1/events/lookup", () => {
       method: "POST",
       url: "/v1/events/lookup",
       payload: {
-        account_id: "acc-1",
+        accountId: "acc-1",
       },
     });
 
     expect(response.statusCode).toBe(200);
     const body = response.json();
-    expect(body.total_count).toBe(1);
+    expect(body.totalCount).toBe(1);
     expect(body.events).toHaveLength(1);
-    expect(body.has_more).toBe(false);
+    expect(body.hasMore).toBe(false);
   });
 
   it("passes process/date/status filters to service", async () => {
@@ -142,10 +142,10 @@ describe("POST /v1/events/lookup", () => {
       method: "POST",
       url: "/v1/events/lookup",
       payload: {
-        process_name: "PAYMENT_SETTLEMENT",
-        event_status: "FAILURE",
-        start_date: "2024-01-01T00:00:00Z",
-        end_date: "2024-01-10T00:00:00Z",
+        processName: "PAYMENT_SETTLEMENT",
+        eventStatus: "FAILURE",
+        startDate: "2024-01-01T00:00:00Z",
+        endDate: "2024-01-10T00:00:00Z",
       },
     });
 
@@ -156,13 +156,13 @@ describe("POST /v1/events/lookup", () => {
     expect(captured?.endDate).toBe("2024-01-10T00:00:00Z");
   });
 
-  it("rejects requests without account_id or process_name", async () => {
+  it("rejects requests without accountId or processName", async () => {
     const response = await app.inject({
       method: "POST",
       url: "/v1/events/lookup",
       payload: {
-        start_date: "2024-01-01T00:00:00Z",
-        end_date: "2024-01-02T00:00:00Z",
+        startDate: "2024-01-01T00:00:00Z",
+        endDate: "2024-01-02T00:00:00Z",
       },
     });
 
@@ -174,9 +174,9 @@ describe("POST /v1/events/lookup", () => {
       method: "POST",
       url: "/v1/events/lookup",
       payload: {
-        account_id: "acc-1",
-        start_date: "2024-01-01T00:00:00Z",
-        end_date: "2024-02-15T00:00:00Z",
+        accountId: "acc-1",
+        startDate: "2024-01-01T00:00:00Z",
+        endDate: "2024-02-15T00:00:00Z",
       },
     });
 

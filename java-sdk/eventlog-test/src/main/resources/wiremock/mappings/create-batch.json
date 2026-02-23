@@ -10,9 +10,9 @@
     },
     "jsonBody": {
       "success": true,
-      "total_received": 1,
-      "total_inserted": 1,
-      "execution_ids": ["exec-1"],
+      "totalReceived": 1,
+      "totalInserted": 1,
+      "executionIds": ["exec-1"],
       "errors": []
     }
   }

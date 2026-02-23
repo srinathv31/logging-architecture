@@ -8,8 +8,8 @@ export interface CreateEventRequest {
 
 export interface CreateEventResponse {
   success: boolean;
-  execution_ids: string[];
-  correlation_id: string;
+  executionIds: string[];
+  correlationId: string;
 }
 
 // POST /api/v1/events/batch
@@ -19,230 +19,230 @@ export interface BatchCreateEventRequest {
 
 export interface BatchCreateEventResponse {
   success: boolean;
-  total_received: number;
-  total_inserted: number;
-  execution_ids: string[];
+  totalReceived: number;
+  totalInserted: number;
+  executionIds: string[];
   errors?: Array<{ index: number; error: string }>;
 }
 
 // GET /api/v1/events/account/:accountId
 export interface GetEventsByAccountRequest {
-  account_id: string;
-  start_date?: string;
-  end_date?: string;
-  process_name?: string;
-  event_status?: EventStatus;
-  include_linked?: boolean;
+  accountId: string;
+  startDate?: string;
+  endDate?: string;
+  processName?: string;
+  eventStatus?: EventStatus;
+  includeLinked?: boolean;
   page?: number;
-  page_size?: number;
+  pageSize?: number;
 }
 
 export interface GetEventsByAccountResponse {
-  account_id: string;
+  accountId: string;
   events: EventLog[];
-  total_count: number;
+  totalCount: number;
   page: number;
-  page_size: number;
-  has_more: boolean;
+  pageSize: number;
+  hasMore: boolean;
 }
 
 // GET /api/v1/events/correlation/:correlationId
 export interface GetEventsByCorrelationResponse {
-  correlation_id: string;
-  account_id?: string | null;
+  correlationId: string;
+  accountId?: string | null;
   events: EventLog[];
-  is_linked: boolean;
+  isLinked: boolean;
 }
 
 // GET /api/v1/events/trace/:traceId
 export interface GetEventsByTraceResponse {
-  trace_id: string;
+  traceId: string;
   events: EventLog[];
-  systems_involved: string[];
-  total_duration_ms?: number | null;
-  status_counts: {
+  systemsInvolved: string[];
+  totalDurationMs?: number | null;
+  statusCounts: {
     success: number;
     failure: number;
-    in_progress: number;
+    inProgress: number;
     skipped: number;
   };
-  process_name: string | null;
-  account_id: string | null;
-  start_time: string | null;
-  end_time: string | null;
+  processName: string | null;
+  accountId: string | null;
+  startTime: string | null;
+  endTime: string | null;
 }
 
 // GET /api/v1/traces
 export interface TraceSummary {
-  trace_id: string;
-  event_count: number;
-  has_errors: boolean;
-  latest_status: string;
-  duration_ms: number | null;
-  process_name: string | null;
-  account_id: string | null;
-  start_time: string;
-  end_time: string;
+  traceId: string;
+  eventCount: number;
+  hasErrors: boolean;
+  latestStatus: string;
+  durationMs: number | null;
+  processName: string | null;
+  accountId: string | null;
+  startTime: string;
+  endTime: string;
 }
 
 export interface ListTracesResponse {
   traces: TraceSummary[];
-  total_count: number;
+  totalCount: number;
   page: number;
-  page_size: number;
-  has_more: boolean;
+  pageSize: number;
+  hasMore: boolean;
 }
 
 // GET /api/v1/dashboard/stats
 export interface DashboardStatsResponse {
-  total_traces: number;
-  total_accounts: number;
-  total_events: number;
-  success_rate: number;
-  system_names: string[];
+  totalTraces: number;
+  totalAccounts: number;
+  totalEvents: number;
+  successRate: number;
+  systemNames: string[];
 }
 
 // POST /api/v1/events/search/text
 export interface TextSearchRequest {
   query: string;
-  account_id?: string;
-  process_name?: string;
-  start_date?: string;
-  end_date?: string;
+  accountId?: string;
+  processName?: string;
+  startDate?: string;
+  endDate?: string;
   page?: number;
-  page_size?: number;
+  pageSize?: number;
 }
 
 export interface TextSearchResponse {
   query: string;
   events: EventLog[];
-  total_count: number;
+  totalCount: number;
   page: number;
-  page_size: number;
+  pageSize: number;
 }
 
 // POST /api/v1/events/lookup
 export interface LookupEventsRequest {
-  account_id?: string;
-  process_name?: string;
-  event_status?: EventStatus;
-  start_date?: string;
-  end_date?: string;
+  accountId?: string;
+  processName?: string;
+  eventStatus?: EventStatus;
+  startDate?: string;
+  endDate?: string;
   page?: number;
-  page_size?: number;
+  pageSize?: number;
 }
 
 export interface LookupEventsResponse {
   events: EventLog[];
-  total_count: number;
+  totalCount: number;
   page: number;
-  page_size: number;
-  has_more: boolean;
+  pageSize: number;
+  hasMore: boolean;
 }
 
 // POST /api/v1/correlation-links
 export interface CreateCorrelationLinkRequest {
-  correlation_id: string;
-  account_id: string;
-  application_id?: string;
-  customer_id?: string;
-  card_number_last4?: string;
+  correlationId: string;
+  accountId: string;
+  applicationId?: string;
+  customerId?: string;
+  cardNumberLast4?: string;
 }
 
 export interface CreateCorrelationLinkResponse {
   success: boolean;
-  correlation_id: string;
-  account_id: string;
-  linked_at: string;
+  correlationId: string;
+  accountId: string;
+  linkedAt: string;
 }
 
 // GET /api/v1/events/account/:accountId/summary
 export interface GetAccountSummaryResponse {
   summary: {
-    account_id: string;
-    first_event_at: string;
-    last_event_at: string;
-    total_events: number;
-    total_processes: number;
-    error_count: number;
-    last_process?: string | null;
-    systems_touched?: string[] | null;
-    correlation_ids?: string[] | null;
-    updated_at: string;
+    accountId: string;
+    firstEventAt: string;
+    lastEventAt: string;
+    totalEvents: number;
+    totalProcesses: number;
+    errorCount: number;
+    lastProcess?: string | null;
+    systemsTouched?: string[] | null;
+    correlationIds?: string[] | null;
+    updatedAt: string;
   };
-  recent_events: EventLog[];
-  recent_errors: EventLog[];
+  recentEvents: EventLog[];
+  recentErrors: EventLog[];
 }
 
 // Event log entry (for API input - doesn't include auto-generated fields)
 export interface EventLogEntry {
-  correlation_id: string;
-  account_id?: string | null;
-  trace_id: string;
-  span_id?: string;
-  parent_span_id?: string;
-  span_links?: string[];
-  batch_id?: string;
-  application_id: string;
-  target_system: string;
-  originating_system: string;
-  process_name: string;
-  step_sequence?: number;
-  step_name?: string;
-  event_type: string;
-  event_status: string;
+  correlationId: string;
+  accountId?: string | null;
+  traceId: string;
+  spanId?: string;
+  parentSpanId?: string;
+  spanLinks?: string[];
+  batchId?: string;
+  applicationId: string;
+  targetSystem: string;
+  originatingSystem: string;
+  processName: string;
+  stepSequence?: number;
+  stepName?: string;
+  eventType: string;
+  eventStatus: string;
   identifiers: Record<string, unknown>;
   summary: string;
   result: string;
   metadata?: Record<string, unknown>;
-  event_timestamp: string;
-  execution_time_ms?: number;
+  eventTimestamp: string;
+  executionTimeMs?: number;
   endpoint?: string;
-  http_method?: string;
-  http_status_code?: number;
-  error_code?: string;
-  error_message?: string;
-  request_payload?: string;
-  response_payload?: string;
-  idempotency_key?: string;
+  httpMethod?: string;
+  httpStatusCode?: number;
+  errorCode?: string;
+  errorMessage?: string;
+  requestPayload?: string;
+  responsePayload?: string;
+  idempotencyKey?: string;
 }
 
 // POST /api/v1/events/batch/upload
 export interface BatchUploadRequest {
-  batch_id: string;
+  batchId: string;
   events: EventLogEntry[];
 }
 
 export interface BatchUploadResponse {
   success: boolean;
-  batch_id: string;
-  total_received: number;
-  total_inserted: number;
-  correlation_ids: string[];
+  batchId: string;
+  totalReceived: number;
+  totalInserted: number;
+  correlationIds: string[];
   errors?: Array<{ index: number; error: string }>;
 }
 
 // GET /api/v1/events/batch/:batchId
 export interface GetEventsByBatchResponse {
-  batch_id: string;
+  batchId: string;
   events: EventLog[];
-  total_count: number;
-  unique_correlation_ids: number;
-  success_count: number;
-  failure_count: number;
+  totalCount: number;
+  uniqueCorrelationIds: number;
+  successCount: number;
+  failureCount: number;
   page: number;
-  page_size: number;
-  has_more: boolean;
+  pageSize: number;
+  hasMore: boolean;
 }
 
 // GET /api/v1/events/batch/:batchId/summary
 export interface BatchSummaryResponse {
-  batch_id: string;
-  total_processes: number;
+  batchId: string;
+  totalProcesses: number;
   completed: number;
-  in_progress: number;
+  inProgress: number;
   failed: number;
-  correlation_ids: string[];
-  started_at: string | null;
-  last_event_at: string | null;
+  correlationIds: string[];
+  startedAt: string | null;
+  lastEventAt: string | null;
 }

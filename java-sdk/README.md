@@ -526,9 +526,9 @@ var accountEvents = client.getEventsByAccount("AC-1234567890");
 
 // With filters
 var filteredEvents = client.getEventsByAccount("AC-1234567890", Map.of(
-    "start_date", "2025-01-01T00:00:00Z",
-    "process_name", "ADD_AUTH_USER",
-    "event_status", "FAILURE"
+    "startDate", "2025-01-01T00:00:00Z",
+    "processName", "ADD_AUTH_USER",
+    "eventStatus", "FAILURE"
 ));
 
 // Get events by correlation ID

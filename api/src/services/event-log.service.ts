@@ -48,48 +48,48 @@ async function getTotalCountFromPaginatedRows(
 
 function entryToInsert(entry: EventLogEntry) {
   return {
-    correlationId: entry.correlation_id,
-    accountId: entry.account_id ?? null,
-    traceId: entry.trace_id,
-    spanId: entry.span_id,
-    parentSpanId: entry.parent_span_id,
-    spanLinks: entry.span_links ?? null,
-    batchId: entry.batch_id ?? null,
-    applicationId: entry.application_id,
-    targetSystem: entry.target_system,
-    originatingSystem: entry.originating_system,
-    processName: entry.process_name,
-    stepSequence: entry.step_sequence,
-    stepName: entry.step_name,
-    eventType: entry.event_type,
-    eventStatus: entry.event_status,
+    correlationId: entry.correlationId,
+    accountId: entry.accountId ?? null,
+    traceId: entry.traceId,
+    spanId: entry.spanId,
+    parentSpanId: entry.parentSpanId,
+    spanLinks: entry.spanLinks ?? null,
+    batchId: entry.batchId ?? null,
+    applicationId: entry.applicationId,
+    targetSystem: entry.targetSystem,
+    originatingSystem: entry.originatingSystem,
+    processName: entry.processName,
+    stepSequence: entry.stepSequence,
+    stepName: entry.stepName,
+    eventType: entry.eventType,
+    eventStatus: entry.eventStatus,
     identifiers: entry.identifiers,
     summary: entry.summary,
     result: entry.result,
     metadata: entry.metadata,
-    eventTimestamp: new Date(entry.event_timestamp),
-    executionTimeMs: entry.execution_time_ms,
+    eventTimestamp: new Date(entry.eventTimestamp),
+    executionTimeMs: entry.executionTimeMs,
     endpoint: entry.endpoint,
-    httpMethod: entry.http_method,
-    httpStatusCode: entry.http_status_code,
-    errorCode: entry.error_code,
-    errorMessage: entry.error_message,
-    requestPayload: entry.request_payload,
-    responsePayload: entry.response_payload,
-    idempotencyKey: entry.idempotency_key,
+    httpMethod: entry.httpMethod,
+    httpStatusCode: entry.httpStatusCode,
+    errorCode: entry.errorCode,
+    errorMessage: entry.errorMessage,
+    requestPayload: entry.requestPayload,
+    responsePayload: entry.responsePayload,
+    idempotencyKey: entry.idempotencyKey,
   };
 }
 
 export async function createEvent(entry: EventLogEntry) {
   const db = await getDb();
 
-  // If idempotency_key is provided, check for existing record
-  if (entry.idempotency_key) {
+  // If idempotencyKey is provided, check for existing record
+  if (entry.idempotencyKey) {
     const existing = await db
       .select()
       .top(1)
       .from(eventLogs)
-      .where(eq(eventLogs.idempotencyKey, entry.idempotency_key));
+      .where(eq(eventLogs.idempotencyKey, entry.idempotencyKey));
 
     if (existing.length > 0) {
       return existing[0];
@@ -114,10 +114,10 @@ export async function createEvents(entries: EventLogEntry[]) {
     // Collect all idempotency keys and their indices
     const idempotencyMap = new Map<string, number[]>();
     entries.forEach((entry, index) => {
-      if (entry.idempotency_key) {
-        const indices = idempotencyMap.get(entry.idempotency_key) || [];
+      if (entry.idempotencyKey) {
+        const indices = idempotencyMap.get(entry.idempotencyKey) || [];
         indices.push(index);
-        idempotencyMap.set(entry.idempotency_key, indices);
+        idempotencyMap.set(entry.idempotencyKey, indices);
       }
     });
 
@@ -148,8 +148,8 @@ export async function createEvents(entries: EventLogEntry[]) {
     const toInsert: Array<{ index: number; entry: EventLogEntry }> = [];
     for (let i = 0; i < entries.length; i++) {
       const entry = entries[i];
-      if (entry.idempotency_key && existingMap.has(entry.idempotency_key)) {
-        executionIds[i] = existingMap.get(entry.idempotency_key)!;
+      if (entry.idempotencyKey && existingMap.has(entry.idempotencyKey)) {
+        executionIds[i] = existingMap.get(entry.idempotencyKey)!;
       } else {
         toInsert.push({ index: i, entry });
       }
@@ -500,18 +500,18 @@ export async function listTraces(filters: {
   const hasMore = offset + filters.pageSize < totalCount;
 
   const traces = rows.map(({ _totalCount, startTime, endTime, errorCount, ...row }) => ({
-    trace_id: row.traceId,
-    event_count: row.eventCount,
-    has_errors: errorCount > 0,
-    latest_status: row.latestStatus,
-    duration_ms:
+    traceId: row.traceId,
+    eventCount: row.eventCount,
+    hasErrors: errorCount > 0,
+    latestStatus: row.latestStatus,
+    durationMs:
       startTime && endTime
         ? Math.max(0, endTime.getTime() - startTime.getTime())
         : null,
-    process_name: row.processName ?? null,
-    account_id: row.accountId ?? null,
-    start_time: startTime ? startTime.toISOString() : '',
-    end_time: endTime ? endTime.toISOString() : '',
+    processName: row.processName ?? null,
+    accountId: row.accountId ?? null,
+    startTime: startTime ? startTime.toISOString() : '',
+    endTime: endTime ? endTime.toISOString() : '',
   }));
 
   return { traces, totalCount, hasMore };
@@ -642,10 +642,10 @@ export async function createBatchUpload(
     // Collect all idempotency keys and their indices
     const idempotencyMap = new Map<string, number[]>();
     entries.forEach((entry, index) => {
-      if (entry.idempotency_key) {
-        const indices = idempotencyMap.get(entry.idempotency_key) || [];
+      if (entry.idempotencyKey) {
+        const indices = idempotencyMap.get(entry.idempotencyKey) || [];
         indices.push(index);
-        idempotencyMap.set(entry.idempotency_key, indices);
+        idempotencyMap.set(entry.idempotencyKey, indices);
       }
     });
 
@@ -673,9 +673,9 @@ export async function createBatchUpload(
     const toInsert: Array<{ index: number; entry: EventLogEntry }> = [];
     for (let i = 0; i < entries.length; i++) {
       const entry = entries[i];
-      if (entry.idempotency_key && existingKeys.has(entry.idempotency_key)) {
+      if (entry.idempotencyKey && existingKeys.has(entry.idempotencyKey)) {
         // Already exists - count as inserted and record correlation_id
-        correlationIds[i] = entry.correlation_id;
+        correlationIds[i] = entry.correlationId;
         totalInserted++;
       } else {
         toInsert.push({ index: i, entry });
@@ -695,7 +695,7 @@ export async function createBatchUpload(
 
         // Mark all as successful
         for (const item of chunk) {
-          correlationIds[item.index] = item.entry.correlation_id;
+          correlationIds[item.index] = item.entry.correlationId;
           totalInserted++;
         }
       } catch {
@@ -706,7 +706,7 @@ export async function createBatchUpload(
               ...entryToInsert(item.entry),
               batchId,
             });
-            correlationIds[item.index] = item.entry.correlation_id;
+            correlationIds[item.index] = item.entry.correlationId;
             totalInserted++;
           } catch (err) {
             errors.push({

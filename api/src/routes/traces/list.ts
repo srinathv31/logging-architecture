@@ -20,25 +20,25 @@ export async function listTracesRoute(app: FastifyInstance) {
       },
     },
     async (request, reply) => {
-      const { page, page_size, start_date, end_date, process_name, event_status, account_id } =
+      const { page, pageSize, startDate, endDate, processName, eventStatus, accountId } =
         request.query;
 
       const { traces, totalCount, hasMore } = await eventLogService.listTraces({
-        startDate: start_date,
-        endDate: end_date,
-        processName: process_name,
-        eventStatus: event_status,
-        accountId: account_id,
+        startDate,
+        endDate,
+        processName,
+        eventStatus,
+        accountId,
         page,
-        pageSize: page_size,
+        pageSize,
       });
 
       return reply.send({
         traces,
-        total_count: totalCount,
+        totalCount,
         page,
-        page_size,
-        has_more: hasMore,
+        pageSize,
+        hasMore,
       });
     },
   );

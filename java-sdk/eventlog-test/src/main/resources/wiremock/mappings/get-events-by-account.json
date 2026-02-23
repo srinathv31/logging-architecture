@@ -9,12 +9,12 @@
       "Content-Type": "application/json"
     },
     "jsonBody": {
-      "account_id": "acct-test",
+      "accountId": "acct-test",
       "events": [],
-      "total_count": 0,
+      "totalCount": 0,
       "page": 1,
-      "page_size": 50,
-      "has_more": false
+      "pageSize": 50,
+      "hasMore": false
     }
   }
 }

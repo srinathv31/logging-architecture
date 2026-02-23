@@ -13,28 +13,28 @@ import * as eventLogService from '../../services/event-log.service';
 export async function batchRoutes(app: FastifyInstance) {
   const typedApp = app.withTypeProvider<ZodTypeProvider>();
 
-  // POST /events/batch/upload — batch upload with shared batch_id
+  // POST /events/batch/upload — batch upload with shared batchId
   typedApp.post(
     '/batch/upload',
     {
       schema: {
         tags: ['Batch Operations'],
-        description: 'Upload a batch of event log entries with a shared batch_id',
+        description: 'Upload a batch of event log entries with a shared batchId',
         body: batchUploadRequestSchema,
         response: { 201: batchUploadResponseSchema },
       },
     },
     async (request, reply) => {
-      const { batch_id, events } = request.body;
+      const { batchId, events } = request.body;
       const { correlationIds, totalInserted, errors } =
-        await eventLogService.createBatchUpload(batch_id, events);
+        await eventLogService.createBatchUpload(batchId, events);
 
       return reply.status(201).send({
         success: errors.length === 0,
-        batch_id,
-        total_received: events.length,
-        total_inserted: totalInserted,
-        correlation_ids: correlationIds,
+        batchId,
+        totalReceived: events.length,
+        totalInserted,
+        correlationIds,
         errors: errors.length > 0 ? errors : undefined,
       });
     },
@@ -54,24 +54,24 @@ export async function batchRoutes(app: FastifyInstance) {
     },
     async (request, reply) => {
       const { batchId } = request.params;
-      const { page, page_size, event_status } = request.query;
+      const { page, pageSize, eventStatus } = request.query;
 
       const result = await eventLogService.getByBatch(batchId, {
-        eventStatus: event_status,
+        eventStatus,
         page,
-        pageSize: page_size,
+        pageSize,
       });
 
       return reply.send({
-        batch_id: batchId,
+        batchId,
         events: result.events,
-        total_count: result.totalCount,
-        unique_correlation_ids: result.uniqueCorrelationIds,
-        success_count: result.successCount,
-        failure_count: result.failureCount,
+        totalCount: result.totalCount,
+        uniqueCorrelationIds: result.uniqueCorrelationIds,
+        successCount: result.successCount,
+        failureCount: result.failureCount,
         page,
-        page_size,
-        has_more: result.hasMore,
+        pageSize,
+        hasMore: result.hasMore,
       });
     },
   );
@@ -92,14 +92,14 @@ export async function batchRoutes(app: FastifyInstance) {
       const summary = await eventLogService.getBatchSummary(batchId);
 
       return reply.send({
-        batch_id: batchId,
-        total_processes: summary.totalProcesses,
+        batchId,
+        totalProcesses: summary.totalProcesses,
         completed: summary.completed,
-        in_progress: summary.inProgress,
+        inProgress: summary.inProgress,
         failed: summary.failed,
-        correlation_ids: summary.correlationIds,
-        started_at: summary.startedAt,
-        last_event_at: summary.lastEventAt,
+        correlationIds: summary.correlationIds,
+        startedAt: summary.startedAt,
+        lastEventAt: summary.lastEventAt,
       });
     },
   );
