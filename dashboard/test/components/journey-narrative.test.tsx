@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
 import React from 'react';
 import { render } from '@testing-library/react';
 import { makeTraceEvent, makeTraceDetail } from '../util/fixtures';
@@ -10,9 +10,15 @@ vi.mock('@/lib/span-tree', () => ({
 }));
 
 import { JourneyNarrative } from '@/components/trace-detail/journey-narrative';
-import { hasParallelExecution } from '@/lib/span-tree';
+import { hasParallelExecution, buildStepFlow } from '@/lib/span-tree';
 
 describe('JourneyNarrative', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    (hasParallelExecution as any).mockReturnValue(false);
+    (buildStepFlow as any).mockReturnValue([]);
+  });
+
   it('renders success outcome for all-success events', () => {
     const detail = makeTraceDetail({
       processName: 'order_processing',
@@ -238,5 +244,117 @@ describe('JourneyNarrative', () => {
     );
 
     expect(container.textContent).not.toContain('Error summary');
+  });
+
+  it('renders retry success narrative with retryInfo', () => {
+    const detail = makeTraceDetail({
+      statusCounts: { SUCCESS: 1 },
+      events: [makeTraceEvent({ targetSystem: 'A' })],
+    });
+    const retryInfo = {
+      attempts: [
+        { attemptNumber: 1, rootSpanId: null, events: [], status: 'failure' as const },
+        { attemptNumber: 2, rootSpanId: null, events: [], status: 'success' as const },
+      ],
+      finalAttempt: { attemptNumber: 2, rootSpanId: null, events: [], status: 'success' as const },
+      overallStatus: 'success' as const,
+    };
+    const { container } = render(
+      <JourneyNarrative traceId="trace-1" detail={detail} retryInfo={retryInfo} />
+    );
+    expect(container.textContent).toContain('failed on the first attempt, then retried and completed successfully');
+    expect(container.textContent).toContain('Completed in');
+    expect(container.textContent).toContain('2 attempts');
+  });
+
+  it('renders retry failure narrative', () => {
+    const detail = makeTraceDetail({
+      statusCounts: { FAILURE: 1 },
+      events: [makeTraceEvent({ targetSystem: 'A', eventStatus: 'FAILURE' })],
+    });
+    const retryInfo = {
+      attempts: [
+        { attemptNumber: 1, rootSpanId: null, events: [], status: 'failure' as const },
+        { attemptNumber: 2, rootSpanId: null, events: [], status: 'failure' as const },
+        { attemptNumber: 3, rootSpanId: null, events: [], status: 'failure' as const },
+      ],
+      finalAttempt: { attemptNumber: 3, rootSpanId: null, events: [], status: 'failure' as const },
+      overallStatus: 'failure' as const,
+    };
+    const { container } = render(
+      <JourneyNarrative traceId="trace-1" detail={detail} retryInfo={retryInfo} />
+    );
+    expect(container.textContent).toContain('failed after 3 attempts');
+  });
+
+  it('renders retry in-progress narrative', () => {
+    const detail = makeTraceDetail({
+      statusCounts: { IN_PROGRESS: 1 },
+      events: [makeTraceEvent({ targetSystem: 'A' })],
+    });
+    const retryInfo = {
+      attempts: [
+        { attemptNumber: 1, rootSpanId: null, events: [], status: 'failure' as const },
+        { attemptNumber: 2, rootSpanId: null, events: [], status: 'in_progress' as const },
+      ],
+      finalAttempt: { attemptNumber: 2, rootSpanId: null, events: [], status: 'in_progress' as const },
+      overallStatus: 'in_progress' as const,
+    };
+    const { container } = render(
+      <JourneyNarrative traceId="trace-1" detail={detail} retryInfo={retryInfo} />
+    );
+    expect(container.textContent).toContain('retry attempt 2 is in progress');
+  });
+
+  it('renders step-level retry note when buildStepFlow returns retry nodes and no retryInfo', () => {
+    (buildStepFlow as any).mockReturnValue([
+      {
+        type: 'retry',
+        steps: [
+          { stepName: 'Validate', stepSequence: 1, eventType: 'STEP', eventStatus: 'FAILURE', processName: 'p', targetSystem: 'A', executionTimeMs: null },
+          { stepName: 'Validate', stepSequence: 1, eventType: 'STEP', eventStatus: 'SUCCESS', processName: 'p', targetSystem: 'A', executionTimeMs: null },
+        ],
+      },
+    ]);
+
+    const detail = makeTraceDetail({
+      statusCounts: { SUCCESS: 1 },
+      events: [makeTraceEvent({ targetSystem: 'A', eventType: 'PROCESS_END', eventStatus: 'SUCCESS' })],
+    });
+
+    const { container } = render(
+      <JourneyNarrative traceId="trace-1" detail={detail} />
+    );
+    expect(container.textContent).toContain('required');
+    expect(container.textContent).toContain('retries');
+    expect(container.textContent).toContain('and resolved successfully');
+  });
+
+  it('error callout uses amber theme when retryInfo.overallStatus is success', () => {
+    const detail = makeTraceDetail({
+      statusCounts: { SUCCESS: 1 },
+      events: [
+        makeTraceEvent({
+          targetSystem: 'A',
+          eventStatus: 'SUCCESS',
+          errorMessage: 'Transient error',
+          eventType: 'PROCESS_END',
+        }),
+      ],
+    });
+    const retryInfo = {
+      attempts: [
+        { attemptNumber: 1, rootSpanId: null, events: [], status: 'failure' as const },
+        { attemptNumber: 2, rootSpanId: null, events: [], status: 'success' as const },
+      ],
+      finalAttempt: { attemptNumber: 2, rootSpanId: null, events: [], status: 'success' as const },
+      overallStatus: 'success' as const,
+    };
+
+    const { container } = render(
+      <JourneyNarrative traceId="trace-1" detail={detail} retryInfo={retryInfo} />
+    );
+    expect(container.querySelector('.border-amber-200')).not.toBeNull();
+    expect(container.textContent).toContain('Errors from earlier attempt(s)');
   });
 });
