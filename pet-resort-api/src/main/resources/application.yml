@@ -17,6 +17,10 @@ eventlog:
     enabled: true
     queue-capacity: 1000
     virtual-threads: true
+    spillover-path: ./spillover
+    replay-interval-ms: 10000
+    max-spillover-events: 10000
+    max-spillover-size-mb: 50
   annotation:
     enabled: true
   mdc-filter:
@@ -27,6 +31,9 @@ management:
     web:
       exposure:
         include: health,metrics
+      cors:
+        allowed-origins: "*"
+        allowed-methods: GET
   endpoint:
     health:
       show-details: always

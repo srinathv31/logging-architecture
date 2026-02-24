@@ -257,6 +257,24 @@ class EventLogAutoConfigurationTest {
                 });
     }
 
+    @Test
+    void invalidReplayAndSpilloverLimitsFailFast() {
+        contextRunner
+                .withPropertyValues(
+                        "eventlog.enabled=true",
+                        "eventlog.base-url=https://api.test",
+                        "eventlog.transport=jdk",
+                        "eventlog.async.spillover-path=/tmp/spill",
+                        "eventlog.async.replay-interval-ms=999",
+                        "eventlog.async.max-spillover-events=0",
+                        "eventlog.async.max-spillover-size-mb=0")
+                .run(context -> {
+                    assertThat(context).hasFailed();
+                    assertThat(context.getStartupFailure()).hasRootCauseInstanceOf(IllegalArgumentException.class);
+                    assertThat(context.getStartupFailure()).hasMessageContaining("replayIntervalMs");
+                });
+    }
+
     // --- Dev profile defaults ---
 
     @Test

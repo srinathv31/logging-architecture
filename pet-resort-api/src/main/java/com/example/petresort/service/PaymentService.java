@@ -6,6 +6,8 @@ import com.eventlog.sdk.model.EventStatus;
 import com.eventlog.sdk.model.EventType;
 import com.eventlog.sdk.util.EventLogUtils;
 import com.example.petresort.exception.PaymentFailedException;
+import io.micrometer.core.instrument.Counter;
+import io.micrometer.core.instrument.MeterRegistry;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.slf4j.MDC;
@@ -25,14 +27,25 @@ public class PaymentService {
     private final String targetSystem;
     private final String originatingSystem;
 
+    private final Counter paymentsTotal;
+    private final Counter paymentsFailed;
+
     public PaymentService(AsyncEventLogger asyncEventLogger,
                           @Value("${eventlog.application-id}") String applicationId,
                           @Value("${eventlog.target-system}") String targetSystem,
-                          @Value("${eventlog.originating-system}") String originatingSystem) {
+                          @Value("${eventlog.originating-system}") String originatingSystem,
+                          MeterRegistry registry) {
         this.asyncEventLogger = asyncEventLogger;
         this.applicationId = applicationId;
         this.targetSystem = targetSystem;
         this.originatingSystem = originatingSystem;
+
+        this.paymentsTotal = Counter.builder("petresort.payments.total")
+                .description("Total payment attempts")
+                .register(registry);
+        this.paymentsFailed = Counter.builder("petresort.payments.failed")
+                .description("Total failed payments")
+                .register(registry);
     }
 
     /**
@@ -40,6 +53,7 @@ public class PaymentService {
      * Useful when you need full control over every field.
      */
     public boolean processPayment(String bookingId, BigDecimal amount, String cardLast4, String parentSpanId) {
+        paymentsTotal.increment();
         String correlationId = MDC.get("correlationId");
         String traceId = MDC.get("traceId");
         long start = System.currentTimeMillis();
@@ -77,6 +91,7 @@ public class PaymentService {
             if (!asyncEventLogger.log(failBuilder.build())) {
                 log.warn("Event not queued: {} for booking {}", "Payment Declined", bookingId);
             }
+            paymentsFailed.increment();
             throw new PaymentFailedException(bookingId,
                     "Card declined: ***" + EventLogUtils.maskLast4(cardLast4));
         }
@@ -133,6 +148,7 @@ public class PaymentService {
 
         // Simulate: negative amounts fail
         if (amount.compareTo(BigDecimal.ZERO) <= 0) {
+            paymentsFailed.increment();
             throw new PaymentFailedException(bookingId, "Invalid payment amount: " + amount);
         }
 

@@ -16,6 +16,8 @@ import com.example.petresort.exception.PetNotFoundException;
 import com.example.petresort.model.*;
 import com.example.petresort.store.InMemoryBookingStore;
 import com.example.petresort.store.InMemoryPetStore;
+import io.micrometer.core.instrument.Counter;
+import io.micrometer.core.instrument.MeterRegistry;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.slf4j.MDC;
@@ -39,13 +41,19 @@ public class BookingService {
     private final AsyncEventLogger asyncEventLogger;
     private final EventLogClient eventLogClient;
 
+    private final Counter bookingsCreated;
+    private final Counter checkinsCompleted;
+    private final Counter checkoutsCompleted;
+    private final Counter bookingsCancelled;
+
     public BookingService(InMemoryBookingStore bookingStore,
                           InMemoryPetStore petStore,
                           KennelService kennelService,
                           PaymentService paymentService,
                           EventLogTemplate eventLogTemplate,
                           AsyncEventLogger asyncEventLogger,
-                          EventLogClient eventLogClient) {
+                          EventLogClient eventLogClient,
+                          MeterRegistry registry) {
         this.bookingStore = bookingStore;
         this.petStore = petStore;
         this.kennelService = kennelService;
@@ -53,6 +61,19 @@ public class BookingService {
         this.eventLogTemplate = eventLogTemplate;
         this.asyncEventLogger = asyncEventLogger;
         this.eventLogClient = eventLogClient;
+
+        this.bookingsCreated = Counter.builder("petresort.bookings.created")
+                .description("Total bookings created")
+                .register(registry);
+        this.checkinsCompleted = Counter.builder("petresort.checkins.completed")
+                .description("Total check-ins completed")
+                .register(registry);
+        this.checkoutsCompleted = Counter.builder("petresort.checkouts.completed")
+                .description("Total check-outs completed")
+                .register(registry);
+        this.bookingsCancelled = Counter.builder("petresort.bookings.cancelled")
+                .description("Total bookings cancelled")
+                .register(registry);
     }
 
     // ──────────────────────────────────────────────────────────────────────
@@ -226,6 +247,7 @@ public class BookingService {
             }
         });
 
+        bookingsCreated.increment();
         log.info("Booking {} created for pet {} (owner {}) with kennel retry",
                 bookingId, request.petId(), pet.ownerId());
         return booking;
@@ -294,6 +316,7 @@ public class BookingService {
             }
         });
 
+        bookingsCreated.increment();
         log.info("Booking {} created for pet {} (owner {})", bookingId, request.petId(), pet.ownerId());
         return booking;
     }
@@ -427,6 +450,7 @@ public class BookingService {
                         + " is in kennel " + assignment.kennelNumber(),
                 "CHECK_IN_COMPLETE", duration);
 
+        checkinsCompleted.increment();
         log.info("Pet {} checked into kennel {}", booking.getPetId(), assignment.kennelNumber());
         return booking;
     }
@@ -531,6 +555,7 @@ public class BookingService {
                         + " (vet diet approval flow)",
                 "CHECK_IN_COMPLETE", duration);
 
+        checkinsCompleted.increment();
         log.info("Booking {} approved — pet {} checked into kennel {}",
                 bookingId, booking.getPetId(), assignment.kennelNumber());
         return booking;
@@ -795,6 +820,7 @@ public class BookingService {
             log.warn("Event not queued: {} for booking {}", "Process End", bookingId);
         }
 
+        checkoutsCompleted.increment();
         log.info("Booking {} checked out — total: {}", bookingId, request.paymentAmount());
         return booking;
     }
@@ -827,6 +853,7 @@ public class BookingService {
 
         booking.setStatus(BookingStatus.CANCELLED);
         bookingStore.save(booking);
+        bookingsCancelled.increment();
 
         // Direct logError() call — demonstrates template error shorthand
         String correlationId = MDC.get("correlationId");

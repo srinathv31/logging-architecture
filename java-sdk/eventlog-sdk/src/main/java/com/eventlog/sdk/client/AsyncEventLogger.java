@@ -11,7 +11,9 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.*;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.*;
+import java.nio.file.StandardCopyOption;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.HashSet;
@@ -59,6 +61,9 @@ public class AsyncEventLogger implements AutoCloseable {
 
     private static final Logger log = LoggerFactory.getLogger(AsyncEventLogger.class);
 
+    private static final String SPILL_FILE = "eventlog-spillover.jsonl";
+    private static final String REPLAY_FILE = "eventlog-spillover.replay.jsonl";
+
     private static final EventLossCallback DEFAULT_LOSS_CALLBACK = (event, reason) ->
             log.warn("Event lost ({}): correlationId={}, processName={}",
                     reason, event.getCorrelationId(), event.getProcessName());
@@ -89,11 +94,21 @@ public class AsyncEventLogger implements AutoCloseable {
     private final ExecutorService spilloverExecutor;
     private final ObjectMapper spilloverObjectMapper;
 
+    // Replay
+    private final long replayIntervalMs;
+    private final ScheduledExecutorService replayExecutor;
+    private final int maxSpilloverEvents;
+    private final long maxSpilloverSizeBytes;
+    private final AtomicInteger spilloverEventCount = new AtomicInteger(0);
+    private final AtomicLong spilloverFileSize = new AtomicLong(0);
+    private final Object spillReplayLock = new Object();
+
     // Metrics
     private final AtomicLong eventsQueued = new AtomicLong(0);
     private final AtomicLong eventsSent = new AtomicLong(0);
     private final AtomicLong eventsFailed = new AtomicLong(0);
     private final AtomicLong eventsSpilled = new AtomicLong(0);
+    private final AtomicLong eventsReplayed = new AtomicLong(0);
     
     // Pending retry tracking (CAS gate for shutdown-retry race)
     private final Set<QueuedEvent> pendingRetryEvents = ConcurrentHashMap.newKeySet();
@@ -144,10 +159,44 @@ public class AsyncEventLogger implements AutoCloseable {
                             return t;
                         }))
                 : null;
+        this.replayIntervalMs = builder.replayIntervalMs;
+        this.maxSpilloverEvents = builder.maxSpilloverEvents;
+        this.maxSpilloverSizeBytes = builder.maxSpilloverSizeBytes;
         this.spilloverObjectMapper = new ObjectMapper()
                 .registerModule(new JavaTimeModule())
                 .disable(SerializationFeature.WRITE_DATES_AS_TIMESTAMPS)
                 .configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false);
+
+        // Initialize spillover counters from existing file
+        if (this.spilloverEnabled) {
+            Path activeFile = this.spilloverPath.resolve(SPILL_FILE);
+            try {
+                if (Files.exists(activeFile)) {
+                    List<String> existingLines = Files.readAllLines(activeFile);
+                    int count = 0;
+                    for (String line : existingLines) {
+                        if (!line.isBlank()) {
+                            count++;
+                        }
+                    }
+                    this.spilloverEventCount.set(count);
+                    this.spilloverFileSize.set(Files.size(activeFile));
+                }
+            } catch (IOException e) {
+                log.warn("Could not read existing spillover file for counter init: {}", e.getMessage());
+            }
+        }
+
+        // Create replay executor
+        this.replayExecutor = spilloverEnabled
+                ? Executors.newSingleThreadScheduledExecutor(builder.virtualThreads
+                    ? Thread.ofVirtual().name("eventlog-replay").factory()
+                    : r -> {
+                        Thread t = new Thread(r, "eventlog-replay");
+                        t.setDaemon(true);
+                        return t;
+                    })
+                : null;
 
         // Start sender thread(s)
         this.senderExecutor = builder.senderExecutor != null
@@ -190,6 +239,10 @@ public class AsyncEventLogger implements AutoCloseable {
         if (startBackground && spilloverExecutor != null) {
             spilloverExecutor.submit(this::spilloverLoop);
         }
+        if (startBackground && replayExecutor != null) {
+            replayExecutor.scheduleWithFixedDelay(this::replayLoop,
+                    replayIntervalMs, replayIntervalMs, TimeUnit.MILLISECONDS);
+        }
 
         // Register shutdown hook
         if (startBackground && builder.registerShutdownHook) {
@@ -198,8 +251,9 @@ public class AsyncEventLogger implements AutoCloseable {
         }
         
         if (startBackground) {
-            log.info("AsyncEventLogger started - queue capacity: {}, spillover: {}", 
-                    builder.queueCapacity, spilloverEnabled ? spilloverPath : "disabled");
+            log.info("AsyncEventLogger started - queue capacity: {}, spillover: {}, replay interval: {}ms",
+                    builder.queueCapacity, spilloverEnabled ? spilloverPath : "disabled",
+                    spilloverEnabled ? replayIntervalMs : "N/A");
         }
     }
 
@@ -286,6 +340,7 @@ public class AsyncEventLogger implements AutoCloseable {
                 eventsSent.get(),
                 eventsFailed.get(),
                 eventsSpilled.get(),
+                eventsReplayed.get(),
                 queue.size(),
                 circuitOpen.get()
         );
@@ -570,18 +625,146 @@ public class AsyncEventLogger implements AutoCloseable {
 
     private void spillToDisk(QueuedEvent queued) {
         try {
-            Path file = spilloverPath.resolve("eventlog-spill-" +
-                    Instant.now().toString().replace(":", "-") + ".json");
-
+            Path file = spilloverPath.resolve(SPILL_FILE);
             String json = serializeEvent(queued.event);
-            Files.writeString(file, json + "\n", StandardOpenOption.CREATE, StandardOpenOption.APPEND);
+            byte[] payload = (json + "\n").getBytes(StandardCharsets.UTF_8);
+            long lineBytes = payload.length;
 
+            synchronized (spillReplayLock) {
+                if (spilloverEventCount.get() >= maxSpilloverEvents) {
+                    notifyEventLoss(queued.event, "spillover_max_events");
+                    eventsFailed.incrementAndGet();
+                    return;
+                }
+                if (spilloverFileSize.get() + lineBytes > maxSpilloverSizeBytes) {
+                    notifyEventLoss(queued.event, "spillover_max_size");
+                    eventsFailed.incrementAndGet();
+                    return;
+                }
+
+                Files.write(file, payload, StandardOpenOption.CREATE, StandardOpenOption.APPEND);
+                spilloverEventCount.incrementAndGet();
+                spilloverFileSize.addAndGet(lineBytes);
+            }
             eventsSpilled.incrementAndGet();
-            log.debug("Event spilled to disk: {}", file);
-
         } catch (IOException e) {
             log.error("Failed to spill event to disk", e);
             eventsFailed.incrementAndGet();
+        }
+    }
+
+    private void replayLoop() {
+        if (circuitOpen.get()) {
+            if (shouldResetCircuit()) {
+                resetCircuit();
+            } else {
+                return;
+            }
+        }
+
+        Path replayFile = spilloverPath.resolve(REPLAY_FILE);
+        Path activeFile = spilloverPath.resolve(SPILL_FILE);
+
+        // Step 1: If no replay file, rotate the active file
+        synchronized (spillReplayLock) {
+            if (!Files.exists(replayFile)) {
+                try {
+                    if (!Files.exists(activeFile) || Files.size(activeFile) == 0) return;
+                    moveActiveToReplay(activeFile, replayFile);
+                    spilloverEventCount.set(0);
+                    spilloverFileSize.set(0);
+                } catch (IOException e) {
+                    log.warn("Failed to rotate spillover file for replay: {}", e.getMessage());
+                    return;
+                }
+            }
+        }
+
+        // Step 2: Read all lines
+        List<String> lines;
+        try {
+            lines = Files.readAllLines(replayFile);
+        } catch (IOException e) {
+            log.warn("Failed to read replay file: {}", e.getMessage());
+            return;
+        }
+        if (lines.isEmpty()) {
+            synchronized (spillReplayLock) {
+                try {
+                    Files.deleteIfExists(replayFile);
+                } catch (IOException ignored) {}
+            }
+            return;
+        }
+
+        // Step 3: Replay line by line
+        int sent = 0;
+        for (String line : lines) {
+            if (shutdownRequested.get() || circuitOpen.get()) break;
+            if (line.isBlank()) { sent++; continue; }
+            try {
+                EventLogEntry event = spilloverObjectMapper.readValue(line, EventLogEntry.class);
+                client.createEvent(event);
+                eventsReplayed.incrementAndGet();
+                sent++;
+            } catch (IOException e) {
+                log.warn("Skipping corrupt spillover line: {}", e.getMessage());
+                sent++; // skip corrupt line
+            } catch (Exception e) {
+                log.warn("Replay send failed, pausing: {}", e.getMessage());
+                break; // stop on API failure
+            }
+        }
+
+        // Step 4: Rewrite remaining or delete
+        synchronized (spillReplayLock) {
+            try {
+                if (!Files.exists(replayFile)) {
+                    return;
+                }
+                if (sent >= lines.size()) {
+                    Files.deleteIfExists(replayFile);
+                } else {
+                    List<String> remaining = lines.subList(sent, lines.size());
+                    rewriteReplayFile(replayFile, remaining);
+                }
+            } catch (IOException e) {
+                log.warn("Failed to update replay file: {}", e.getMessage());
+            }
+        }
+    }
+
+    protected void moveActiveToReplay(Path activeFile, Path replayFile) throws IOException {
+        try {
+            moveFileAtomic(activeFile, replayFile);
+        } catch (AtomicMoveNotSupportedException e) {
+            moveFileReplace(activeFile, replayFile);
+        }
+    }
+
+    protected void moveFileAtomic(Path source, Path target) throws IOException {
+        Files.move(source, target, StandardCopyOption.ATOMIC_MOVE);
+    }
+
+    protected void moveFileReplace(Path source, Path target) throws IOException {
+        Files.move(source, target, StandardCopyOption.REPLACE_EXISTING);
+    }
+
+    private void rewriteReplayFile(Path replayFile, List<String> remaining) throws IOException {
+        Path tempFile = replayFile.resolveSibling(REPLAY_FILE + ".tmp");
+        String payload = String.join("\n", remaining) + "\n";
+        Files.writeString(tempFile, payload, StandardOpenOption.CREATE, StandardOpenOption.TRUNCATE_EXISTING);
+        try {
+            Files.move(tempFile, replayFile, StandardCopyOption.ATOMIC_MOVE, StandardCopyOption.REPLACE_EXISTING);
+        } catch (AtomicMoveNotSupportedException e) {
+            Files.move(tempFile, replayFile, StandardCopyOption.REPLACE_EXISTING);
+        } catch (IOException e) {
+            try {
+                Files.deleteIfExists(tempFile);
+            } catch (IOException ignored) {
+                // best effort cleanup
+            }
+            throw e;
         }
     }
 
@@ -651,6 +834,9 @@ public class AsyncEventLogger implements AutoCloseable {
 
         // Shutdown executors
         senderExecutor.shutdownNow();
+        if (replayExecutor != null) {
+            replayExecutor.shutdownNow();
+        }
         if (spilloverExecutor != null) {
             spilloverExecutor.shutdown();
             try {
@@ -665,8 +851,8 @@ public class AsyncEventLogger implements AutoCloseable {
             }
         }
 
-        log.info("AsyncEventLogger shutdown complete - sent: {}, failed: {}, spilled: {}",
-                eventsSent.get(), eventsFailed.get(), eventsSpilled.get());
+        log.info("AsyncEventLogger shutdown complete - sent: {}, failed: {}, spilled: {}, replayed: {}",
+                eventsSent.get(), eventsFailed.get(), eventsSpilled.get(), eventsReplayed.get());
     }
 
     // ========================================================================
@@ -693,23 +879,25 @@ public class AsyncEventLogger implements AutoCloseable {
         public final long eventsSent;
         public final long eventsFailed;
         public final long eventsSpilled;
+        public final long eventsReplayed;
         public final int currentQueueDepth;
         public final boolean circuitOpen;
 
-        Metrics(long eventsQueued, long eventsSent, long eventsFailed, 
-                long eventsSpilled, int currentQueueDepth, boolean circuitOpen) {
+        Metrics(long eventsQueued, long eventsSent, long eventsFailed,
+                long eventsSpilled, long eventsReplayed, int currentQueueDepth, boolean circuitOpen) {
             this.eventsQueued = eventsQueued;
             this.eventsSent = eventsSent;
             this.eventsFailed = eventsFailed;
             this.eventsSpilled = eventsSpilled;
+            this.eventsReplayed = eventsReplayed;
             this.currentQueueDepth = currentQueueDepth;
             this.circuitOpen = circuitOpen;
         }
 
         @Override
         public String toString() {
-            return String.format("Metrics{queued=%d, sent=%d, failed=%d, spilled=%d, depth=%d, circuitOpen=%s}",
-                    eventsQueued, eventsSent, eventsFailed, eventsSpilled, currentQueueDepth, circuitOpen);
+            return String.format("Metrics{queued=%d, sent=%d, failed=%d, spilled=%d, replayed=%d, depth=%d, circuitOpen=%s}",
+                    eventsQueued, eventsSent, eventsFailed, eventsSpilled, eventsReplayed, currentQueueDepth, circuitOpen);
         }
     }
 
@@ -735,6 +923,9 @@ public class AsyncEventLogger implements AutoCloseable {
         private int batchSize = 50;
         private long maxBatchWaitMs = 100;
         private int senderThreads = 1;
+        private long replayIntervalMs = 10_000;
+        private int maxSpilloverEvents = 10_000;
+        private long maxSpilloverSizeBytes = 50L * 1024 * 1024;
 
         /**
          * Set the EventLogClient (required)
@@ -876,6 +1067,33 @@ public class AsyncEventLogger implements AutoCloseable {
             return this;
         }
 
+        /**
+         * Set the replay interval in milliseconds (default: 10000).
+         * Controls how often spilled events are retried when the API recovers.
+         */
+        public Builder replayIntervalMs(long replayIntervalMs) {
+            this.replayIntervalMs = replayIntervalMs;
+            return this;
+        }
+
+        /**
+         * Set the maximum number of events to store in the spillover file (default: 10,000).
+         * Events beyond this limit are dropped.
+         */
+        public Builder maxSpilloverEvents(int maxSpilloverEvents) {
+            this.maxSpilloverEvents = maxSpilloverEvents;
+            return this;
+        }
+
+        /**
+         * Set the maximum spillover file size in bytes (default: 50MB).
+         * Events beyond this limit are dropped.
+         */
+        public Builder maxSpilloverSizeBytes(long maxSpilloverSizeBytes) {
+            this.maxSpilloverSizeBytes = maxSpilloverSizeBytes;
+            return this;
+        }
+
         public AsyncEventLogger build() {
             if (client == null) {
                 throw new IllegalStateException("client is required");
@@ -888,6 +1106,15 @@ public class AsyncEventLogger implements AutoCloseable {
             }
             if (maxBatchWaitMs < 0) {
                 throw new IllegalArgumentException("maxBatchWaitMs must be >= 0, got: " + maxBatchWaitMs);
+            }
+            if (replayIntervalMs < 1000) {
+                throw new IllegalArgumentException("replayIntervalMs must be >= 1000, got: " + replayIntervalMs);
+            }
+            if (maxSpilloverEvents < 1) {
+                throw new IllegalArgumentException("maxSpilloverEvents must be >= 1, got: " + maxSpilloverEvents);
+            }
+            if (maxSpilloverSizeBytes < 1) {
+                throw new IllegalArgumentException("maxSpilloverSizeBytes must be >= 1, got: " + maxSpilloverSizeBytes);
             }
             return new AsyncEventLogger(this);
         }

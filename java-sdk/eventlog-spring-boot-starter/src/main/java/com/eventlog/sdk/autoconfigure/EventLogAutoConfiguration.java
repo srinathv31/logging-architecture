@@ -265,7 +265,10 @@ public class EventLogAutoConfiguration {
 
         builder.batchSize(async.getBatchSize())
                 .senderThreads(async.getSenderThreads())
-                .maxBatchWaitMs(async.getMaxBatchWaitMs());
+                .maxBatchWaitMs(async.getMaxBatchWaitMs())
+                .replayIntervalMs(async.getReplayIntervalMs())
+                .maxSpilloverEvents(async.getMaxSpilloverEvents())
+                .maxSpilloverSizeBytes(async.getMaxSpilloverSizeMb() * 1024L * 1024L);
 
         return builder.build();
     }

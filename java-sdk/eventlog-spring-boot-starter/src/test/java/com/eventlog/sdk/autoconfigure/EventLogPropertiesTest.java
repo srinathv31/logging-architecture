@@ -240,7 +240,7 @@ class EventLogPropertiesTest {
     @Test
     void asyncDefaultValues() {
         EventLogProperties.Async async = new EventLogProperties.Async(
-                null, null, null, null, null, null, null, null, null, null, null, null, null);
+                null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null);
         assertThat(async.isEnabled()).isTrue();
         assertThat(async.getQueueCapacity()).isEqualTo(10_000);
         assertThat(async.getMaxRetries()).isEqualTo(3);
@@ -254,7 +254,7 @@ class EventLogPropertiesTest {
     void asyncCustomValues() {
         Path spillover = Path.of("/tmp/spill");
         EventLogProperties.Async async = new EventLogProperties.Async(
-                true, 5000, 5, 2000L, 60000L, 10, 60000L, spillover, true, "myExecutor", null, null, null);
+                true, 5000, 5, 2000L, 60000L, 10, 60000L, spillover, true, "myExecutor", null, null, null, null, null, null);
         assertThat(async.isEnabled()).isTrue();
         assertThat(async.getQueueCapacity()).isEqualTo(5000);
         assertThat(async.getMaxRetries()).isEqualTo(5);
@@ -270,35 +270,35 @@ class EventLogPropertiesTest {
     @Test
     void asyncEnabledDefaultsToTrue() {
         EventLogProperties.Async async = new EventLogProperties.Async(
-                null, null, null, null, null, null, null, null, null, null, null, null, null);
+                null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null);
         assertThat(async.isEnabled()).isTrue();
     }
 
     @Test
     void asyncEnabledFalseWhenSetFalse() {
         EventLogProperties.Async async = new EventLogProperties.Async(
-                false, null, null, null, null, null, null, null, null, null, null, null, null);
+                false, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null);
         assertThat(async.isEnabled()).isFalse();
     }
 
     @Test
     void asyncVirtualThreadsDefaultsToFalse() {
         EventLogProperties.Async async = new EventLogProperties.Async(
-                null, null, null, null, null, null, null, null, null, null, null, null, null);
+                null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null);
         assertThat(async.isVirtualThreads()).isFalse();
     }
 
     @Test
     void asyncExecutorTrimmed() {
         EventLogProperties.Async async = new EventLogProperties.Async(
-                null, null, null, null, null, null, null, null, null, " myBean ", null, null, null);
+                null, null, null, null, null, null, null, null, null, " myBean ", null, null, null, null, null, null);
         assertThat(async.getExecutor()).isEqualTo("myBean");
     }
 
     @Test
     void asyncExecutorNullWhenBlank() {
         EventLogProperties.Async async = new EventLogProperties.Async(
-                null, null, null, null, null, null, null, null, null, "  ", null, null, null);
+                null, null, null, null, null, null, null, null, null, "  ", null, null, null, null, null, null);
         assertThat(async.getExecutor()).isNull();
     }
 
@@ -306,8 +306,28 @@ class EventLogPropertiesTest {
     void asyncSpilloverPathPreserved() {
         Path path = Path.of("/var/log/spillover");
         EventLogProperties.Async async = new EventLogProperties.Async(
-                null, null, null, null, null, null, null, path, null, null, null, null, null);
+                null, null, null, null, null, null, null, path, null, null, null, null, null, null, null, null);
         assertThat(async.getSpilloverPath()).isEqualTo(path);
+    }
+
+    // --- Async replay/spillover limit defaults ---
+
+    @Test
+    void asyncReplayDefaultValues() {
+        EventLogProperties.Async async = new EventLogProperties.Async(
+                null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null);
+        assertThat(async.getReplayIntervalMs()).isEqualTo(10_000);
+        assertThat(async.getMaxSpilloverEvents()).isEqualTo(10_000);
+        assertThat(async.getMaxSpilloverSizeMb()).isEqualTo(50);
+    }
+
+    @Test
+    void asyncReplayCustomValues() {
+        EventLogProperties.Async async = new EventLogProperties.Async(
+                null, null, null, null, null, null, null, null, null, null, null, null, null, 5000L, 20_000, 100);
+        assertThat(async.getReplayIntervalMs()).isEqualTo(5000);
+        assertThat(async.getMaxSpilloverEvents()).isEqualTo(20_000);
+        assertThat(async.getMaxSpilloverSizeMb()).isEqualTo(100);
     }
 
     // --- Metrics nested class ---

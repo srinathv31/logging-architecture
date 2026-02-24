@@ -33,6 +33,7 @@ class EventLogMetricsAutoConfigurationTest {
             assertThat(registry.find("eventlog.events.sent").gauge()).isNotNull();
             assertThat(registry.find("eventlog.events.failed").gauge()).isNotNull();
             assertThat(registry.find("eventlog.events.spilled").gauge()).isNotNull();
+            assertThat(registry.find("eventlog.events.replayed").gauge()).isNotNull();
             assertThat(registry.find("eventlog.queue.depth").gauge()).isNotNull();
             assertThat(registry.find("eventlog.circuit-breaker.open").gauge()).isNotNull();
         });
@@ -80,6 +81,7 @@ class EventLogMetricsAutoConfigurationTest {
             assertThat(gauge(registry, "eventlog.events.sent")).isZero();
             assertThat(gauge(registry, "eventlog.events.failed")).isZero();
             assertThat(gauge(registry, "eventlog.events.spilled")).isZero();
+            assertThat(gauge(registry, "eventlog.events.replayed")).isZero();
             assertThat(gauge(registry, "eventlog.queue.depth")).isZero();
             assertThat(gauge(registry, "eventlog.circuit-breaker.open")).isZero();
         });

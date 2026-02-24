@@ -6,21 +6,33 @@ import com.eventlog.sdk.client.transport.EventLogRequest;
 import com.eventlog.sdk.model.EventLogEntry;
 import com.eventlog.sdk.model.EventStatus;
 import com.eventlog.sdk.model.EventType;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.SerializationFeature;
+import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
 import java.io.IOException;
 import java.lang.reflect.Field;
+import java.lang.reflect.Method;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.AtomicMoveNotSupportedException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Duration;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 import java.util.stream.Stream;
 import java.util.concurrent.*;
 import java.util.concurrent.ConcurrentLinkedQueue;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.BooleanSupplier;
 import java.util.function.Function;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 import static org.junit.jupiter.api.Assertions.*;
 
@@ -28,6 +40,12 @@ class AsyncEventLoggerTest {
 
     private static final String SUCCESS_BODY = "{\"success\":true,\"executionIds\":[\"id1\"],\"correlationId\":\"corr\"}";
     private static final String ERROR_BODY = "{\"error\":\"boom\"}";
+    private static final String SPILL_FILE = "eventlog-spillover.jsonl";
+    private static final String REPLAY_FILE = "eventlog-spillover.replay.jsonl";
+    private static final Pattern CORRELATION_ID_PATTERN = Pattern.compile("\"correlationId\"\\s*:\\s*\"([^\"]+)\"");
+    private static final ObjectMapper SPILLOVER_MAPPER = new ObjectMapper()
+            .registerModule(new JavaTimeModule())
+            .disable(SerializationFeature.WRITE_DATES_AS_TIMESTAMPS);
 
     @Test
     void logQueuesAndSends() throws Exception {
@@ -609,10 +627,336 @@ class AsyncEventLoggerTest {
         assertTrue(str.contains("sent="), "toString should include sent");
         assertTrue(str.contains("failed="), "toString should include failed");
         assertTrue(str.contains("spilled="), "toString should include spilled");
+        assertTrue(str.contains("replayed="), "toString should include replayed");
         assertTrue(str.contains("depth="), "toString should include depth");
         assertTrue(str.contains("circuitOpen="), "toString should include circuitOpen");
 
         logger.shutdown();
+    }
+
+    @Test
+    void replayFallsBackWhenAtomicMoveUnsupported(@TempDir Path tempDir) throws Exception {
+        ConcurrentLinkedQueue<String> replayed = new ConcurrentLinkedQueue<>();
+        EventLogClient client = clientWithTransport(request -> {
+            replayed.add(extractCorrelationId(request.getBody()));
+            return new EventLogResponse(200, SUCCESS_BODY);
+        });
+
+        Files.writeString(tempDir.resolve(SPILL_FILE),
+                serializeForSpill(eventWithCorrelationId("replay-1")) + "\n");
+
+        AtomicBoolean replaceFallbackUsed = new AtomicBoolean(false);
+        AsyncEventLogger.Builder builder = AsyncEventLogger.builder()
+                .client(client)
+                .spilloverPath(tempDir)
+                .replayIntervalMs(60_000)
+                .registerShutdownHook(false)
+                .senderExecutor(Executors.newSingleThreadExecutor())
+                .retryExecutor(Executors.newSingleThreadScheduledExecutor());
+
+        AsyncEventLogger logger = new AsyncEventLogger(builder, true) {
+            @Override
+            protected void moveFileAtomic(Path source, Path target) throws IOException {
+                throw new AtomicMoveNotSupportedException(source.toString(), target.toString(), "forced");
+            }
+
+            @Override
+            protected void moveFileReplace(Path source, Path target) throws IOException {
+                replaceFallbackUsed.set(true);
+                super.moveFileReplace(source, target);
+            }
+        };
+
+        invokeReplayLoop(logger);
+
+        assertTrue(replaceFallbackUsed.get(), "Replay should fall back to non-atomic move");
+        assertEquals(1, logger.getMetrics().eventsReplayed);
+        assertTrue(replayed.contains("replay-1"));
+        assertFalse(Files.exists(tempDir.resolve(REPLAY_FILE)));
+        logger.shutdown();
+    }
+
+    @Test
+    void replaySkipsCorruptLinesAndReplaysValidOnes(@TempDir Path tempDir) throws Exception {
+        Set<String> replayed = ConcurrentHashMap.newKeySet();
+        EventLogClient client = clientWithTransport(request -> {
+            replayed.add(extractCorrelationId(request.getBody()));
+            return new EventLogResponse(200, SUCCESS_BODY);
+        });
+
+        String valid1 = serializeForSpill(eventWithCorrelationId("valid-1"));
+        String valid2 = serializeForSpill(eventWithCorrelationId("valid-2"));
+        Files.writeString(tempDir.resolve(SPILL_FILE), valid1 + "\nnot-json\n" + valid2 + "\n");
+
+        AsyncEventLogger logger = AsyncEventLogger.builder()
+                .client(client)
+                .spilloverPath(tempDir)
+                .replayIntervalMs(60_000)
+                .registerShutdownHook(false)
+                .senderExecutor(Executors.newSingleThreadExecutor())
+                .retryExecutor(Executors.newSingleThreadScheduledExecutor())
+                .build();
+
+        invokeReplayLoop(logger);
+
+        assertEquals(2, logger.getMetrics().eventsReplayed);
+        assertTrue(replayed.contains("valid-1"));
+        assertTrue(replayed.contains("valid-2"));
+        assertFalse(Files.exists(tempDir.resolve(REPLAY_FILE)), "Replay file should be drained");
+        logger.shutdown();
+    }
+
+    @Test
+    void replayKeepsUnsentLinesWhenApiFails(@TempDir Path tempDir) throws Exception {
+        AtomicInteger calls = new AtomicInteger(0);
+        EventLogClient client = clientWithTransport(request -> {
+            int call = calls.incrementAndGet();
+            if (call == 2) {
+                return new EventLogResponse(500, ERROR_BODY);
+            }
+            return new EventLogResponse(200, SUCCESS_BODY);
+        });
+
+        String p1 = serializeForSpill(eventWithCorrelationId("p1"));
+        String p2 = serializeForSpill(eventWithCorrelationId("p2"));
+        String p3 = serializeForSpill(eventWithCorrelationId("p3"));
+        Files.writeString(tempDir.resolve(SPILL_FILE), p1 + "\n" + p2 + "\n" + p3 + "\n");
+
+        AsyncEventLogger logger = AsyncEventLogger.builder()
+                .client(client)
+                .spilloverPath(tempDir)
+                .replayIntervalMs(60_000)
+                .registerShutdownHook(false)
+                .senderExecutor(Executors.newSingleThreadExecutor())
+                .retryExecutor(Executors.newSingleThreadScheduledExecutor())
+                .build();
+
+        invokeReplayLoop(logger);
+
+        Path replayFile = tempDir.resolve(REPLAY_FILE);
+        assertTrue(Files.exists(replayFile), "Replay file should keep unsent lines");
+        List<String> remaining = Files.readAllLines(replayFile).stream()
+                .filter(line -> !line.isBlank())
+                .toList();
+        assertEquals(2, remaining.size());
+        assertEquals("p2", extractCorrelationId(remaining.get(0)));
+        assertEquals("p3", extractCorrelationId(remaining.get(1)));
+        assertEquals(1, logger.getMetrics().eventsReplayed);
+        logger.shutdown();
+    }
+
+    @Test
+    void replayResetsCircuitAndReplaysWithoutIncomingTraffic(@TempDir Path tempDir) throws Exception {
+        Set<String> replayed = ConcurrentHashMap.newKeySet();
+        EventLogClient client = clientWithTransport(request -> {
+            replayed.add(extractCorrelationId(request.getBody()));
+            return new EventLogResponse(200, SUCCESS_BODY);
+        });
+
+        Files.writeString(tempDir.resolve(SPILL_FILE),
+                serializeForSpill(eventWithCorrelationId("recover-1")) + "\n");
+
+        AsyncEventLogger logger = AsyncEventLogger.builder()
+                .client(client)
+                .spilloverPath(tempDir)
+                .circuitBreakerResetMs(1_000)
+                .replayIntervalMs(60_000)
+                .registerShutdownHook(false)
+                .senderExecutor(Executors.newSingleThreadExecutor())
+                .retryExecutor(Executors.newSingleThreadScheduledExecutor())
+                .build();
+
+        setCircuitState(logger, true, System.currentTimeMillis() - 2_000);
+        invokeReplayLoop(logger);
+
+        assertFalse(logger.isCircuitOpen(), "Replay loop should reset circuit after timeout");
+        assertEquals(1, logger.getMetrics().eventsReplayed, "Replay should send spilled event without new traffic");
+        assertTrue(replayed.contains("recover-1"));
+        assertFalse(Files.exists(tempDir.resolve(REPLAY_FILE)));
+        logger.shutdown();
+    }
+
+    @Test
+    void replayDoesNotResetCircuitBeforeTimeout(@TempDir Path tempDir) throws Exception {
+        EventLogClient client = clientWithTransport(request -> new EventLogResponse(200, SUCCESS_BODY));
+
+        Files.writeString(tempDir.resolve(SPILL_FILE),
+                serializeForSpill(eventWithCorrelationId("blocked-1")) + "\n");
+
+        AsyncEventLogger logger = AsyncEventLogger.builder()
+                .client(client)
+                .spilloverPath(tempDir)
+                .circuitBreakerResetMs(60_000)
+                .replayIntervalMs(60_000)
+                .registerShutdownHook(false)
+                .senderExecutor(Executors.newSingleThreadExecutor())
+                .retryExecutor(Executors.newSingleThreadScheduledExecutor())
+                .build();
+
+        setCircuitState(logger, true, System.currentTimeMillis());
+        invokeReplayLoop(logger);
+
+        assertTrue(logger.isCircuitOpen(), "Circuit should remain open before reset timeout");
+        assertEquals(0, logger.getMetrics().eventsReplayed);
+        assertTrue(Files.exists(tempDir.resolve(SPILL_FILE)), "Spill file should remain untouched");
+        assertFalse(Files.exists(tempDir.resolve(REPLAY_FILE)));
+        logger.shutdown();
+    }
+
+    @Test
+    void replayDrainsAfterCircuitResetWindowElapsesWithoutIncomingTraffic(@TempDir Path tempDir) throws Exception {
+        EventLogClient client = clientWithTransport(request -> new EventLogResponse(200, SUCCESS_BODY));
+
+        Files.writeString(tempDir.resolve(SPILL_FILE),
+                serializeForSpill(eventWithCorrelationId("drain-1")) + "\n");
+
+        AsyncEventLogger logger = AsyncEventLogger.builder()
+                .client(client)
+                .spilloverPath(tempDir)
+                .circuitBreakerResetMs(1_000)
+                .replayIntervalMs(60_000)
+                .registerShutdownHook(false)
+                .senderExecutor(Executors.newSingleThreadExecutor())
+                .retryExecutor(Executors.newSingleThreadScheduledExecutor())
+                .build();
+
+        setCircuitState(logger, true, System.currentTimeMillis());
+        invokeReplayLoop(logger);
+        assertEquals(0, logger.getMetrics().eventsReplayed);
+        assertTrue(logger.isCircuitOpen());
+        assertTrue(Files.exists(tempDir.resolve(SPILL_FILE)));
+
+        setCircuitState(logger, true, System.currentTimeMillis() - 2_000);
+        invokeReplayLoop(logger);
+
+        assertFalse(logger.isCircuitOpen());
+        assertEquals(1, logger.getMetrics().eventsReplayed);
+        assertFalse(Files.exists(tempDir.resolve(REPLAY_FILE)));
+        assertFalse(Files.exists(tempDir.resolve(SPILL_FILE)));
+        logger.shutdown();
+    }
+
+    @Test
+    void spilloverSizeLimitUsesUtf8Bytes(@TempDir Path tempDir) throws Exception {
+        EventLogEntry multibyte = eventWithCorrelationAndSummary("utf8-overflow", "🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂");
+        String json = serializeForSpill(multibyte);
+        int charCountSize = json.length() + 1;
+        int utf8Size = (json + "\n").getBytes(StandardCharsets.UTF_8).length;
+        assertTrue(utf8Size > charCountSize, "UTF-8 payload should be larger than char count");
+        long strictLimit = charCountSize + ((utf8Size - charCountSize) / 2L);
+
+        CountDownLatch senderStarted = new CountDownLatch(1);
+        CountDownLatch unblockSender = new CountDownLatch(1);
+        EventLogClient client = clientWithTransport(request -> {
+            senderStarted.countDown();
+            try { unblockSender.await(2, TimeUnit.SECONDS); } catch (InterruptedException e) { Thread.currentThread().interrupt(); }
+            return new EventLogResponse(200, SUCCESS_BODY);
+        });
+
+        ConcurrentLinkedQueue<String> reasons = new ConcurrentLinkedQueue<>();
+        EventLossCallback callback = (event, reason) -> reasons.add(reason);
+
+        AsyncEventLogger logger = AsyncEventLogger.builder()
+                .client(client)
+                .queueCapacity(1)
+                .maxRetries(0)
+                .spilloverPath(tempDir)
+                .maxSpilloverSizeBytes(strictLimit)
+                .registerShutdownHook(false)
+                .onEventLoss(callback)
+                .senderExecutor(Executors.newSingleThreadExecutor())
+                .retryExecutor(Executors.newSingleThreadScheduledExecutor())
+                .build();
+
+        assertTrue(logger.log(eventWithCorrelationId("queue-blocker")));
+        assertTrue(senderStarted.await(1, TimeUnit.SECONDS));
+        assertTrue(logger.log(eventWithCorrelationId("queue-fill")));
+        assertTrue(logger.log(multibyte));
+
+        assertTrue(waitUntil(() -> reasons.contains("spillover_max_size"), Duration.ofSeconds(2)),
+                "Spillover should reject based on UTF-8 byte limit");
+        assertFalse(hasSpillFiles(tempDir), "Oversized payload should not be written");
+        assertTrue(logger.getMetrics().eventsFailed >= 1);
+
+        unblockSender.countDown();
+        logger.shutdown();
+    }
+
+    @Test
+    void replayAndSpilloverRetainAllEventIdsDuringConcurrentReplay(@TempDir Path tempDir) throws Exception {
+        Set<String> delivered = ConcurrentHashMap.newKeySet();
+        CountDownLatch senderStarted = new CountDownLatch(1);
+        CountDownLatch unblockSender = new CountDownLatch(1);
+        CountDownLatch replayStarted = new CountDownLatch(1);
+        CountDownLatch unblockReplay = new CountDownLatch(1);
+
+        EventLogClient client = clientWithTransport(request -> {
+            String correlationId = extractCorrelationId(request.getBody());
+            if ("queue-blocker".equals(correlationId)) {
+                senderStarted.countDown();
+                try { unblockSender.await(2, TimeUnit.SECONDS); } catch (InterruptedException e) { Thread.currentThread().interrupt(); }
+            }
+            if ("a1".equals(correlationId) && replayStarted.getCount() > 0) {
+                replayStarted.countDown();
+                try { unblockReplay.await(2, TimeUnit.SECONDS); } catch (InterruptedException e) { Thread.currentThread().interrupt(); }
+            }
+            delivered.add(correlationId);
+            return new EventLogResponse(200, SUCCESS_BODY);
+        });
+
+        AsyncEventLogger logger = AsyncEventLogger.builder()
+                .client(client)
+                .queueCapacity(1)
+                .maxRetries(0)
+                .spilloverPath(tempDir)
+                .replayIntervalMs(60_000)
+                .registerShutdownHook(false)
+                .senderExecutor(Executors.newSingleThreadExecutor())
+                .retryExecutor(Executors.newSingleThreadScheduledExecutor())
+                .build();
+
+        assertTrue(logger.log(eventWithCorrelationId("queue-blocker")));
+        assertTrue(senderStarted.await(1, TimeUnit.SECONDS));
+        assertTrue(logger.log(eventWithCorrelationId("queue-fill")));
+
+        assertTrue(logger.log(eventWithCorrelationId("a1")));
+        assertTrue(waitUntil(() -> logger.getMetrics().eventsSpilled >= 1, Duration.ofSeconds(2)));
+        assertTrue(logger.log(eventWithCorrelationId("a2")));
+        assertTrue(waitUntil(() -> logger.getMetrics().eventsSpilled >= 2, Duration.ofSeconds(2)));
+        assertTrue(logger.log(eventWithCorrelationId("a3")));
+        assertTrue(waitUntil(() -> logger.getMetrics().eventsSpilled >= 3, Duration.ofSeconds(2)));
+
+        ExecutorService replayExecutor = Executors.newSingleThreadExecutor();
+        Future<?> replayFuture = replayExecutor.submit(() -> {
+            try {
+                invokeReplayLoop(logger);
+            } catch (Exception e) {
+                throw new RuntimeException(e);
+            }
+        });
+
+        assertTrue(replayStarted.await(2, TimeUnit.SECONDS), "Replay should begin sending snapshot lines");
+
+        assertTrue(logger.log(eventWithCorrelationId("b1")));
+        assertTrue(waitUntil(() -> logger.getMetrics().eventsSpilled >= 4, Duration.ofSeconds(2)));
+        assertTrue(logger.log(eventWithCorrelationId("b2")));
+        assertTrue(waitUntil(() -> logger.getMetrics().eventsSpilled >= 5, Duration.ofSeconds(2)));
+        assertTrue(logger.log(eventWithCorrelationId("b3")));
+        assertTrue(waitUntil(() -> logger.getMetrics().eventsSpilled >= 6, Duration.ofSeconds(2)));
+
+        unblockReplay.countDown();
+        replayFuture.get(2, TimeUnit.SECONDS);
+        replayExecutor.shutdownNow();
+
+        unblockSender.countDown();
+        logger.shutdown();
+
+        Set<String> expected = Set.of("queue-blocker", "queue-fill", "a1", "a2", "a3", "b1", "b2", "b3");
+        Set<String> observed = new HashSet<>(delivered);
+        observed.addAll(readCorrelationIdsFromSpillFiles(tempDir));
+        for (String id : expected) {
+            assertTrue(observed.contains(id), "Missing event id: " + id);
+        }
     }
 
     // ========================================================================
@@ -911,6 +1255,30 @@ class AsyncEventLoggerTest {
                 AsyncEventLogger.builder().client(client).maxBatchWaitMs(-1).build());
     }
 
+    @Test
+    void builderRejectsReplayIntervalBelowMinimum() {
+        EventLogClient client = clientWithTransport(
+                request -> new EventLogResponse(200, SUCCESS_BODY));
+        assertThrows(IllegalArgumentException.class, () ->
+                AsyncEventLogger.builder().client(client).replayIntervalMs(999).build());
+    }
+
+    @Test
+    void builderRejectsMaxSpilloverEventsBelowOne() {
+        EventLogClient client = clientWithTransport(
+                request -> new EventLogResponse(200, SUCCESS_BODY));
+        assertThrows(IllegalArgumentException.class, () ->
+                AsyncEventLogger.builder().client(client).maxSpilloverEvents(0).build());
+    }
+
+    @Test
+    void builderRejectsMaxSpilloverSizeBytesBelowOne() {
+        EventLogClient client = clientWithTransport(
+                request -> new EventLogResponse(200, SUCCESS_BODY));
+        assertThrows(IllegalArgumentException.class, () ->
+                AsyncEventLogger.builder().client(client).maxSpilloverSizeBytes(0).build());
+    }
+
     // ========================================================================
     // Helpers
     // ========================================================================
@@ -935,8 +1303,16 @@ class AsyncEventLoggerTest {
     }
 
     private EventLogEntry minimalEvent() {
+        return eventWithCorrelationAndSummary("corr", "ok");
+    }
+
+    private EventLogEntry eventWithCorrelationId(String correlationId) {
+        return eventWithCorrelationAndSummary(correlationId, "ok");
+    }
+
+    private EventLogEntry eventWithCorrelationAndSummary(String correlationId, String summary) {
         return EventLogEntry.builder()
-                .correlationId("corr")
+                .correlationId(correlationId)
                 .traceId("trace")
                 .applicationId("app")
                 .targetSystem("system")
@@ -944,7 +1320,7 @@ class AsyncEventLoggerTest {
                 .processName("PROC")
                 .eventType(EventType.STEP)
                 .eventStatus(EventStatus.SUCCESS)
-                .summary("ok")
+                .summary(summary)
                 .result("OK")
                 .build();
     }
@@ -966,6 +1342,54 @@ class AsyncEventLoggerTest {
                 .addMetadata("source", "test")
                 .result("OK")
                 .build();
+    }
+
+    private void invokeReplayLoop(AsyncEventLogger logger) throws Exception {
+        Method replayLoop = AsyncEventLogger.class.getDeclaredMethod("replayLoop");
+        replayLoop.setAccessible(true);
+        replayLoop.invoke(logger);
+    }
+
+    private void setCircuitState(AsyncEventLogger logger, boolean open, long openedAtMs) throws Exception {
+        Field circuitOpenField = AsyncEventLogger.class.getDeclaredField("circuitOpen");
+        circuitOpenField.setAccessible(true);
+        AtomicBoolean circuitOpen = (AtomicBoolean) circuitOpenField.get(logger);
+        circuitOpen.set(open);
+
+        Field circuitOpenedAtField = AsyncEventLogger.class.getDeclaredField("circuitOpenedAt");
+        circuitOpenedAtField.setAccessible(true);
+        AtomicLong circuitOpenedAt = (AtomicLong) circuitOpenedAtField.get(logger);
+        circuitOpenedAt.set(openedAtMs);
+    }
+
+    private String serializeForSpill(EventLogEntry event) throws IOException {
+        return SPILLOVER_MAPPER.writeValueAsString(event);
+    }
+
+    private String extractCorrelationId(String json) {
+        if (json == null) {
+            return "";
+        }
+        Matcher matcher = CORRELATION_ID_PATTERN.matcher(json);
+        return matcher.find() ? matcher.group(1) : "";
+    }
+
+    private Set<String> readCorrelationIdsFromSpillFiles(Path directory) throws IOException {
+        Set<String> ids = new HashSet<>();
+        try (Stream<Path> files = Files.list(directory)) {
+            for (Path file : files.toList()) {
+                if (!Files.isRegularFile(file)) {
+                    continue;
+                }
+                for (String line : Files.readAllLines(file)) {
+                    if (line.isBlank()) {
+                        continue;
+                    }
+                    ids.add(extractCorrelationId(line));
+                }
+            }
+        }
+        return ids;
     }
 
     private boolean hasSpillFiles(Path directory) {

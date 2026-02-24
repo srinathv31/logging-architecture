@@ -27,6 +27,11 @@ class EventLogMetricsBinder {
                 .description("Total events spilled to disk")
                 .register(registry);
 
+        Gauge.builder("eventlog.events.replayed", logger,
+                        l -> l.getMetrics().eventsReplayed)
+                .description("Total events replayed from spillover")
+                .register(registry);
+
         Gauge.builder("eventlog.queue.depth", logger,
                         l -> l.getMetrics().currentQueueDepth)
                 .description("Current queue size")

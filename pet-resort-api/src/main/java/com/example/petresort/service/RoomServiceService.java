@@ -10,6 +10,8 @@ import com.example.petresort.model.*;
 import com.example.petresort.store.InMemoryBookingStore;
 import com.example.petresort.store.InMemoryOwnerStore;
 import com.example.petresort.store.InMemoryPetStore;
+import io.micrometer.core.instrument.Counter;
+import io.micrometer.core.instrument.MeterRegistry;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.slf4j.MDC;
@@ -28,14 +30,21 @@ public class RoomServiceService {
     private final EventLogTemplate eventLogTemplate;
     private final AtomicInteger orderSequence = new AtomicInteger(1);
 
+    private final Counter roomServiceOrders;
+
     public RoomServiceService(InMemoryBookingStore bookingStore,
                               InMemoryPetStore petStore,
                               InMemoryOwnerStore ownerStore,
-                              EventLogTemplate eventLogTemplate) {
+                              EventLogTemplate eventLogTemplate,
+                              MeterRegistry registry) {
         this.bookingStore = bookingStore;
         this.petStore = petStore;
         this.ownerStore = ownerStore;
         this.eventLogTemplate = eventLogTemplate;
+
+        this.roomServiceOrders = Counter.builder("petresort.roomservice.orders")
+                .description("Total room service orders fulfilled")
+                .register(registry);
     }
 
     public RoomServiceResponse fulfillRoomService(RoomServiceRequest request) {
@@ -124,6 +133,7 @@ public class RoomServiceService {
                         + pet.name() + " received " + request.quantity() + "x " + request.item(),
                 "ORDER_COMPLETE", duration);
 
+        roomServiceOrders.increment();
         log.info("Room service order {} fulfilled for pet {} in kennel {}",
                 orderId, request.petId(), booking.getKennelNumber());
 

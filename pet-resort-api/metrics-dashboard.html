@@ -1,0 +1,616 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Event Log Metrics</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+      background: #0f1117;
+      color: #e1e4e8;
+      min-height: 100vh;
+      padding: 24px;
+    }
+
+    header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 32px;
+    }
+
+    header h1 {
+      font-size: 20px;
+      font-weight: 600;
+      color: #f0f0f0;
+    }
+
+    header h1 span {
+      color: #6b7280;
+      font-weight: 400;
+      font-size: 14px;
+      margin-left: 8px;
+    }
+
+    .status-bar {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      font-size: 13px;
+      color: #8b949e;
+    }
+
+    .status-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      display: inline-block;
+      margin-right: 6px;
+    }
+
+    .status-dot.ok { background: #3fb950; box-shadow: 0 0 6px #3fb95066; }
+    .status-dot.err { background: #f85149; box-shadow: 0 0 6px #f8514966; }
+    .status-dot.pending { background: #6b7280; }
+
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+      gap: 16px;
+      margin-bottom: 32px;
+    }
+
+    .card {
+      background: #161b22;
+      border: 1px solid #21262d;
+      border-radius: 10px;
+      padding: 20px;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .card.wide {
+      grid-column: span 2;
+    }
+
+    .card-label {
+      font-size: 12px;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      color: #8b949e;
+      margin-bottom: 8px;
+    }
+
+    .card-value {
+      font-size: 36px;
+      font-weight: 700;
+      font-variant-numeric: tabular-nums;
+      line-height: 1.1;
+    }
+
+    .card-sub {
+      font-size: 12px;
+      color: #6b7280;
+      margin-top: 6px;
+    }
+
+    .card-delta {
+      font-size: 13px;
+      margin-top: 4px;
+    }
+    .card-delta.up { color: #3fb950; }
+    .card-delta.down { color: #f85149; }
+    .card-delta.flat { color: #6b7280; }
+
+    .accent-queued { color: #58a6ff; }
+    .accent-sent { color: #3fb950; }
+    .accent-failed { color: #f85149; }
+    .accent-spilled { color: #d29922; }
+    .accent-replayed { color: #2ea043; }
+    .accent-depth { color: #bc8cff; }
+    .accent-cb { color: #f0883e; }
+
+    .accent-bookings { color: #79c0ff; }
+    .accent-checkins { color: #56d364; }
+    .accent-checkouts { color: #d2a8ff; }
+    .accent-cancelled { color: #ffa657; }
+    .accent-payments { color: #ff7b72; }
+    .accent-pay-fail { color: #f85149; }
+    .accent-roomsvc { color: #7ee787; }
+    .accent-active { color: #58a6ff; }
+    .accent-petsin { color: #3fb950; }
+
+    .section-header {
+      font-size: 15px;
+      font-weight: 600;
+      color: #f0f0f0;
+      margin-bottom: 4px;
+    }
+
+    .section-subtitle {
+      font-size: 12px;
+      color: #6b7280;
+      margin-bottom: 16px;
+      font-family: monospace;
+    }
+
+    .section-divider {
+      border-top: 1px solid #21262d;
+      margin: 8px 0 24px;
+      padding-top: 24px;
+    }
+
+    .bar-bg {
+      height: 4px;
+      background: #21262d;
+      border-radius: 2px;
+      margin-top: 14px;
+      overflow: hidden;
+    }
+
+    .bar-fill {
+      height: 100%;
+      border-radius: 2px;
+      transition: width 0.6s ease;
+    }
+
+    .cb-badge {
+      display: inline-block;
+      padding: 2px 10px;
+      border-radius: 12px;
+      font-size: 13px;
+      font-weight: 600;
+      margin-top: 4px;
+    }
+    .cb-badge.closed { background: #1b3a2d; color: #3fb950; }
+    .cb-badge.open { background: #3d1f1f; color: #f85149; }
+
+    .sparkline-container {
+      margin-top: 12px;
+      height: 40px;
+    }
+
+    .sparkline-container svg {
+      width: 100%;
+      height: 100%;
+    }
+
+    .sparkline-container svg polyline {
+      fill: none;
+      stroke-width: 1.5;
+      stroke-linejoin: round;
+      stroke-linecap: round;
+    }
+
+    .sparkline-container svg polygon {
+      stroke: none;
+      opacity: 0.1;
+    }
+
+    .section-title {
+      font-size: 13px;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      color: #6b7280;
+      margin-bottom: 12px;
+      font-weight: 600;
+    }
+
+    .history-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 13px;
+      font-variant-numeric: tabular-nums;
+    }
+
+    .history-table th {
+      text-align: left;
+      color: #6b7280;
+      font-weight: 500;
+      padding: 6px 8px;
+      border-bottom: 1px solid #21262d;
+    }
+
+    .history-table td {
+      padding: 6px 8px;
+      border-bottom: 1px solid #21262d22;
+      color: #c9d1d9;
+    }
+
+    .history-table tr:last-child td { border-bottom: none; }
+
+    .refresh-controls {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .refresh-controls select, .refresh-controls button {
+      background: #21262d;
+      color: #c9d1d9;
+      border: 1px solid #30363d;
+      border-radius: 6px;
+      padding: 4px 10px;
+      font-size: 13px;
+      cursor: pointer;
+    }
+
+    .refresh-controls button:hover { background: #30363d; }
+
+    @media (max-width: 640px) {
+      .card.wide { grid-column: span 1; }
+      .grid { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>Event Log Metrics <span>pet-resort-api</span></h1>
+    <div class="status-bar">
+      <span id="conn-status"><span class="status-dot pending"></span>Connecting...</span>
+      <div class="refresh-controls">
+        <select id="interval-select">
+          <option value="2000">2s</option>
+          <option value="5000" selected>5s</option>
+          <option value="10000">10s</option>
+          <option value="30000">30s</option>
+        </select>
+        <button onclick="fetchMetrics()">Refresh</button>
+      </div>
+    </div>
+  </header>
+
+  <div class="section-header">Event Log SDK Metrics</div>
+  <div class="section-subtitle">eventlog.*</div>
+  <div class="grid">
+    <div class="card">
+      <div class="card-label">Events Queued</div>
+      <div class="card-value accent-queued" id="val-queued">--</div>
+      <div class="card-delta flat" id="delta-queued"></div>
+      <div class="sparkline-container" id="spark-queued"></div>
+    </div>
+
+    <div class="card">
+      <div class="card-label">Events Sent</div>
+      <div class="card-value accent-sent" id="val-sent">--</div>
+      <div class="card-delta flat" id="delta-sent"></div>
+      <div class="sparkline-container" id="spark-sent"></div>
+    </div>
+
+    <div class="card">
+      <div class="card-label">Events Failed</div>
+      <div class="card-value accent-failed" id="val-failed">--</div>
+      <div class="card-delta flat" id="delta-failed"></div>
+      <div class="sparkline-container" id="spark-failed"></div>
+    </div>
+
+    <div class="card">
+      <div class="card-label">Events Spilled to Disk</div>
+      <div class="card-value accent-spilled" id="val-spilled">--</div>
+      <div class="card-delta flat" id="delta-spilled"></div>
+    </div>
+
+    <div class="card">
+      <div class="card-label">Events Replayed</div>
+      <div class="card-value accent-replayed" id="val-replayed">--</div>
+      <div class="card-delta flat" id="delta-replayed"></div>
+      <div class="sparkline-container" id="spark-replayed"></div>
+    </div>
+
+    <div class="card">
+      <div class="card-label">Queue Depth</div>
+      <div class="card-value accent-depth" id="val-depth">--</div>
+      <div class="card-sub" id="depth-sub">/ 1000 capacity</div>
+      <div class="bar-bg"><div class="bar-fill" id="depth-bar" style="width:0%;background:#bc8cff;"></div></div>
+    </div>
+
+    <div class="card">
+      <div class="card-label">Circuit Breaker</div>
+      <div class="card-value" id="val-cb">--</div>
+    </div>
+  </div>
+
+  <div class="card wide" style="margin-bottom:24px;">
+    <div class="section-title">Delivery Rate</div>
+    <div class="card-sub" id="delivery-rate" style="font-size:14px;color:#c9d1d9;"></div>
+    <div class="bar-bg" style="margin-top:10px;height:6px;">
+      <div class="bar-fill" id="delivery-bar" style="width:0%;background:#3fb950;"></div>
+    </div>
+  </div>
+
+  <div class="card wide">
+    <div class="section-title">SDK Snapshot History (last 20)</div>
+    <table class="history-table">
+      <thead>
+        <tr>
+          <th>Time</th>
+          <th>Queued</th>
+          <th>Sent</th>
+          <th>Failed</th>
+          <th>Spilled</th>
+          <th>Replayed</th>
+          <th>Depth</th>
+          <th>CB</th>
+        </tr>
+      </thead>
+      <tbody id="history-body"></tbody>
+    </table>
+  </div>
+
+  <div class="section-divider">
+    <div class="section-header">Application Metrics</div>
+    <div class="section-subtitle">petresort.*</div>
+  </div>
+
+  <div class="grid">
+    <div class="card">
+      <div class="card-label">Bookings Created</div>
+      <div class="card-value accent-bookings" id="val-bookings-created">--</div>
+      <div class="card-delta flat" id="delta-bookings-created"></div>
+      <div class="sparkline-container" id="spark-bookings-created"></div>
+    </div>
+
+    <div class="card">
+      <div class="card-label">Check-ins Completed</div>
+      <div class="card-value accent-checkins" id="val-checkins">--</div>
+      <div class="card-delta flat" id="delta-checkins"></div>
+      <div class="sparkline-container" id="spark-checkins"></div>
+    </div>
+
+    <div class="card">
+      <div class="card-label">Checkouts Completed</div>
+      <div class="card-value accent-checkouts" id="val-checkouts">--</div>
+      <div class="card-delta flat" id="delta-checkouts"></div>
+      <div class="sparkline-container" id="spark-checkouts"></div>
+    </div>
+
+    <div class="card">
+      <div class="card-label">Bookings Cancelled</div>
+      <div class="card-value accent-cancelled" id="val-cancelled">--</div>
+      <div class="card-delta flat" id="delta-cancelled"></div>
+      <div class="sparkline-container" id="spark-cancelled"></div>
+    </div>
+
+    <div class="card">
+      <div class="card-label">Payments Total</div>
+      <div class="card-value accent-payments" id="val-payments-total">--</div>
+      <div class="card-delta flat" id="delta-payments-total"></div>
+      <div class="sparkline-container" id="spark-payments-total"></div>
+    </div>
+
+    <div class="card">
+      <div class="card-label">Payments Failed</div>
+      <div class="card-value accent-pay-fail" id="val-payments-failed">--</div>
+      <div class="card-delta flat" id="delta-payments-failed"></div>
+      <div class="sparkline-container" id="spark-payments-failed"></div>
+    </div>
+
+    <div class="card">
+      <div class="card-label">Room Service Orders</div>
+      <div class="card-value accent-roomsvc" id="val-roomservice">--</div>
+      <div class="card-delta flat" id="delta-roomservice"></div>
+      <div class="sparkline-container" id="spark-roomservice"></div>
+    </div>
+
+    <div class="card">
+      <div class="card-label">Active Bookings</div>
+      <div class="card-value accent-active" id="val-active">--</div>
+      <div class="card-sub">PENDING + AWAITING + CHECKED_IN</div>
+    </div>
+
+    <div class="card">
+      <div class="card-label">Pets Checked In</div>
+      <div class="card-value accent-petsin" id="val-pets-in">--</div>
+      <div class="card-sub">Currently in kennels</div>
+    </div>
+  </div>
+
+  <script>
+    const BASE = 'http://localhost:8081/actuator/metrics';
+    const SDK_METRICS = [
+      'eventlog.events.queued',
+      'eventlog.events.sent',
+      'eventlog.events.failed',
+      'eventlog.events.spilled',
+      'eventlog.events.replayed',
+      'eventlog.queue.depth',
+      'eventlog.circuit-breaker.open',
+    ];
+    const APP_METRICS = [
+      'petresort.bookings.created',
+      'petresort.checkins.completed',
+      'petresort.checkouts.completed',
+      'petresort.bookings.cancelled',
+      'petresort.payments.total',
+      'petresort.payments.failed',
+      'petresort.roomservice.orders',
+      'petresort.bookings.active',
+      'petresort.pets.checked_in',
+    ];
+
+    const history = [];
+    const MAX_HISTORY = 60;
+    let prev = null;
+    let timer = null;
+
+    async function fetchOne(name) {
+      const r = await fetch(`${BASE}/${name}`);
+      if (!r.ok) return 0;
+      const j = await r.json();
+      return j.measurements[0].value;
+    }
+
+    async function fetchMetrics() {
+      try {
+        const [sdkValues, appValues] = await Promise.all([
+          Promise.all(SDK_METRICS.map(fetchOne)),
+          Promise.all(APP_METRICS.map(fetchOne)),
+        ]);
+        const snap = {
+          time: new Date(),
+          queued: sdkValues[0],
+          sent: sdkValues[1],
+          failed: sdkValues[2],
+          spilled: sdkValues[3],
+          replayed: sdkValues[4],
+          depth: sdkValues[5],
+          cb: sdkValues[6],
+          bookingsCreated: appValues[0],
+          checkins: appValues[1],
+          checkouts: appValues[2],
+          cancelled: appValues[3],
+          paymentsTotal: appValues[4],
+          paymentsFailed: appValues[5],
+          roomservice: appValues[6],
+          active: appValues[7],
+          petsIn: appValues[8],
+        };
+
+        updateUI(snap);
+        history.push(snap);
+        if (history.length > MAX_HISTORY) history.shift();
+        prev = snap;
+
+        document.getElementById('conn-status').innerHTML =
+          '<span class="status-dot ok"></span>Connected';
+      } catch (e) {
+        document.getElementById('conn-status').innerHTML =
+          '<span class="status-dot err"></span>Disconnected';
+      }
+    }
+
+    function delta(cur, prevVal) {
+      if (prev === null) return '';
+      const d = cur - prevVal;
+      if (d > 0) return `<span class="card-delta up">+${d}</span>`;
+      if (d < 0) return `<span class="card-delta down">${d}</span>`;
+      return `<span class="card-delta flat">--</span>`;
+    }
+
+    function sparkline(containerId, data, color) {
+      const el = document.getElementById(containerId);
+      if (!el || data.length < 2) { if (el) el.innerHTML = ''; return; }
+
+      const w = 240, h = 40, pad = 2;
+      const min = Math.min(...data);
+      const max = Math.max(...data);
+      const range = max - min || 1;
+
+      const points = data.map((v, i) => {
+        const x = pad + (i / (data.length - 1)) * (w - 2 * pad);
+        const y = h - pad - ((v - min) / range) * (h - 2 * pad);
+        return `${x},${y}`;
+      });
+
+      const areaPoints = [...points, `${pad + ((data.length - 1) / (data.length - 1)) * (w - 2 * pad)},${h}`, `${pad},${h}`];
+
+      el.innerHTML = `<svg viewBox="0 0 ${w} ${h}" preserveAspectRatio="none">
+        <polygon points="${areaPoints.join(' ')}" fill="${color}"/>
+        <polyline points="${points.join(' ')}" stroke="${color}"/>
+      </svg>`;
+    }
+
+    function updateUI(s) {
+      document.getElementById('val-queued').textContent = fmt(s.queued);
+      document.getElementById('val-sent').textContent = fmt(s.sent);
+      document.getElementById('val-failed').textContent = fmt(s.failed);
+      document.getElementById('val-spilled').textContent = fmt(s.spilled);
+      document.getElementById('val-replayed').textContent = fmt(s.replayed);
+      document.getElementById('val-depth').textContent = fmt(s.depth);
+
+      document.getElementById('delta-queued').innerHTML = prev ? delta(s.queued, prev.queued) : '';
+      document.getElementById('delta-sent').innerHTML = prev ? delta(s.sent, prev.sent) : '';
+      document.getElementById('delta-failed').innerHTML = prev ? delta(s.failed, prev.failed) : '';
+      document.getElementById('delta-spilled').innerHTML = prev ? delta(s.spilled, prev.spilled) : '';
+      document.getElementById('delta-replayed').innerHTML = prev ? delta(s.replayed, prev.replayed) : '';
+
+      // Queue depth bar (out of 1000)
+      const depthPct = Math.min((s.depth / 1000) * 100, 100);
+      document.getElementById('depth-bar').style.width = depthPct + '%';
+
+      // Circuit breaker
+      if (s.cb === 1) {
+        document.getElementById('val-cb').innerHTML = '<span class="cb-badge open">OPEN</span>';
+      } else {
+        document.getElementById('val-cb').innerHTML = '<span class="cb-badge closed">CLOSED</span>';
+      }
+
+      // Delivery rate
+      if (s.queued > 0) {
+        const rate = ((s.sent / s.queued) * 100).toFixed(1);
+        document.getElementById('delivery-rate').textContent =
+          `${fmt(s.sent)} / ${fmt(s.queued)} events delivered (${rate}%)`;
+        document.getElementById('delivery-bar').style.width = rate + '%';
+      } else {
+        document.getElementById('delivery-rate').textContent = 'No events yet';
+        document.getElementById('delivery-bar').style.width = '0%';
+      }
+
+      // SDK Sparklines
+      sparkline('spark-queued', history.map(h => h.queued), '#58a6ff');
+      sparkline('spark-sent', history.map(h => h.sent), '#3fb950');
+      sparkline('spark-failed', history.map(h => h.failed), '#f85149');
+      sparkline('spark-replayed', history.map(h => h.replayed), '#2ea043');
+
+      // SDK History table
+      const tbody = document.getElementById('history-body');
+      const rows = history.slice().reverse().slice(0, 20);
+      tbody.innerHTML = rows.map(r => `<tr>
+        <td>${r.time.toLocaleTimeString()}</td>
+        <td>${fmt(r.queued)}</td>
+        <td>${fmt(r.sent)}</td>
+        <td style="color:${r.failed > 0 ? '#f85149' : '#c9d1d9'}">${fmt(r.failed)}</td>
+        <td>${fmt(r.spilled)}</td>
+        <td style="color:${r.replayed > 0 ? '#2ea043' : '#c9d1d9'}">${fmt(r.replayed)}</td>
+        <td>${fmt(r.depth)}</td>
+        <td>${r.cb === 1 ? '<span style="color:#f85149">OPEN</span>' : '<span style="color:#3fb950">CLOSED</span>'}</td>
+      </tr>`).join('');
+
+      // App metrics
+      document.getElementById('val-bookings-created').textContent = fmt(s.bookingsCreated);
+      document.getElementById('val-checkins').textContent = fmt(s.checkins);
+      document.getElementById('val-checkouts').textContent = fmt(s.checkouts);
+      document.getElementById('val-cancelled').textContent = fmt(s.cancelled);
+      document.getElementById('val-payments-total').textContent = fmt(s.paymentsTotal);
+      document.getElementById('val-payments-failed').textContent = fmt(s.paymentsFailed);
+      document.getElementById('val-roomservice').textContent = fmt(s.roomservice);
+      document.getElementById('val-active').textContent = fmt(s.active);
+      document.getElementById('val-pets-in').textContent = fmt(s.petsIn);
+
+      document.getElementById('delta-bookings-created').innerHTML = prev ? delta(s.bookingsCreated, prev.bookingsCreated) : '';
+      document.getElementById('delta-checkins').innerHTML = prev ? delta(s.checkins, prev.checkins) : '';
+      document.getElementById('delta-checkouts').innerHTML = prev ? delta(s.checkouts, prev.checkouts) : '';
+      document.getElementById('delta-cancelled').innerHTML = prev ? delta(s.cancelled, prev.cancelled) : '';
+      document.getElementById('delta-payments-total').innerHTML = prev ? delta(s.paymentsTotal, prev.paymentsTotal) : '';
+      document.getElementById('delta-payments-failed').innerHTML = prev ? delta(s.paymentsFailed, prev.paymentsFailed) : '';
+      document.getElementById('delta-roomservice').innerHTML = prev ? delta(s.roomservice, prev.roomservice) : '';
+
+      // App sparklines
+      sparkline('spark-bookings-created', history.map(h => h.bookingsCreated), '#79c0ff');
+      sparkline('spark-checkins', history.map(h => h.checkins), '#56d364');
+      sparkline('spark-checkouts', history.map(h => h.checkouts), '#d2a8ff');
+      sparkline('spark-cancelled', history.map(h => h.cancelled), '#ffa657');
+      sparkline('spark-payments-total', history.map(h => h.paymentsTotal), '#ff7b72');
+      sparkline('spark-payments-failed', history.map(h => h.paymentsFailed), '#f85149');
+      sparkline('spark-roomservice', history.map(h => h.roomservice), '#7ee787');
+    }
+
+    function fmt(n) {
+      return Number.isInteger(n) ? n.toLocaleString() : Math.round(n).toLocaleString();
+    }
+
+    function startPolling() {
+      clearInterval(timer);
+      const ms = parseInt(document.getElementById('interval-select').value);
+      timer = setInterval(fetchMetrics, ms);
+    }
+
+    document.getElementById('interval-select').addEventListener('change', startPolling);
+
+    fetchMetrics();
+    startPolling();
+  </script>
+</body>
+</html>

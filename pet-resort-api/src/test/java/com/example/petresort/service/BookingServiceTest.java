@@ -10,6 +10,7 @@ import com.eventlog.sdk.template.EventLogTemplate;
 import com.example.petresort.model.*;
 import com.example.petresort.store.InMemoryBookingStore;
 import com.example.petresort.store.InMemoryPetStore;
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -43,14 +44,16 @@ class BookingServiceTest {
                 .originatingSystem("PET_RESORT")
                 .build();
 
+        SimpleMeterRegistry meterRegistry = new SimpleMeterRegistry();
+
         PaymentService paymentService = new PaymentService(
-                mockEventLogger, "pet-resort-api-test", "PET_RESORT", "PET_RESORT");
+                mockEventLogger, "pet-resort-api-test", "PET_RESORT", "PET_RESORT", meterRegistry);
 
         EventLogClient eventLogClient = stubEventLogClient();
 
         bookingService = new BookingService(
                 bookingStore, petStore, kennelService, paymentService,
-                eventLogTemplate, mockEventLogger, eventLogClient);
+                eventLogTemplate, mockEventLogger, eventLogClient, meterRegistry);
 
         // Seed a test pet
         petStore.save(new Pet("PET-001", "Buddy", PetSpecies.DOG, "Golden Retriever", 3, "OWN-001", null));

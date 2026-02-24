@@ -2,6 +2,7 @@ package com.example.petresort.service;
 
 import com.eventlog.sdk.client.MockAsyncEventLogger;
 import com.eventlog.sdk.model.EventLogEntry;
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.slf4j.MDC;
@@ -30,7 +31,7 @@ class PaymentServiceTest {
         };
 
         PaymentService paymentService = new PaymentService(
-                falseLogger, "pet-resort-api-test", "PET_RESORT", "PET_RESORT");
+                falseLogger, "pet-resort-api-test", "PET_RESORT", "PET_RESORT", new SimpleMeterRegistry());
 
         MDC.put("correlationId", "corr-pay-test");
         MDC.put("traceId", "trace-pay-test");
@@ -51,7 +52,7 @@ class PaymentServiceTest {
         // Given
         MockAsyncEventLogger mockEventLogger = new MockAsyncEventLogger();
         PaymentService paymentService = new PaymentService(
-                mockEventLogger, "pet-resort-api-test", "PET_RESORT", "PET_RESORT");
+                mockEventLogger, "pet-resort-api-test", "PET_RESORT", "PET_RESORT", new SimpleMeterRegistry());
 
         MDC.put("correlationId", "corr-pay-success");
         MDC.put("traceId", "trace-pay-success");

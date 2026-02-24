@@ -65,7 +65,7 @@ public class EventLogProperties {
         this.apiKey = apiKey;
         this.transport = normalizeTransport(transport);
         this.oauth = oauth != null ? oauth : new OAuth(null, null, null, null, null, null, null);
-        this.async = async != null ? async : new Async(null, null, null, null, null, null, null, null, null, null, null, null, null);
+        this.async = async != null ? async : new Async(null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null);
         this.mdcFilter = mdcFilter != null ? mdcFilter : new MdcFilter(null, null, null, null, null, null);
         this.metrics = metrics != null ? metrics : new Metrics(null);
     }
@@ -214,6 +214,9 @@ public class EventLogProperties {
         private static final long DEFAULT_MAX_RETRY_DELAY_MS = 30_000;
         private static final int DEFAULT_CIRCUIT_BREAKER_THRESHOLD = 5;
         private static final long DEFAULT_CIRCUIT_BREAKER_RESET_MS = 30_000;
+        private static final long DEFAULT_REPLAY_INTERVAL_MS = 10_000;
+        private static final int DEFAULT_MAX_SPILLOVER_EVENTS = 10_000;
+        private static final int DEFAULT_MAX_SPILLOVER_SIZE_MB = 50;
 
         private final boolean enabled;
         private final int queueCapacity;
@@ -228,6 +231,9 @@ public class EventLogProperties {
         private final int batchSize;
         private final int senderThreads;
         private final long maxBatchWaitMs;
+        private final long replayIntervalMs;
+        private final int maxSpilloverEvents;
+        private final int maxSpilloverSizeMb;
 
         public Async(
                 Boolean enabled,
@@ -242,7 +248,10 @@ public class EventLogProperties {
                 String executor,
                 Integer batchSize,
                 Integer senderThreads,
-                Long maxBatchWaitMs) {
+                Long maxBatchWaitMs,
+                Long replayIntervalMs,
+                Integer maxSpilloverEvents,
+                Integer maxSpilloverSizeMb) {
             this.enabled = enabled == null || enabled;
             this.queueCapacity = queueCapacity != null ? queueCapacity : DEFAULT_QUEUE_CAPACITY;
             this.maxRetries = maxRetries != null ? maxRetries : DEFAULT_MAX_RETRIES;
@@ -256,6 +265,9 @@ public class EventLogProperties {
             this.batchSize = batchSize != null ? batchSize : 50;
             this.senderThreads = senderThreads != null ? senderThreads : 1;
             this.maxBatchWaitMs = maxBatchWaitMs != null ? maxBatchWaitMs : 100;
+            this.replayIntervalMs = replayIntervalMs != null ? replayIntervalMs : DEFAULT_REPLAY_INTERVAL_MS;
+            this.maxSpilloverEvents = maxSpilloverEvents != null ? maxSpilloverEvents : DEFAULT_MAX_SPILLOVER_EVENTS;
+            this.maxSpilloverSizeMb = maxSpilloverSizeMb != null ? maxSpilloverSizeMb : DEFAULT_MAX_SPILLOVER_SIZE_MB;
         }
 
         public boolean isEnabled() {
@@ -308,6 +320,18 @@ public class EventLogProperties {
 
         public long getMaxBatchWaitMs() {
             return maxBatchWaitMs;
+        }
+
+        public long getReplayIntervalMs() {
+            return replayIntervalMs;
+        }
+
+        public int getMaxSpilloverEvents() {
+            return maxSpilloverEvents;
+        }
+
+        public int getMaxSpilloverSizeMb() {
+            return maxSpilloverSizeMb;
         }
     }
 
