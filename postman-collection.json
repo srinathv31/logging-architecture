@@ -1,0 +1,563 @@
+{
+  "info": {
+    "name": "Event Log API",
+    "description": "Complete collection for the Event Log API. All requests use a cohesive \"order processing\" scenario with realistic dummy data.\n\n## Quick Start\n1. Import this collection into Postman\n2. Start the API: `cd api && pnpm dev`\n3. Run the **Health** folder to verify connectivity\n4. Run **Create Single Event**, then query endpoints to verify end-to-end flow\n\n## Variables\nCollection-level variables are pre-filled with realistic values. Update `baseUrl` if your API runs on a different host/port.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://localhost:3000",
+      "type": "string"
+    },
+    {
+      "key": "traceId",
+      "value": "a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6",
+      "type": "string"
+    },
+    {
+      "key": "correlationId",
+      "value": "order-processing-abc123",
+      "type": "string"
+    },
+    {
+      "key": "accountId",
+      "value": "ACCT-00042",
+      "type": "string"
+    },
+    {
+      "key": "batchId",
+      "value": "nightly-import-2026-02-26",
+      "type": "string"
+    }
+  ],
+  "item": [
+    {
+      "name": "Health",
+      "description": "Health check and version endpoints. Run these first to verify the API is reachable.",
+      "item": [
+        {
+          "name": "Healthcheck",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/v1/healthcheck",
+              "host": ["{{baseUrl}}"],
+              "path": ["v1", "healthcheck"]
+            },
+            "description": "Basic liveness check. Returns 200 if the server is running."
+          }
+        },
+        {
+          "name": "Readiness Check",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/v1/healthcheck/ready",
+              "host": ["{{baseUrl}}"],
+              "path": ["v1", "healthcheck", "ready"]
+            },
+            "description": "Readiness check. Returns 200 if the server and its dependencies (database) are ready to serve traffic."
+          }
+        },
+        {
+          "name": "Version",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/v1/version",
+              "host": ["{{baseUrl}}"],
+              "path": ["v1", "version"]
+            },
+            "description": "Returns the current API version and build info."
+          }
+        }
+      ]
+    },
+    {
+      "name": "Events",
+      "description": "Create and query individual event log entries.",
+      "item": [
+        {
+          "name": "Create Single Event",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"correlationId\": \"{{correlationId}}\",\n  \"accountId\": \"{{accountId}}\",\n  \"traceId\": \"{{traceId}}\",\n  \"spanId\": \"1a2b3c4d5e6f7a8b\",\n  \"parentSpanId\": \"0000000000000000\",\n  \"applicationId\": \"order-service\",\n  \"targetSystem\": \"payment-gateway\",\n  \"originatingSystem\": \"web-portal\",\n  \"processName\": \"order-fulfillment\",\n  \"stepSequence\": 1,\n  \"stepName\": \"validate-payment\",\n  \"eventType\": \"STEP\",\n  \"eventStatus\": \"SUCCESS\",\n  \"identifiers\": {\n    \"orderId\": \"ORD-2026-98765\",\n    \"customerId\": \"CUST-1234\",\n    \"amount\": 149.99,\n    \"currency\": \"USD\"\n  },\n  \"summary\": \"Payment validation completed for order ORD-2026-98765\",\n  \"result\": \"Payment of $149.99 USD authorized via credit card ending 4242. Authorization code: AUTH-88321.\",\n  \"metadata\": {\n    \"paymentMethod\": \"credit_card\",\n    \"cardLast4\": \"4242\",\n    \"authorizationCode\": \"AUTH-88321\",\n    \"riskScore\": 12\n  },\n  \"eventTimestamp\": \"2026-02-26T14:30:00.000Z\",\n  \"executionTimeMs\": 245,\n  \"endpoint\": \"/api/payments/authorize\",\n  \"httpMethod\": \"POST\",\n  \"httpStatusCode\": 200,\n  \"requestPayload\": \"{\\\"orderId\\\":\\\"ORD-2026-98765\\\",\\\"amount\\\":149.99,\\\"currency\\\":\\\"USD\\\"}\",\n  \"responsePayload\": \"{\\\"authorized\\\":true,\\\"authCode\\\":\\\"AUTH-88321\\\"}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/v1/events/",
+              "host": ["{{baseUrl}}"],
+              "path": ["v1", "events", ""]
+            },
+            "description": "Create a single event log entry. This example logs a successful payment validation step in an order fulfillment process."
+          }
+        },
+        {
+          "name": "Get Events by Account",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/v1/events/account/{{accountId}}?page=1&pageSize=20&startDate=2026-02-01T00:00:00.000Z&endDate=2026-02-28T23:59:59.999Z",
+              "host": ["{{baseUrl}}"],
+              "path": ["v1", "events", "account", "{{accountId}}"],
+              "query": [
+                {
+                  "key": "page",
+                  "value": "1"
+                },
+                {
+                  "key": "pageSize",
+                  "value": "20"
+                },
+                {
+                  "key": "startDate",
+                  "value": "2026-02-01T00:00:00.000Z"
+                },
+                {
+                  "key": "endDate",
+                  "value": "2026-02-28T23:59:59.999Z"
+                },
+                {
+                  "key": "processName",
+                  "value": "order-fulfillment",
+                  "disabled": true
+                },
+                {
+                  "key": "eventStatus",
+                  "value": "SUCCESS",
+                  "disabled": true
+                },
+                {
+                  "key": "includeLinked",
+                  "value": "false",
+                  "disabled": true
+                }
+              ]
+            },
+            "description": "Retrieve paginated events for a specific account. Optional filters for date range, process name, and event status are included (some disabled by default — enable as needed)."
+          }
+        },
+        {
+          "name": "Get Account Summary",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/v1/events/account/{{accountId}}/summary",
+              "host": ["{{baseUrl}}"],
+              "path": ["v1", "events", "account", "{{accountId}}", "summary"]
+            },
+            "description": "Get a summary of all event activity for an account, including total events, error count, recent events, and recent errors."
+          }
+        },
+        {
+          "name": "Get Events by Correlation ID",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/v1/events/correlation/{{correlationId}}?page=1&pageSize=200",
+              "host": ["{{baseUrl}}"],
+              "path": ["v1", "events", "correlation", "{{correlationId}}"],
+              "query": [
+                {
+                  "key": "page",
+                  "value": "1"
+                },
+                {
+                  "key": "pageSize",
+                  "value": "200"
+                }
+              ]
+            },
+            "description": "Retrieve all events sharing the same correlation ID. Useful for tracing a single business operation across systems."
+          }
+        },
+        {
+          "name": "Get Events by Trace ID",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/v1/events/trace/{{traceId}}?page=1&pageSize=200",
+              "host": ["{{baseUrl}}"],
+              "path": ["v1", "events", "trace", "{{traceId}}"],
+              "query": [
+                {
+                  "key": "page",
+                  "value": "1"
+                },
+                {
+                  "key": "pageSize",
+                  "value": "200"
+                }
+              ]
+            },
+            "description": "Retrieve all events in a W3C distributed trace. Returns system involvement, duration, and status breakdown."
+          }
+        },
+        {
+          "name": "Search Events by Text",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"query\": \"payment authorized\",\n  \"accountId\": \"{{accountId}}\",\n  \"startDate\": \"2026-02-01T00:00:00.000Z\",\n  \"endDate\": \"2026-02-28T23:59:59.999Z\",\n  \"page\": 1,\n  \"pageSize\": 20\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/v1/events/search/text",
+              "host": ["{{baseUrl}}"],
+              "path": ["v1", "events", "search", "text"]
+            },
+            "description": "Full-text search across event summaries and results. Must provide at least accountId or processName. Date range is optional but both startDate and endDate must be provided together."
+          }
+        },
+        {
+          "name": "Lookup Events",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"accountId\": \"{{accountId}}\",\n  \"processName\": \"order-fulfillment\",\n  \"eventStatus\": \"SUCCESS\",\n  \"startDate\": \"2026-02-01T00:00:00.000Z\",\n  \"endDate\": \"2026-02-28T23:59:59.999Z\",\n  \"page\": 1,\n  \"pageSize\": 20\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/v1/events/lookup",
+              "host": ["{{baseUrl}}"],
+              "path": ["v1", "events", "lookup"]
+            },
+            "description": "Structured lookup for events by account, process, status, and date range. Must provide at least accountId or processName."
+          }
+        }
+      ]
+    },
+    {
+      "name": "Batch Operations",
+      "description": "Create and query batches of events. The batch creation example simulates a complete order fulfillment lifecycle (START → STEP → END).",
+      "item": [
+        {
+          "name": "Create Batch Events",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"batchId\": \"{{batchId}}\",\n  \"events\": [\n    {\n      \"correlationId\": \"{{correlationId}}\",\n      \"accountId\": \"{{accountId}}\",\n      \"traceId\": \"{{traceId}}\",\n      \"spanId\": \"aa11bb22cc33dd44\",\n      \"applicationId\": \"order-service\",\n      \"targetSystem\": \"inventory-system\",\n      \"originatingSystem\": \"web-portal\",\n      \"processName\": \"order-fulfillment\",\n      \"stepSequence\": 0,\n      \"stepName\": \"initiate-order\",\n      \"eventType\": \"PROCESS_START\",\n      \"eventStatus\": \"IN_PROGRESS\",\n      \"identifiers\": {\n        \"orderId\": \"ORD-2026-98765\",\n        \"customerId\": \"CUST-1234\",\n        \"itemCount\": 3\n      },\n      \"summary\": \"Order fulfillment process started for ORD-2026-98765\",\n      \"result\": \"Order received with 3 items totaling $149.99. Initiating inventory check and payment validation.\",\n      \"metadata\": {\n        \"channel\": \"web\",\n        \"priority\": \"standard\"\n      },\n      \"eventTimestamp\": \"2026-02-26T14:29:00.000Z\",\n      \"executionTimeMs\": 12,\n      \"endpoint\": \"/api/orders\",\n      \"httpMethod\": \"POST\",\n      \"httpStatusCode\": 201\n    },\n    {\n      \"correlationId\": \"{{correlationId}}\",\n      \"accountId\": \"{{accountId}}\",\n      \"traceId\": \"{{traceId}}\",\n      \"spanId\": \"ee55ff66aa77bb88\",\n      \"parentSpanId\": \"aa11bb22cc33dd44\",\n      \"applicationId\": \"order-service\",\n      \"targetSystem\": \"inventory-system\",\n      \"originatingSystem\": \"order-service\",\n      \"processName\": \"order-fulfillment\",\n      \"stepSequence\": 1,\n      \"stepName\": \"reserve-inventory\",\n      \"eventType\": \"STEP\",\n      \"eventStatus\": \"SUCCESS\",\n      \"identifiers\": {\n        \"orderId\": \"ORD-2026-98765\",\n        \"warehouseId\": \"WH-EAST-01\",\n        \"reservationId\": \"RES-44210\"\n      },\n      \"summary\": \"Inventory reserved at warehouse WH-EAST-01\",\n      \"result\": \"All 3 items reserved successfully. Reservation ID: RES-44210. Estimated ship date: 2026-02-28.\",\n      \"metadata\": {\n        \"warehouseRegion\": \"us-east\",\n        \"allItemsAvailable\": true\n      },\n      \"eventTimestamp\": \"2026-02-26T14:29:30.000Z\",\n      \"executionTimeMs\": 189,\n      \"endpoint\": \"/api/inventory/reserve\",\n      \"httpMethod\": \"POST\",\n      \"httpStatusCode\": 200\n    },\n    {\n      \"correlationId\": \"{{correlationId}}\",\n      \"accountId\": \"{{accountId}}\",\n      \"traceId\": \"{{traceId}}\",\n      \"spanId\": \"cc99dd00ee11ff22\",\n      \"parentSpanId\": \"aa11bb22cc33dd44\",\n      \"applicationId\": \"order-service\",\n      \"targetSystem\": \"notification-service\",\n      \"originatingSystem\": \"order-service\",\n      \"processName\": \"order-fulfillment\",\n      \"stepSequence\": 2,\n      \"stepName\": \"complete-order\",\n      \"eventType\": \"PROCESS_END\",\n      \"eventStatus\": \"SUCCESS\",\n      \"identifiers\": {\n        \"orderId\": \"ORD-2026-98765\",\n        \"confirmationNumber\": \"CNF-20260226-98765\"\n      },\n      \"summary\": \"Order fulfillment completed successfully\",\n      \"result\": \"Order ORD-2026-98765 fulfilled. Confirmation CNF-20260226-98765 sent to customer via email.\",\n      \"metadata\": {\n        \"notificationSent\": true,\n        \"notificationChannel\": \"email\",\n        \"totalProcessingTimeMs\": 446\n      },\n      \"eventTimestamp\": \"2026-02-26T14:30:15.000Z\",\n      \"executionTimeMs\": 78,\n      \"endpoint\": \"/api/orders/complete\",\n      \"httpMethod\": \"PUT\",\n      \"httpStatusCode\": 200\n    }\n  ]\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/v1/events/batch",
+              "host": ["{{baseUrl}}"],
+              "path": ["v1", "events", "batch"]
+            },
+            "description": "Create multiple events in a single request. This example simulates a complete order fulfillment lifecycle:\n1. PROCESS_START — order initiated\n2. STEP — inventory reserved\n3. PROCESS_END — order completed and confirmation sent"
+          }
+        },
+        {
+          "name": "Get Batch Events",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/v1/events/batch/{{batchId}}?page=1&pageSize=20",
+              "host": ["{{baseUrl}}"],
+              "path": ["v1", "events", "batch", "{{batchId}}"],
+              "query": [
+                {
+                  "key": "page",
+                  "value": "1"
+                },
+                {
+                  "key": "pageSize",
+                  "value": "20"
+                },
+                {
+                  "key": "eventStatus",
+                  "value": "SUCCESS",
+                  "disabled": true
+                }
+              ]
+            },
+            "description": "Retrieve all events in a batch with pagination. Includes counts for success/failure and unique correlation IDs."
+          }
+        },
+        {
+          "name": "Get Batch Summary",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/v1/events/batch/{{batchId}}/summary",
+              "host": ["{{baseUrl}}"],
+              "path": ["v1", "events", "batch", "{{batchId}}", "summary"]
+            },
+            "description": "Get a high-level summary of a batch: total processes, completion status, and time range."
+          }
+        }
+      ]
+    },
+    {
+      "name": "Traces",
+      "description": "List and explore distributed traces across the system.",
+      "item": [
+        {
+          "name": "List Traces",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/v1/traces/?page=1&pageSize=20",
+              "host": ["{{baseUrl}}"],
+              "path": ["v1", "traces", ""],
+              "query": [
+                {
+                  "key": "page",
+                  "value": "1"
+                },
+                {
+                  "key": "pageSize",
+                  "value": "20"
+                },
+                {
+                  "key": "startDate",
+                  "value": "2026-02-01T00:00:00.000Z",
+                  "disabled": true
+                },
+                {
+                  "key": "endDate",
+                  "value": "2026-02-28T23:59:59.999Z",
+                  "disabled": true
+                },
+                {
+                  "key": "processName",
+                  "value": "order-fulfillment",
+                  "disabled": true
+                },
+                {
+                  "key": "eventStatus",
+                  "value": "SUCCESS",
+                  "disabled": true
+                },
+                {
+                  "key": "accountId",
+                  "value": "ACCT-00042",
+                  "disabled": true
+                }
+              ]
+            },
+            "description": "List traces with pagination and optional filters. Disabled query params are included for convenience — enable as needed."
+          }
+        }
+      ]
+    },
+    {
+      "name": "Dashboard",
+      "description": "Dashboard statistics and aggregations.",
+      "item": [
+        {
+          "name": "Get Dashboard Stats",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/v1/dashboard/stats",
+              "host": ["{{baseUrl}}"],
+              "path": ["v1", "dashboard", "stats"],
+              "query": [
+                {
+                  "key": "startDate",
+                  "value": "2026-02-01T00:00:00.000Z",
+                  "disabled": true
+                },
+                {
+                  "key": "endDate",
+                  "value": "2026-02-28T23:59:59.999Z",
+                  "disabled": true
+                }
+              ]
+            },
+            "description": "Get high-level dashboard statistics: total traces, accounts, events, success rate, and system names. Enable date filters to scope to a time window."
+          }
+        }
+      ]
+    },
+    {
+      "name": "Processes",
+      "description": "Manage process definitions that describe expected workflows.",
+      "item": [
+        {
+          "name": "Create Process Definition",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"processName\": \"order-fulfillment\",\n  \"displayName\": \"Order Fulfillment\",\n  \"description\": \"End-to-end order processing from placement through payment validation, inventory reservation, and shipment confirmation.\",\n  \"owningTeam\": \"commerce-platform\",\n  \"expectedSteps\": 3,\n  \"slaMs\": 30000\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/v1/processes/",
+              "host": ["{{baseUrl}}"],
+              "path": ["v1", "processes", ""]
+            },
+            "description": "Register a new process definition. This defines the expected shape of the order-fulfillment process (3 steps, 30s SLA)."
+          }
+        },
+        {
+          "name": "List Process Definitions",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/v1/processes/?isActive=true",
+              "host": ["{{baseUrl}}"],
+              "path": ["v1", "processes", ""],
+              "query": [
+                {
+                  "key": "isActive",
+                  "value": "true"
+                }
+              ]
+            },
+            "description": "List all process definitions. Filter by isActive to see only active or inactive processes."
+          }
+        }
+      ]
+    },
+    {
+      "name": "Correlation Links",
+      "description": "Link correlation IDs to accounts and customer identifiers for cross-referencing.",
+      "item": [
+        {
+          "name": "Create Correlation Link",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"correlationId\": \"{{correlationId}}\",\n  \"accountId\": \"{{accountId}}\",\n  \"applicationId\": \"order-service\",\n  \"customerId\": \"CUST-1234\",\n  \"cardNumberLast4\": \"4242\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/v1/correlation-links/",
+              "host": ["{{baseUrl}}"],
+              "path": ["v1", "correlation-links", ""]
+            },
+            "description": "Link a correlation ID to an account with optional customer and card identifiers. Enables account-level querying of correlated events."
+          }
+        },
+        {
+          "name": "Get Correlation Link",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/v1/correlation-links/{{correlationId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["v1", "correlation-links", "{{correlationId}}"]
+            },
+            "description": "Retrieve the correlation link details for a given correlation ID."
+          }
+        }
+      ]
+    },
+    {
+      "name": "Debug",
+      "description": "Debug and maintenance endpoints. Use with caution — these modify data.",
+      "item": [
+        {
+          "name": "Clear All Events",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"confirm\": true\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/v1/debug/events/clear",
+              "host": ["{{baseUrl}}"],
+              "path": ["v1", "debug", "events", "clear"]
+            },
+            "description": "Delete ALL events from the database. Requires `{ \"confirm\": true }` in the body. This is a destructive operation — intended for development/testing only."
+          }
+        }
+      ]
+    }
+  ]
+}
