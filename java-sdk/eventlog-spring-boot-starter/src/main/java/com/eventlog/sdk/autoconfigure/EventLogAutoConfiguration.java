@@ -369,14 +369,14 @@ public class EventLogAutoConfiguration {
             }
         }
 
-        if (senderExecutor == null && (!explicitConfig || forceSpring)) {
+        if (senderExecutor == null && !virtualThreads && (!explicitConfig || forceSpring)) {
             ThreadPoolTaskExecutor taskExecutor = taskExecutorProvider.getIfUnique();
             if (taskExecutor != null) {
                 senderExecutor = taskExecutor.getThreadPoolExecutor();
             }
         }
 
-        if (retryExecutor == null && !forceVirtual) {
+        if (retryExecutor == null && !virtualThreads) {
             TaskScheduler taskScheduler = taskSchedulerProvider.getIfUnique();
             if (taskScheduler instanceof ThreadPoolTaskScheduler scheduler) {
                 retryExecutor = scheduler.getScheduledExecutor();

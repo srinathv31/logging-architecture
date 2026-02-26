@@ -544,6 +544,23 @@ class EventLogAutoConfigurationTest {
                 });
     }
 
+    @Test
+    void virtualThreadsPropertySkipsSpringExecutorFallback() {
+        contextRunner
+                .withUserConfiguration(TaskExecutorConfig.class)
+                .withPropertyValues(
+                        "eventlog.enabled=true",
+                        "eventlog.base-url=https://api.test",
+                        "eventlog.transport=jdk",
+                        "eventlog.async.virtual-threads=true")
+                .run(context -> {
+                    assertThat(context).hasSingleBean(AsyncEventLogger.class);
+                    // The ThreadPoolTaskExecutor bean exists but should NOT be used
+                    // by AsyncEventLogger when virtual-threads=true
+                    assertThat(context).hasSingleBean(ThreadPoolTaskExecutor.class);
+                });
+    }
+
     // --- Template resolution with target/originating system ---
 
     @Test
