@@ -3,7 +3,7 @@
 # ═══════════════════════════════════════════════════════════════════════════
 #
 # Prerequisites:
-#   1. Pet Resort API running on :8080  →  cd pet-resort-api; ./mvnw spring-boot:run
+#   1. Pet Resort API running on :8081  →  cd pet-resort-api; ./mvnw spring-boot:run
 #   2. Event Log API running on :3000   →  cd api; pnpm dev
 #
 # Deterministic on a fresh app start (IDs: BKG-002 through BKG-008)
@@ -13,7 +13,8 @@
 
 $ErrorActionPreference = "Stop"
 
-$BASE_URL = "http://localhost:8080"
+$BASE_URL = "http://localhost:8081"
+$EVENTLOG_URL = "http://localhost:3000"
 
 function Step($msg) { Write-Host "`n> $msg" -ForegroundColor Cyan }
 function Success($msg) { Write-Host "[OK] $msg" -ForegroundColor Green }
@@ -66,6 +67,33 @@ function Invoke-Api {
 
 function Show-Json($obj) {
     if ($obj) { $obj | ConvertTo-Json -Depth 10 }
+}
+
+# ═══════════════════════════════════════════════════════════════════════════
+Header "Pre-flight Checks"
+Write-Host "Verifying services are running..."
+# ═══════════════════════════════════════════════════════════════════════════
+
+Step "Checking Pet Resort API on :8081..."
+try {
+    Invoke-RestMethod -Uri "$BASE_URL/actuator/health" -ErrorAction Stop | Out-Null
+    Success "Pet Resort API is running"
+}
+catch {
+    Write-Host "✗ Pet Resort API not reachable at $BASE_URL/actuator/health" -ForegroundColor Red
+    Write-Host "  Start it:  cd pet-resort-api && ./mvnw spring-boot:run" -ForegroundColor Red
+    exit 1
+}
+
+Step "Checking Event Log API on :3000..."
+try {
+    Invoke-RestMethod -Uri "$EVENTLOG_URL/v1/healthcheck" -ErrorAction Stop | Out-Null
+    Success "Event Log API is running"
+}
+catch {
+    Write-Host "✗ Event Log API not reachable at $EVENTLOG_URL/v1/healthcheck" -ForegroundColor Red
+    Write-Host "  Start it:  cd api && pnpm dev" -ForegroundColor Red
+    exit 1
 }
 
 # ───────────────────────────────────────────────────────────────────────────
@@ -329,6 +357,25 @@ Invoke-Api -Uri "$BASE_URL/api/bookings/$whiskersApprovalBookingId" | Show-Json
 
 Step "Thumper's final state ($thumperBookingId - should be CHECKED_IN)..."
 Invoke-Api -Uri "$BASE_URL/api/bookings/$thumperBookingId" | Show-Json
+
+# ───────────────────────────────────────────────────────────────────────────
+Header "Event Log API Verification"
+# ───────────────────────────────────────────────────────────────────────────
+
+Step "Alice's events (OWN-001)..."
+Invoke-Api -Uri "$EVENTLOG_URL/v1/events/account/OWN-001" | Show-Json
+
+Step "Alice's event summary (OWN-001)..."
+Invoke-Api -Uri "$EVENTLOG_URL/v1/events/account/OWN-001/summary" | Show-Json
+
+Step "Bob's events (OWN-002)..."
+Invoke-Api -Uri "$EVENTLOG_URL/v1/events/account/OWN-002" | Show-Json
+
+Step "Carol's events (OWN-003)..."
+Invoke-Api -Uri "$EVENTLOG_URL/v1/events/account/OWN-003" | Show-Json
+
+Step "Dashboard stats..."
+Invoke-Api -Uri "$EVENTLOG_URL/v1/dashboard/stats" | Show-Json
 
 # ───────────────────────────────────────────────────────────────────────────
 Header "Demo Complete!"

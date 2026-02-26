@@ -4,8 +4,8 @@
 # ═══════════════════════════════════════════════════════════════════════════
 #
 # Prerequisites:
-#   1. Pet Resort API running on :8080  →  cd pet-resort-api && ./mvnw spring-boot:run
-#   2. Event Log API running on :3000   →  cd api && npm run dev
+#   1. Pet Resort API running on :8081  →  cd pet-resort-api && ./mvnw spring-boot:run
+#   2. Event Log API running on :3000   →  cd api && pnpm dev
 #   3. jq installed                     →  brew install jq
 #
 # Deterministic on a fresh app start (IDs: BKG-002 through BKG-008)
@@ -15,7 +15,8 @@
 
 set -euo pipefail
 
-BASE_URL="http://localhost:8080"
+BASE_URL="http://localhost:8081"
+EVENTLOG_URL="http://localhost:3000"
 BOLD='\033[1m'
 GREEN='\033[0;32m'
 RED='\033[0;31m'
@@ -26,7 +27,34 @@ NC='\033[0m' # No Color
 step() { echo -e "\n${CYAN}▸ $1${NC}"; }
 success() { echo -e "${GREEN}✓ $1${NC}"; }
 fail_expected() { echo -e "${YELLOW}✗ $1 (expected)${NC}"; }
-header() { echo -e "\n${BOLD}═══════════════════════════════════════════════════════════${NC}"; echo -e "${BOLD}  $1${NC}"; echo -e "${BOLD}═══════════════════════════════════════════════════════════${NC}"; }
+header() {
+  echo -e "\n${BOLD}═══════════════════════════════════════════════════════════${NC}"
+  echo -e "${BOLD}  $1${NC}"
+  echo -e "${BOLD}═══════════════════════════════════════════════════════════${NC}"
+}
+
+# ═══════════════════════════════════════════════════════════════════════════
+header "Pre-flight Checks"
+echo "Verifying services are running..."
+# ═══════════════════════════════════════════════════════════════════════════
+
+step "Checking Pet Resort API on :8081..."
+if curl -sf "$BASE_URL/actuator/health" > /dev/null 2>&1; then
+  success "Pet Resort API is running"
+else
+  echo -e "${RED}✗ Pet Resort API not reachable at $BASE_URL/actuator/health${NC}"
+  echo -e "${RED}  Start it:  cd pet-resort-api && ./mvnw spring-boot:run${NC}"
+  exit 1
+fi
+
+step "Checking Event Log API on :3000..."
+if curl -sf "$EVENTLOG_URL/v1/healthcheck" > /dev/null 2>&1; then
+  success "Event Log API is running"
+else
+  echo -e "${RED}✗ Event Log API not reachable at $EVENTLOG_URL/v1/healthcheck${NC}"
+  echo -e "${RED}  Start it:  cd api && pnpm dev${NC}"
+  exit 1
+fi
 
 # ───────────────────────────────────────────────────────────────────────────
 header "Scenario 1: Buddy's Booking + Check-in (Happy Path)"
@@ -313,6 +341,25 @@ curl -s "$BASE_URL/api/bookings/$WHISKERS_APPROVAL_BOOKING_ID" | jq .
 
 step "Thumper's final state ($THUMPER_BOOKING_ID — should be CHECKED_IN)..."
 curl -s "$BASE_URL/api/bookings/$THUMPER_BOOKING_ID" | jq .
+
+# ───────────────────────────────────────────────────────────────────────────
+header "Event Log API Verification"
+# ───────────────────────────────────────────────────────────────────────────
+
+step "Alice's events (OWN-001)..."
+curl -s "$EVENTLOG_URL/v1/events/account/OWN-001" | jq .
+
+step "Alice's event summary (OWN-001)..."
+curl -s "$EVENTLOG_URL/v1/events/account/OWN-001/summary" | jq .
+
+step "Bob's events (OWN-002)..."
+curl -s "$EVENTLOG_URL/v1/events/account/OWN-002" | jq .
+
+step "Carol's events (OWN-003)..."
+curl -s "$EVENTLOG_URL/v1/events/account/OWN-003" | jq .
+
+step "Dashboard stats..."
+curl -s "$EVENTLOG_URL/v1/dashboard/stats" | jq .
 
 # ───────────────────────────────────────────────────────────────────────────
 header "Demo Complete!"
