@@ -331,7 +331,7 @@ public class EventLogClient implements AutoCloseable {
             } catch (Exception e) {
                 lastException = e;
                 if (attempt >= maxRetries) {
-                    throw new EventLogException("Request failed after " + maxRetries + " retries", e);
+                    throw new EventLogException("Request failed after " + maxRetries + " retries: " + e.getMessage(), e);
                 }
             }
         }

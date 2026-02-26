@@ -491,8 +491,9 @@ public class AsyncEventLogger implements AutoCloseable {
     private void onFailure(QueuedEvent queued, EventLogException e) {
         int failures = consecutiveFailures.incrementAndGet();
         
-        log.warn("Failed to send event (attempt {}): correlationId={}, status={}, error={}", 
-                queued.attempts + 1, queued.event.getCorrelationId(), e.getStatusCode(), e.getMessage());
+        log.warn("Failed to send event (attempt {}): correlationId={}, status={}, error={}, cause={}",
+                queued.attempts + 1, queued.event.getCorrelationId(), e.getStatusCode(),
+                e.getMessage(), getRootCauseMessage(e));
         
         // Check if we should open circuit
         if (failures >= circuitBreakerThreshold) {
@@ -711,7 +712,8 @@ public class AsyncEventLogger implements AutoCloseable {
                 log.warn("Skipping corrupt spillover line: {}", e.getMessage());
                 sent++; // skip corrupt line
             } catch (Exception e) {
-                log.warn("Replay send failed, pausing: {}", e.getMessage());
+                log.warn("Replay send failed, pausing: {} (cause: {})",
+                        e.getMessage(), getRootCauseMessage(e), e);
                 break; // stop on API failure
             }
         }
@@ -770,6 +772,12 @@ public class AsyncEventLogger implements AutoCloseable {
 
     private String serializeEvent(EventLogEntry event) throws IOException {
         return spilloverObjectMapper.writeValueAsString(event);
+    }
+
+    private static String getRootCauseMessage(Throwable t) {
+        Throwable root = t;
+        while (root.getCause() != null) root = root.getCause();
+        return root.getClass().getSimpleName() + ": " + root.getMessage();
     }
 
     private void notifyEventLoss(EventLogEntry event, String reason) {
