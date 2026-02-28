@@ -1,17 +1,17 @@
 import { buildApp } from './app';
 import { env } from './config/env';
 import { getDb, closeDb } from './db/client';
-import { runMigrations } from './db/migrate';
 
 const app = buildApp();
 
 async function start() {
   try {
-    await getDb();
-    app.log.info('Database connection established');
-    // await runMigrations();
-    // app.log.info('Database migrations applied');
     await app.listen({ port: env.PORT, host: env.HOST });
+
+    // Attempt initial DB connection in background — don't block startup
+    getDb()
+      .then(() => app.log.info('Database connection established'))
+      .catch((err) => app.log.warn({ err }, 'Database not available at startup — will retry on first request'));
   } catch (err) {
     app.log.error(err);
     process.exit(1);

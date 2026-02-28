@@ -7,6 +7,8 @@ import { queryLogger } from "../logger";
 const TOKEN_REFRESH_MS = 45 * 60 * 1000; // 45 minutes
 const TOKEN_FETCH_MAX_RETRIES = 3;
 const TOKEN_FETCH_INITIAL_DELAY_MS = 1000;
+const CONNECT_MAX_RETRIES = 3;
+const CONNECT_INITIAL_DELAY_MS = 1000;
 
 // Module-level state
 let pool: ConnectionPool | null = null;
@@ -113,22 +115,54 @@ function isTokenExpired(): boolean {
 
 /**
  * Refreshes the connection pool with a new token.
- * This is called when the token is expired.
+ * Retries with exponential backoff on transient failures.
  */
 async function refreshConnection(): Promise<void> {
-  // Close existing pool if connected
-  if (pool?.connected) {
-    await pool.close();
+  // Close existing pool — guard against errors from a broken pool
+  if (pool) {
+    try {
+      await pool.close();
+    } catch {
+      // Pool already broken; ignore and proceed with reconnection
+    }
+    pool = null;
+    drizzleDb = null;
   }
 
   const config = await getConfig();
-  pool = await mssql.connect(config);
 
-  // Create new Drizzle instance with the new pool
-  drizzleDb = drizzle({
-    client: pool,
-    logger: env.DRIZZLE_LOG === "true" ? queryLogger : undefined,
-  });
+  let lastError: Error | null = null;
+
+  for (let attempt = 1; attempt <= CONNECT_MAX_RETRIES; attempt++) {
+    try {
+      pool = await mssql.connect(config);
+
+      // Reset state on unexpected disconnection so next getDb() triggers reconnection
+      pool.on("error", (err) => {
+        console.error("MSSQL pool error — connection will be refreshed on next request:", err.message);
+        pool = null;
+        drizzleDb = null;
+      });
+
+      drizzleDb = drizzle({
+        client: pool,
+        logger: env.DRIZZLE_LOG === "true" ? queryLogger : undefined,
+      });
+
+      return;
+    } catch (error) {
+      lastError = error instanceof Error ? error : new Error(String(error));
+
+      if (attempt < CONNECT_MAX_RETRIES) {
+        const delay = CONNECT_INITIAL_DELAY_MS * Math.pow(2, attempt - 1);
+        await new Promise((resolve) => setTimeout(resolve, delay));
+      }
+    }
+  }
+
+  throw new Error(
+    `Failed to connect to database after ${CONNECT_MAX_RETRIES} attempts: ${lastError?.message}`,
+  );
 }
 
 /**
