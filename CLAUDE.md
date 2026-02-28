@@ -9,3 +9,6 @@ dashboard - cd dashboard && pnpm dev
 
 test commands:
 pnpm test
+
+docs-site (VitePress) is the primary documentation source for the Event Log API.
+start: cd docs-site && pnpm dev
