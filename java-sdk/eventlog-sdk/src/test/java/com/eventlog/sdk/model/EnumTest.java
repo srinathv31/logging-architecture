@@ -12,6 +12,7 @@ class EnumTest {
         assertEquals(EventStatus.FAILURE, EventStatus.fromValue("FAILURE"));
         assertEquals(EventStatus.IN_PROGRESS, EventStatus.fromValue("IN_PROGRESS"));
         assertEquals(EventStatus.SKIPPED, EventStatus.fromValue("SKIPPED"));
+        assertEquals(EventStatus.WARNING, EventStatus.fromValue("WARNING"));
     }
 
     @Test
@@ -31,6 +32,7 @@ class EnumTest {
         assertEquals("FAILURE", EventStatus.FAILURE.getValue());
         assertEquals("IN_PROGRESS", EventStatus.IN_PROGRESS.getValue());
         assertEquals("SKIPPED", EventStatus.SKIPPED.getValue());
+        assertEquals("WARNING", EventStatus.WARNING.getValue());
     }
 
     @Test

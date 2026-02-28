@@ -278,8 +278,8 @@ EventLogEntry.builder()
     .processName("PAYMENT_PROCESS")
     .stepSequence(1)
     .stepName("Validate Card")
-    .eventType(EventType.STEP)           // PROCESS_START, PROCESS_END, STEP, ERROR, WARNING
-    .eventStatus(EventStatus.SUCCESS)    // SUCCESS, FAILURE, IN_PROGRESS, PENDING, TIMEOUT
+    .eventType(EventType.STEP)           // PROCESS_START, STEP, PROCESS_END, ERROR
+    .eventStatus(EventStatus.SUCCESS)    // SUCCESS, FAILURE, IN_PROGRESS, SKIPPED, WARNING
 
     // Business data
     .summary("Card validation completed")
