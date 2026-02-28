@@ -522,4 +522,130 @@ class EventLogTemplateTest {
 
         assertEquals(List.of("x", "y", "z"), captor.getValue().getSpanLinks());
     }
+
+    // ========================================================================
+    // One-shot field tests (requestPayload, responsePayload, executionTimeMs,
+    //                       idempotencyKey, errorCode, errorMessage)
+    // ========================================================================
+
+    @Test
+    void withRequestPayloadPassesThroughAndClearsAfterEmit() {
+        EventLogTemplate template = createTemplate();
+        EventLogTemplate.ProcessLogger proc = template.forProcess("PROC")
+                .withCorrelationId("corr").withTraceId("trace");
+
+        proc.withRequestPayload("{\"id\":1}")
+                .withResponsePayload("{\"ok\":true}")
+                .logStep(1, "Call API", EventStatus.SUCCESS, "Called", "OK");
+
+        proc.logStep(2, "Next", EventStatus.SUCCESS, "Done", "OK");
+
+        ArgumentCaptor<EventLogEntry> captor = ArgumentCaptor.forClass(EventLogEntry.class);
+        verify(mockLogger, times(2)).log(captor.capture());
+
+        EventLogEntry first = captor.getAllValues().get(0);
+        assertEquals("{\"id\":1}", first.getRequestPayload());
+        assertEquals("{\"ok\":true}", first.getResponsePayload());
+
+        EventLogEntry second = captor.getAllValues().get(1);
+        assertNull(second.getRequestPayload(), "requestPayload should be cleared after emit");
+        assertNull(second.getResponsePayload(), "responsePayload should be cleared after emit");
+    }
+
+    @Test
+    void withExecutionTimeMsPassesThroughAndClearsAfterEmit() {
+        EventLogTemplate template = createTemplate();
+        EventLogTemplate.ProcessLogger proc = template.forProcess("PROC")
+                .withCorrelationId("corr").withTraceId("trace");
+
+        proc.withExecutionTimeMs(350)
+                .logStep(1, "DB Query", EventStatus.SUCCESS, "Queried", "OK");
+
+        proc.logStep(2, "Next", EventStatus.SUCCESS, "Done", "OK");
+
+        ArgumentCaptor<EventLogEntry> captor = ArgumentCaptor.forClass(EventLogEntry.class);
+        verify(mockLogger, times(2)).log(captor.capture());
+
+        assertEquals(350, captor.getAllValues().get(0).getExecutionTimeMs());
+        assertNull(captor.getAllValues().get(1).getExecutionTimeMs(),
+                "executionTimeMs should be cleared after emit");
+    }
+
+    @Test
+    void withIdempotencyKeyPassesThroughAndClearsAfterEmit() {
+        EventLogTemplate template = createTemplate();
+        EventLogTemplate.ProcessLogger proc = template.forProcess("PROC")
+                .withCorrelationId("corr").withTraceId("trace");
+
+        proc.withIdempotencyKey("idem-abc-123")
+                .logStep(1, "Submit", EventStatus.SUCCESS, "Submitted", "OK");
+
+        proc.logStep(2, "Next", EventStatus.SUCCESS, "Done", "OK");
+
+        ArgumentCaptor<EventLogEntry> captor = ArgumentCaptor.forClass(EventLogEntry.class);
+        verify(mockLogger, times(2)).log(captor.capture());
+
+        assertEquals("idem-abc-123", captor.getAllValues().get(0).getIdempotencyKey());
+        assertNull(captor.getAllValues().get(1).getIdempotencyKey(),
+                "idempotencyKey should be cleared after emit");
+    }
+
+    @Test
+    void withErrorCodeAndMessagePassThroughOnLogStep() {
+        EventLogTemplate template = createTemplate();
+        EventLogTemplate.ProcessLogger proc = template.forProcess("PROC")
+                .withCorrelationId("corr").withTraceId("trace");
+
+        proc.withErrorCode("RATE_LIMIT")
+                .withErrorMessage("Too many requests")
+                .logStep(1, "Call API", EventStatus.WARNING, "Rate limited", "RETRYING");
+
+        proc.logStep(2, "Retry", EventStatus.SUCCESS, "Succeeded", "OK");
+
+        ArgumentCaptor<EventLogEntry> captor = ArgumentCaptor.forClass(EventLogEntry.class);
+        verify(mockLogger, times(2)).log(captor.capture());
+
+        EventLogEntry first = captor.getAllValues().get(0);
+        assertEquals("RATE_LIMIT", first.getErrorCode());
+        assertEquals("Too many requests", first.getErrorMessage());
+
+        EventLogEntry second = captor.getAllValues().get(1);
+        assertNull(second.getErrorCode(), "errorCode should be cleared after emit");
+        assertNull(second.getErrorMessage(), "errorMessage should be cleared after emit");
+    }
+
+    @Test
+    void processEndParameterOverridesPendingExecutionTimeMs() {
+        EventLogTemplate template = createTemplate();
+        EventLogTemplate.ProcessLogger proc = template.forProcess("PROC")
+                .withCorrelationId("corr").withTraceId("trace");
+
+        proc.withExecutionTimeMs(100)
+                .processEnd(3, EventStatus.SUCCESS, "Done", "COMPLETE", 5000);
+
+        ArgumentCaptor<EventLogEntry> captor = ArgumentCaptor.forClass(EventLogEntry.class);
+        verify(mockLogger).log(captor.capture());
+
+        assertEquals(5000, captor.getValue().getExecutionTimeMs(),
+                "processEnd's totalDurationMs parameter should override pending executionTimeMs");
+    }
+
+    @Test
+    void errorMethodParametersOverridePendingErrorFields() {
+        EventLogTemplate template = createTemplate();
+        EventLogTemplate.ProcessLogger proc = template.forProcess("PROC")
+                .withCorrelationId("corr").withTraceId("trace");
+
+        proc.withErrorCode("PENDING_CODE")
+                .withErrorMessage("pending message")
+                .error("ACTUAL_CODE", "actual message", "Error summary", "FAILED");
+
+        ArgumentCaptor<EventLogEntry> captor = ArgumentCaptor.forClass(EventLogEntry.class);
+        verify(mockLogger).log(captor.capture());
+
+        assertEquals("ACTUAL_CODE", captor.getValue().getErrorCode(),
+                "error()'s errorCode parameter should override pending");
+        assertEquals("actual message", captor.getValue().getErrorMessage(),
+                "error()'s errorMessage parameter should override pending");
+    }
 }

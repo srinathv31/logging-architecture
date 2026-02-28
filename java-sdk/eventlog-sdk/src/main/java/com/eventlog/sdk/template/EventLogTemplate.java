@@ -300,6 +300,13 @@ public final class EventLogTemplate {
         private HttpMethod httpMethod;
         private Integer httpStatusCode;
         private boolean awaitCompletion = false;
+        private String pendingRequestPayload;
+        private String pendingResponsePayload;
+        private Integer pendingExecutionTimeMs;
+        private String pendingIdempotencyKey;
+        private String pendingErrorCode;
+        private String pendingErrorMessage;
+
         private ProcessLogger(String processName) {
             this.processName = processName;
         }
@@ -395,6 +402,36 @@ public final class EventLogTemplate {
 
         public ProcessLogger withAwaitCompletion() {
             this.awaitCompletion = true;
+            return this;
+        }
+
+        public ProcessLogger withRequestPayload(String requestPayload) {
+            this.pendingRequestPayload = requestPayload;
+            return this;
+        }
+
+        public ProcessLogger withResponsePayload(String responsePayload) {
+            this.pendingResponsePayload = responsePayload;
+            return this;
+        }
+
+        public ProcessLogger withExecutionTimeMs(Integer executionTimeMs) {
+            this.pendingExecutionTimeMs = executionTimeMs;
+            return this;
+        }
+
+        public ProcessLogger withIdempotencyKey(String idempotencyKey) {
+            this.pendingIdempotencyKey = idempotencyKey;
+            return this;
+        }
+
+        public ProcessLogger withErrorCode(String errorCode) {
+            this.pendingErrorCode = errorCode;
+            return this;
+        }
+
+        public ProcessLogger withErrorMessage(String errorMessage) {
+            this.pendingErrorMessage = errorMessage;
             return this;
         }
 
@@ -557,6 +594,12 @@ public final class EventLogTemplate {
             if (pendingSpanLinks != null && !pendingSpanLinks.isEmpty()) {
                 builder.spanLinks(new ArrayList<>(pendingSpanLinks));
             }
+            if (hasText(pendingRequestPayload)) builder.requestPayload(pendingRequestPayload);
+            if (hasText(pendingResponsePayload)) builder.responsePayload(pendingResponsePayload);
+            if (pendingExecutionTimeMs != null) builder.executionTimeMs(pendingExecutionTimeMs);
+            if (hasText(pendingIdempotencyKey)) builder.idempotencyKey(pendingIdempotencyKey);
+            if (hasText(pendingErrorCode)) builder.errorCode(pendingErrorCode);
+            if (hasText(pendingErrorMessage)) builder.errorMessage(pendingErrorMessage);
             return builder;
         }
 
@@ -581,6 +624,12 @@ public final class EventLogTemplate {
             } finally {
                 pendingTargetSystem = null;
                 pendingSpanLinks = null;
+                pendingRequestPayload = null;
+                pendingResponsePayload = null;
+                pendingExecutionTimeMs = null;
+                pendingIdempotencyKey = null;
+                pendingErrorCode = null;
+                pendingErrorMessage = null;
             }
         }
     }
