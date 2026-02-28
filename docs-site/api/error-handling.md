@@ -88,6 +88,7 @@ Retries use exponential backoff. The `AsyncEventLogger` adds circuit breaker log
 | `FAILURE` | Step failed |
 | `IN_PROGRESS` | Step is still running |
 | `SKIPPED` | Step was skipped |
+| `WARNING` | Step completed with warnings |
 
 ### HTTP Method
 

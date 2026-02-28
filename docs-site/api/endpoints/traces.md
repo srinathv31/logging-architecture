@@ -19,7 +19,7 @@ Returns a paginated list of traces grouped by `traceId`. Each trace summary incl
 | `startDate` | ISO 8601 datetime | — | Filter traces with events on or after this time |
 | `endDate` | ISO 8601 datetime | — | Filter traces with events on or before this time |
 | `processName` | string | — | Filter by process name |
-| `eventStatus` | enum | — | Filter by event status (`SUCCESS`, `FAILURE`, `IN_PROGRESS`, `SKIPPED`) |
+| `eventStatus` | enum | — | Filter by event status (`SUCCESS`, `FAILURE`, `IN_PROGRESS`, `SKIPPED`, `WARNING`) |
 | `accountId` | string | — | Filter by account ID (max 64 chars) |
 
 ### Response (200)

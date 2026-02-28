@@ -49,7 +49,7 @@ Create a single event log entry.
 | `stepSequence` | integer | No | Step sequence number (>= 0) |
 | `stepName` | string | No | Step name (max 510 chars) |
 | `eventType` | enum | Yes | `PROCESS_START`, `STEP`, `PROCESS_END`, `ERROR` |
-| `eventStatus` | enum | Yes | `SUCCESS`, `FAILURE`, `IN_PROGRESS`, `SKIPPED` |
+| `eventStatus` | enum | Yes | `SUCCESS`, `FAILURE`, `IN_PROGRESS`, `SKIPPED`, `WARNING` |
 | `identifiers` | object | Yes | Key-value pairs for business identifiers |
 | `summary` | string | Yes | Human-readable summary |
 | `result` | string | Yes | Result code (1-2048 chars) |
@@ -139,7 +139,8 @@ Returns paginated events for a distributed trace with aggregate metadata.
     "success": 8,
     "failure": 1,
     "inProgress": 2,
-    "skipped": 1
+    "skipped": 1,
+    "warning": 0
   },
   "processName": "ADD_AUTH_USER",
   "accountId": "AC-1234567890",
