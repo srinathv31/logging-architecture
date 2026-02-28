@@ -336,6 +336,57 @@ echo -e "${YELLOW}  Vet health check logged as WARNING — expired avian vaccina
 echo -e "${CYAN}  Booking succeeded (201) despite vet warning — monitoring advisory flagged${NC}"
 
 # ───────────────────────────────────────────────────────────────────────────
+header "Scenario 12: Scales' Checkout — Trace-Level Retry (Same traceId)"
+echo "Pet: Scales (PET-005, REPTILE) | Owner: Carol Chen (OWN-003)"
+echo "Features: same traceId across retry attempts, Request 1 FAILURE → Request 2 SUCCESS,"
+echo "          single trace query shows full retry timeline"
+echo "Prerequisite: Scales is CHECKED_IN from Scenario 3"
+# ───────────────────────────────────────────────────────────────────────────
+
+# Pre-generate a shared traceId + correlationId for both attempts
+SCALES_CHECKOUT_TRACE_ID="$(uuidgen | tr -d '-' | tr '[:upper:]' '[:lower:]')"
+SCALES_CHECKOUT_CORRELATION_ID="corr-scales-checkout-$(date +%s)"
+step "Shared traceId for both attempts: $SCALES_CHECKOUT_TRACE_ID"
+step "Shared correlationId: $SCALES_CHECKOUT_CORRELATION_ID"
+
+step "Attempt #1: Check-out with X-Simulate: payment-failure (expect 422)..."
+SCALES_CHECKOUT_FAIL=$(curl -s -w "\n%{http_code}" -X POST "$BASE_URL/api/bookings/$SCALES_BOOKING_ID/check-out" \
+  -H "Content-Type: application/json" \
+  -H "X-Trace-Id: $SCALES_CHECKOUT_TRACE_ID" \
+  -H "X-Correlation-Id: $SCALES_CHECKOUT_CORRELATION_ID" \
+  -H "X-Simulate: payment-failure" \
+  -d '{"paymentAmount":389.99,"cardNumberLast4":"5555"}')
+SCALES_CHECKOUT_FAIL_CODE=$(echo "$SCALES_CHECKOUT_FAIL" | tail -1)
+SCALES_CHECKOUT_FAIL_BODY=$(echo "$SCALES_CHECKOUT_FAIL" | sed '$d')
+
+if [ "$SCALES_CHECKOUT_FAIL_CODE" -eq 422 ]; then
+  fail_expected "HTTP $SCALES_CHECKOUT_FAIL_CODE — Payment declined (attempt #1)"
+else
+  echo -e "${RED}Unexpected HTTP $SCALES_CHECKOUT_FAIL_CODE (expected 422)${NC}"
+fi
+echo "$SCALES_CHECKOUT_FAIL_BODY" | jq . 2>/dev/null || echo "$SCALES_CHECKOUT_FAIL_BODY"
+
+step "Attempt #2: Check-out with same traceId (no simulation — expect 200)..."
+SCALES_CHECKOUT_SUCCESS=$(curl -s -w "\n%{http_code}" -X POST "$BASE_URL/api/bookings/$SCALES_BOOKING_ID/check-out" \
+  -H "Content-Type: application/json" \
+  -H "X-Trace-Id: $SCALES_CHECKOUT_TRACE_ID" \
+  -H "X-Correlation-Id: $SCALES_CHECKOUT_CORRELATION_ID" \
+  -d '{"paymentAmount":389.99,"cardNumberLast4":"1234"}')
+SCALES_CHECKOUT_SUCCESS_CODE=$(echo "$SCALES_CHECKOUT_SUCCESS" | tail -1)
+SCALES_CHECKOUT_SUCCESS_BODY=$(echo "$SCALES_CHECKOUT_SUCCESS" | sed '$d')
+
+if [ "$SCALES_CHECKOUT_SUCCESS_CODE" -eq 200 ]; then
+  success "HTTP $SCALES_CHECKOUT_SUCCESS_CODE — Check-out succeeded (attempt #2)"
+else
+  echo -e "${RED}Unexpected HTTP $SCALES_CHECKOUT_SUCCESS_CODE (expected 200)${NC}"
+fi
+echo "$SCALES_CHECKOUT_SUCCESS_BODY" | jq . 2>/dev/null || echo "$SCALES_CHECKOUT_SUCCESS_BODY"
+
+echo -e "\n${CYAN}Both attempts share traceId: $SCALES_CHECKOUT_TRACE_ID${NC}"
+echo -e "${CYAN}Query: GET /v1/events/trace/$SCALES_CHECKOUT_TRACE_ID → shows BOTH timelines${NC}"
+echo -e "${CYAN}Compare with Scenario 8: same correlationId but DIFFERENT traceIds${NC}"
+
+# ───────────────────────────────────────────────────────────────────────────
 header "Verification Lookups"
 # ───────────────────────────────────────────────────────────────────────────
 
@@ -345,7 +396,7 @@ curl -s "$BASE_URL/api/owners/OWN-001/bookings" | jq .
 step "Bob's bookings (OWN-002 — Tweety PENDING x2 + Thumper CHECKED_IN)..."
 curl -s "$BASE_URL/api/owners/OWN-002/bookings" | jq .
 
-step "Carol's bookings (OWN-003 — Scales CHECKED_IN)..."
+step "Carol's bookings (OWN-003 — Scales CHECKED_OUT)..."
 curl -s "$BASE_URL/api/owners/OWN-003/bookings" | jq .
 
 step "Buddy's final state ($BUDDY_BOOKING_ID — should be CHECKED_OUT)..."
@@ -362,6 +413,9 @@ curl -s "$BASE_URL/api/bookings/$THUMPER_BOOKING_ID" | jq .
 
 step "Tweety's vet-warning booking ($TWEETY_WARNING_BOOKING_ID — should be PENDING)..."
 curl -s "$BASE_URL/api/bookings/$TWEETY_WARNING_BOOKING_ID" | jq .
+
+step "Scales' final state ($SCALES_BOOKING_ID — should be CHECKED_OUT)..."
+curl -s "$BASE_URL/api/bookings/$SCALES_BOOKING_ID" | jq .
 
 # ───────────────────────────────────────────────────────────────────────────
 header "Event Log API Verification"
@@ -388,7 +442,7 @@ echo ""
 echo "Booking IDs:"
 echo "  Buddy:              $BUDDY_BOOKING_ID (booking + check-in + failed checkout + successful checkout)"
 echo "  Tweety (fail):      BKG-003 (consumed, not saved — 504 timeout)"
-echo "  Scales:             $SCALES_BOOKING_ID (kennel retry + room service)"
+echo "  Scales:             $SCALES_BOOKING_ID (kennel retry + room service + failed checkout + successful checkout)"
 echo "  Tweety (retry):     $TWEETY_BOOKING_ID (successful retry)"
 echo "  Whiskers (cancel):  $WHISKERS_BOOKING_ID (book → lookup → cancel)"
 echo "  Thumper:            $THUMPER_BOOKING_ID (booking + agent-gate check-in)"
@@ -404,5 +458,6 @@ echo "            Boarding approval: correlationId=$APPROVAL_CORRELATION_ID"
 echo "  OWN-002 — 4 correlation IDs (Tweety fail + Tweety success + Thumper booking/check-in + Tweety vet-warning)"
 echo "            Thumper check-in: step 2 has IN_PROGRESS → SUCCESS on same spanId"
 echo "            Tweety vet-warning: vet health check step has WARNING status"
-echo "  OWN-003 — events across 2 process types (booking, room service)"
+echo "  OWN-003 — events across 3 process types (booking, room service, checkout)"
+echo "            Checkout trace-retry: traceId=$SCALES_CHECKOUT_TRACE_ID (2 attempts, SAME traceId)"
 echo ""
