@@ -4,15 +4,16 @@ title: SDK Approaches
 
 # SDK Approaches Comparison
 
-The Pet Resort API demonstrates all three Event Log Java SDK approaches. Use this guide to choose the right one for your use case.
+The Pet Resort API demonstrates both Event Log Java SDK approaches. Use this guide to choose the right one for your use case.
 
 ## Overview
 
 | Approach | Where Used | When to Use |
 |----------|-----------|-------------|
-| **ProcessLogger** | `BookingService.createBooking()`, `checkIn()`, `approveCheckIn()`, `RoomServiceService.fulfillRoomService()` | Multi-step processes with branching, retries, or approval gates |
-| **EventLogUtils** | `BookingService.checkOut()`, `PaymentService.processPayment()` | Full manual control over event construction and span management |
-| **@LogEvent** | `BookingService.getBooking()`, `PetService.getPet()`, `OwnerService.getOwner()`, `KennelService.assignKennel()` | Simple single-step operations needing minimal configuration |
+| **ProcessLogger** | `BookingService.createBooking()`, `checkIn()`, `approveCheckIn()`, `checkOut()`, `RoomServiceService.fulfillRoomService()` | Multi-step processes with branching, retries, or approval gates |
+| **@LogEvent** | `BookingService.getBooking()`, `PaymentService.processPayment()`, `PetService.getPet()`, `OwnerService.getOwner()`, `KennelService.assignKennel()` | Simple single-step operations needing minimal configuration |
+
+> **Note:** `checkOut()` demonstrates ProcessLogger features not shown elsewhere: `withBatchId()`, `withIdempotencyKey()`, `withRequestPayload()` / `withResponsePayload()`, per-step `withTargetSystem()`, and `withErrorCode()` / `withErrorMessage()` on FAILURE steps.
 
 ## ProcessLogger (Fluent Multi-Step)
 
@@ -36,37 +37,6 @@ process.logProcessEnd(3, EventStatus.SUCCESS, "Check-in completed", totalMs);
 - Steps have conditional branching or retries
 - You need progressive identifier accumulation
 - Approval gates are involved
-
-## EventLogUtils (Manual Control)
-
-Best when you need full control over event construction, span IDs, and timing.
-
-```java
-String spanId = EventLogUtils.createSpanId();
-long startMs = System.currentTimeMillis();
-
-// ... do work ...
-
-EventLogEntry event = EventLogUtils.step(correlationId, traceId, "CHECKOUT", 1, "Process Payment")
-    .spanId(spanId)
-    .parentSpanId(parentSpanId)
-    .applicationId("pet-resort-api")
-    .targetSystem("PAYMENT_GATEWAY")
-    .originatingSystem("PET_RESORT")
-    .eventStatus(EventStatus.SUCCESS)
-    .summary("Payment of $" + amount + " processed")
-    .result("PAYMENT_APPROVED")
-    .executionTimeMs(System.currentTimeMillis() - startMs)
-    .build();
-
-eventLog.log(event);
-```
-
-**Use when:**
-- You need precise span ID management
-- Fork-join patterns with span links
-- Custom timing calculations
-- Integration with external trace contexts
 
 ## @LogEvent (Annotation-Based)
 

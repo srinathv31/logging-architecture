@@ -1,10 +1,10 @@
 # Pet Resort API — Event Log SDK Reference Implementation
 
-Spring Boot 3.4 application demonstrating all three Event Log Java SDK logging approaches in a realistic pet boarding scenario.
+Spring Boot 3.4 application demonstrating both Event Log Java SDK logging approaches in a realistic pet boarding scenario.
 
 ## What This Demonstrates
 
-- **Three SDK approaches**: ProcessLogger (fluent multi-step), EventLogUtils (manual control), @LogEvent (annotation-based)
+- **Two SDK approaches**: ProcessLogger (fluent multi-step) and @LogEvent (annotation-based)
 - **Fork-join with span links**: parallel kennel/vet checks linked to a downstream decision step
 - **MDC correlation propagation**: inbound correlation/trace IDs flow through all child events
 - **Retry and error handling**: kennel timeout, kennel retry, payment failure scenarios
@@ -40,7 +40,7 @@ All scenarios use `POST /api/bookings` unless noted. Use the `X-Simulate` header
 | 5 | Agent gate | `POST /api/bookings/{id}/check-in` | `agent-gate` | Kennel flagged for maintenance, agent calls facilities (3s), room cleared |
 | 6 | Awaiting approval | `POST /api/bookings/{id}/check-in` | `awaiting-approval` | Returns AWAITING_APPROVAL, requires approve-check-in to complete |
 | 7 | Approve check-in | `POST /api/bookings/{id}/approve-check-in` | _(none)_ | Completes the awaiting-approval flow |
-| 8 | Check-out | `POST /api/bookings/{id}/check-out` | _(none)_ | Payment processed, pet checked out (uses EventLogUtils approach) |
+| 8 | Check-out | `POST /api/bookings/{id}/check-out` | _(none)_ | Payment processed, pet checked out |
 | 9 | Payment failure | `POST /api/bookings/{id}/check-out` | `payment-failure` | Payment declined, process ends with error |
 | 10 | Room service retry | `POST /api/room-service` | `account-retry` | Account lookup fails once, succeeds on retry |
 
@@ -48,9 +48,8 @@ All scenarios use `POST /api/bookings` unless noted. Use the `X-Simulate` header
 
 | Approach | Where Used | When to Use |
 |----------|-----------|-------------|
-| **ProcessLogger** | `BookingService.createBooking()`, `checkIn()`, `approveCheckIn()`, `RoomServiceService.fulfillRoomService()` | Multi-step processes with branching, retries, or approval gates |
-| **EventLogUtils** | `BookingService.checkOut()`, `PaymentService.processPayment()` | Full manual control over event construction and span management |
-| **@LogEvent** | `BookingService.getBooking()`, `PetService.getPet()`, `OwnerService.getOwner()`, `KennelService.assignKennel()` | Simple single-step operations needing minimal configuration |
+| **ProcessLogger** | `BookingService.createBooking()`, `checkIn()`, `approveCheckIn()`, `checkOut()`, `RoomServiceService.fulfillRoomService()` | Multi-step processes with branching, retries, or approval gates |
+| **@LogEvent** | `BookingService.getBooking()`, `PaymentService.processPayment()`, `PetService.getPet()`, `OwnerService.getOwner()`, `KennelService.assignKennel()` | Simple single-step operations needing minimal configuration |
 
 ## Project Structure
 
@@ -78,10 +77,10 @@ src/main/java/com/example/petresort/
 │   ├── Owner.java, Pet.java, PetSpecies.java
 │   └── RoomServiceRequest.java, RoomServiceResponse.java
 ├── service/
-│   ├── BookingService.java           # ProcessLogger + EventLogUtils + @LogEvent
+│   ├── BookingService.java           # ProcessLogger + @LogEvent
 │   ├── KennelService.java            # @LogEvent annotation approach
 │   ├── OwnerService.java             # @LogEvent annotation approach
-│   ├── PaymentService.java           # EventLogUtils manual builder
+│   ├── PaymentService.java           # @LogEvent annotation approach
 │   ├── PetService.java               # @LogEvent annotation approach
 │   └── RoomServiceService.java       # ProcessLogger with retry
 └── store/

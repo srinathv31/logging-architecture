@@ -1,9 +1,7 @@
 package com.example.petresort.service;
 
 import com.eventlog.sdk.annotation.LogEvent;
-import com.eventlog.sdk.client.AsyncEventLogger;
 import com.eventlog.sdk.client.EventLogClient;
-import com.eventlog.sdk.model.EventLogEntry;
 import com.eventlog.sdk.model.EventStatus;
 import com.eventlog.sdk.model.HttpMethod;
 import com.eventlog.sdk.template.EventLogTemplate;
@@ -12,6 +10,7 @@ import com.eventlog.sdk.util.EventLogUtils;
 import com.example.petresort.exception.BookingConflictException;
 import com.example.petresort.exception.BookingNotFoundException;
 import com.example.petresort.exception.KennelVendorTimeoutException;
+import com.example.petresort.exception.PaymentFailedException;
 import com.example.petresort.exception.PetNotFoundException;
 import com.example.petresort.model.*;
 import com.example.petresort.store.InMemoryBookingStore;
@@ -38,7 +37,6 @@ public class BookingService {
     private final KennelService kennelService;
     private final PaymentService paymentService;
     private final EventLogTemplate eventLogTemplate;
-    private final AsyncEventLogger asyncEventLogger;
     private final EventLogClient eventLogClient;
 
     private final Counter bookingsCreated;
@@ -51,7 +49,6 @@ public class BookingService {
                           KennelService kennelService,
                           PaymentService paymentService,
                           EventLogTemplate eventLogTemplate,
-                          AsyncEventLogger asyncEventLogger,
                           EventLogClient eventLogClient,
                           MeterRegistry registry) {
         this.bookingStore = bookingStore;
@@ -59,7 +56,6 @@ public class BookingService {
         this.kennelService = kennelService;
         this.paymentService = paymentService;
         this.eventLogTemplate = eventLogTemplate;
-        this.asyncEventLogger = asyncEventLogger;
         this.eventLogClient = eventLogClient;
 
         this.bookingsCreated = Counter.builder("petresort.bookings.created")
@@ -75,10 +71,6 @@ public class BookingService {
                 .description("Total bookings cancelled")
                 .register(registry);
     }
-
-    // ──────────────────────────────────────────────────────────────────────
-    // Approach 1: ProcessLogger — fluent multi-step process logging
-    // ──────────────────────────────────────────────────────────────────────
 
     public Booking createBooking(CreateBookingRequest request) {
         long start = System.currentTimeMillis();
@@ -621,219 +613,121 @@ public class BookingService {
         return booking;
     }
 
-    // ──────────────────────────────────────────────────────────────────────
-    // Approach 2: EventLogUtils static factories + AsyncEventLogger.log()
-    // Shown for teams that need full control. Prefer Approach 1 (ProcessLogger) for most use cases.
-    // ──────────────────────────────────────────────────────────────────────
-
     public Booking checkOut(String bookingId, CheckOutRequest request) {
-        // Event-loss safety nets:
-        // 1. ProcessLogger (Approach 1) handles internally via the SDK
-        // 2. Manual log() calls (Approach 2, this method) should check return value
-        // 3. EventLossCallback provides application-wide notification for any dropped events
         long start = System.currentTimeMillis();
         String correlationId = MDC.get("correlationId");
         String traceId = MDC.get("traceId");
-        String batchId = EventLogUtils.createBatchId("checkout");
-        String rootSpanId = EventLogUtils.createSpanId();
-        String appId = "pet-resort-api";
-        String origin = "PET_RESORT";
+        String parentSpanId = MDC.get("spanId");
 
         Booking booking = bookingStore.findById(bookingId).orElse(null);
         Pet pet = booking != null ? petStore.findById(booking.getPetId()).orElse(null) : null;
 
-        // Step 0: PROCESS_START via EventLogUtils
-        EventLogEntry startEvent = EventLogUtils.processStart(
-                        correlationId, traceId, "CHECK_OUT_PET",
-                        appId, "PET_RESORT", origin,
-                        "Initiating check-out for booking " + bookingId
-                                + (pet != null ? " — " + pet.name() + " (" + pet.species() + ")" : ""),
-                        "CHECK_OUT_STARTED")
-                .batchId(batchId)
-                .spanId(rootSpanId)
-                .accountId(booking != null ? booking.getOwnerId() : null)
-                .endpoint("/api/bookings/" + bookingId + "/check-out")
-                .httpMethod(HttpMethod.POST)
-                .addIdentifier("booking_id", bookingId)
-                .build();
-        if (!asyncEventLogger.log(startEvent)) {
-            log.warn("Event not queued: {} for booking {}", "Process Start", bookingId);
+        ProcessLogger processLogger = eventLogTemplate.forProcess("CHECK_OUT_PET")
+                .withCorrelationId(correlationId)
+                .withTraceId(traceId)
+                .withParentSpanId(parentSpanId)
+                .withBatchId(EventLogUtils.createBatchId("checkout"))
+                .withEndpoint("/api/bookings/" + bookingId + "/check-out")
+                .withHttpMethod(HttpMethod.POST)
+                .addIdentifier("booking_id", bookingId);
+
+        if (booking != null) {
+            processLogger.withAccountId(booking.getOwnerId());
         }
+
+        // Step 0: PROCESS_START
+        processLogger.processStart(
+                "Initiating check-out for booking " + bookingId
+                        + (pet != null ? " — " + pet.name() + " (" + pet.species() + ")" : ""),
+                "CHECK_OUT_STARTED");
 
         // Step 1: Verify Check-In
         if (booking == null) {
-            EventLogEntry errorEvent = EventLogUtils.error(
-                            correlationId, traceId, "CHECK_OUT_PET",
-                            "BOOKING_NOT_FOUND", "Booking not found: " + bookingId,
-                            appId, "PET_RESORT", origin,
-                            "Check-out failed — booking " + bookingId + " does not exist",
-                            "NOT_FOUND")
-                    .batchId(batchId)
-                    .spanId(EventLogUtils.createSpanId())
-                    .parentSpanId(rootSpanId)
-                    .build();
-            if (!asyncEventLogger.log(errorEvent)) {
-                log.warn("Event not queued: {} for booking {}", "Booking Not Found", bookingId);
-            }
+            processLogger.error("BOOKING_NOT_FOUND",
+                    "Booking not found: " + bookingId,
+                    "Check-out failed — booking " + bookingId + " does not exist",
+                    "NOT_FOUND");
             throw new BookingNotFoundException(bookingId);
         }
 
         if (booking.getStatus() != BookingStatus.CHECKED_IN) {
-            EventLogEntry errorEvent = EventLogUtils.error(
-                            correlationId, traceId, "CHECK_OUT_PET",
-                            "NOT_CHECKED_IN", "Booking " + bookingId + " is " + booking.getStatus(),
-                            appId, "PET_RESORT", origin,
-                            "Check-out failed — booking " + bookingId + " is " + booking.getStatus()
-                                    + ", expected CHECKED_IN",
-                            "INVALID_STATE")
-                    .batchId(batchId)
-                    .spanId(EventLogUtils.createSpanId())
-                    .parentSpanId(rootSpanId)
-                    .build();
-            if (!asyncEventLogger.log(errorEvent)) {
-                log.warn("Event not queued: {} for booking {}", "Not Checked In", bookingId);
-            }
+            processLogger.error("NOT_CHECKED_IN",
+                    "Booking " + bookingId + " is " + booking.getStatus(),
+                    "Check-out failed — booking " + bookingId + " is " + booking.getStatus()
+                            + ", expected CHECKED_IN",
+                    "INVALID_STATE");
             throw new BookingConflictException(bookingId, "NOT_CHECKED_IN",
                     "Booking must be CHECKED_IN to check out, was: " + booking.getStatus());
         }
 
-        EventLogEntry verifyEvent = EventLogUtils.step(
-                        correlationId, traceId, "CHECK_OUT_PET",
-                        1, "Verify Check-In", EventStatus.SUCCESS,
-                        appId, "PET_RESORT", origin,
-                        "Booking " + bookingId + " verified — " + pet.name()
-                                + " is CHECKED_IN at kennel " + booking.getKennelNumber(),
-                        "VERIFIED")
-                .batchId(batchId)
-                .spanId(EventLogUtils.createSpanId())
-                .parentSpanId(rootSpanId)
-                .accountId(booking.getOwnerId())
-                .addIdentifier("booking_id", bookingId)
+        processLogger
                 .addIdentifier("pet_id", booking.getPetId())
                 .addIdentifier("owner_id", booking.getOwnerId())
-                .build();
-        if (!asyncEventLogger.log(verifyEvent)) {
-            log.warn("Event not queued: {} for booking {}", "Verify Check-In", bookingId);
-        }
+                .logStep(1, "Verify Check-In", EventStatus.SUCCESS,
+                        "Booking " + bookingId + " verified — " + pet.name()
+                                + " is CHECKED_IN at kennel " + booking.getKennelNumber(),
+                        "VERIFIED");
 
-        // Step 2a: Process Payment (STRIPE) — parallel with invoice
-        String paymentSpanId = EventLogUtils.createSpanId();
+        // Step 2: Process Payment
         String idempotencyKey = "checkout-" + bookingId + "-" + Instant.now().getEpochSecond();
 
         try {
-            paymentService.processPayment(bookingId, request.paymentAmount(), request.cardNumberLast4(), rootSpanId);
+            paymentService.processPayment(bookingId, request.paymentAmount(), request.cardNumberLast4());
 
             try { Thread.sleep(1200); } catch (InterruptedException e) { Thread.currentThread().interrupt(); }
 
-            EventLogEntry paymentStep = EventLogUtils.step(
-                            correlationId, traceId, "CHECK_OUT_PET",
-                            2, "Process Payment", EventStatus.SUCCESS,
-                            appId, "STRIPE", origin,
-                            "Payment of $" + request.paymentAmount() + " processed via STRIPE for booking "
-                                    + bookingId + " — card ending ***" + request.cardNumberLast4(),
-                            "PAYMENT_SUCCESS")
-                    .batchId(batchId)
-                    .spanId(paymentSpanId)
-                    .parentSpanId(rootSpanId)
-                    .accountId(booking.getOwnerId())
-                    .idempotencyKey(idempotencyKey)
-                    .requestPayload("{\"amount\":" + request.paymentAmount()
+            processLogger
+                    .withTargetSystem("STRIPE")
+                    .withIdempotencyKey(idempotencyKey)
+                    .withRequestPayload("{\"amount\":" + request.paymentAmount()
                             + ",\"currency\":\"USD\",\"card_last4\":\""
                             + EventLogUtils.maskLast4(request.cardNumberLast4())
                             + "\",\"booking_id\":\"" + bookingId + "\"}")
-                    .responsePayload("{\"charge_id\":\"ch_" + bookingId.replace("BKG-", "")
+                    .withResponsePayload("{\"charge_id\":\"ch_" + bookingId.replace("BKG-", "")
                             + "\",\"status\":\"succeeded\",\"amount\":" + request.paymentAmount() + "}")
-                    .addIdentifier("booking_id", bookingId)
                     .addIdentifier("card_number_last4", EventLogUtils.maskLast4(request.cardNumberLast4()))
                     .addMetadata("amount", request.paymentAmount().toString())
-                    .build();
-            if (!asyncEventLogger.log(paymentStep)) {
-                log.warn("Event not queued: {} for booking {}", "Process Payment", bookingId);
-            }
-        } catch (com.example.petresort.exception.PaymentFailedException e) {
-            // Payment failed — log FAILURE step, ERROR, PROCESS_END, then rethrow
+                    .logStep(2, "Process Payment", EventStatus.SUCCESS,
+                            "Payment of $" + request.paymentAmount() + " processed via STRIPE for booking "
+                                    + bookingId + " — card ending ***" + request.cardNumberLast4(),
+                            "PAYMENT_SUCCESS");
+
+        } catch (PaymentFailedException e) {
             int failDuration = (int) (System.currentTimeMillis() - start);
 
-            EventLogEntry paymentFailStep = EventLogUtils.step(
-                            correlationId, traceId, "CHECK_OUT_PET",
-                            2, "Process Payment", EventStatus.FAILURE,
-                            appId, "STRIPE", origin,
+            processLogger
+                    .withTargetSystem("STRIPE")
+                    .withErrorCode("PAYMENT_DECLINED")
+                    .withErrorMessage(e.getMessage())
+                    .logStep(2, "Process Payment", EventStatus.FAILURE,
                             "Payment of $" + request.paymentAmount() + " DECLINED for booking "
                                     + bookingId + " — " + e.getMessage(),
-                            "PAYMENT_FAILED")
-                    .batchId(batchId)
-                    .spanId(paymentSpanId)
-                    .parentSpanId(rootSpanId)
-                    .accountId(booking.getOwnerId())
-                    .errorCode("PAYMENT_DECLINED")
-                    .errorMessage(e.getMessage())
-                    .addIdentifier("booking_id", bookingId)
-                    .build();
-            if (!asyncEventLogger.log(paymentFailStep)) {
-                log.warn("Event not queued: {} for booking {}", "Payment Failed Step", bookingId);
-            }
+                            "PAYMENT_FAILED");
 
-            EventLogEntry errorEvent = EventLogUtils.error(
-                            correlationId, traceId, "CHECK_OUT_PET",
-                            "PAYMENT_FAILED", e.getMessage(),
-                            appId, "PET_RESORT", origin,
-                            "Check-out failed — payment declined for booking " + bookingId,
-                            "PAYMENT_DECLINED")
-                    .batchId(batchId)
-                    .spanId(EventLogUtils.createSpanId())
-                    .parentSpanId(rootSpanId)
-                    .accountId(booking.getOwnerId())
-                    .addIdentifier("booking_id", bookingId)
-                    .build();
-            if (!asyncEventLogger.log(errorEvent)) {
-                log.warn("Event not queued: {} for booking {}", "Payment Error", bookingId);
-            }
+            processLogger.error("PAYMENT_FAILED", e.getMessage(),
+                    "Check-out failed — payment declined for booking " + bookingId,
+                    "PAYMENT_DECLINED");
 
-            EventLogEntry failEnd = EventLogUtils.processEnd(
-                            correlationId, traceId, "CHECK_OUT_PET",
-                            3, EventStatus.FAILURE, failDuration,
-                            appId, "PET_RESORT", origin,
-                            "Check-out FAILED in " + failDuration + "ms — payment declined for "
-                                    + pet.name() + ", booking " + bookingId,
-                            "CHECK_OUT_FAILED")
-                    .batchId(batchId)
-                    .spanId(EventLogUtils.createSpanId())
-                    .parentSpanId(rootSpanId)
-                    .accountId(booking.getOwnerId())
-                    .httpStatusCode(422)
-                    .addIdentifier("booking_id", bookingId)
-                    .build();
-            if (!asyncEventLogger.log(failEnd)) {
-                log.warn("Event not queued: {} for booking {}", "Payment Declined End", bookingId);
-            }
+            processLogger.withHttpStatusCode(422);
+            processLogger.processEnd(3, EventStatus.FAILURE,
+                    "Check-out FAILED in " + failDuration + "ms — payment declined for "
+                            + pet.name() + ", booking " + bookingId,
+                    "CHECK_OUT_FAILED", failDuration);
 
             throw e;
         }
 
-        // Step 2b: Generate Invoice (PET_RESORT) — parallel with payment
-        String invoiceSpanId = EventLogUtils.createSpanId();
+        // Step 3: Generate Invoice
         try { Thread.sleep(400); } catch (InterruptedException e) { Thread.currentThread().interrupt(); }
 
-        EventLogEntry invoiceStep = EventLogUtils.step(
-                        correlationId, traceId, "CHECK_OUT_PET",
-                        2, "Generate Invoice", EventStatus.SUCCESS,
-                        appId, "PET_RESORT", origin,
+        processLogger
+                .withTargetSystem("INVOICE_SERVICE")
+                .logStep(3, "Generate Invoice", EventStatus.SUCCESS,
                         "Invoice generated for booking " + bookingId + " — total $"
                                 + request.paymentAmount() + " for " + pet.name() + "'s stay",
-                        "INVOICE_GENERATED")
-                .batchId(batchId)
-                .spanId(invoiceSpanId)
-                .parentSpanId(rootSpanId)
-                .accountId(booking.getOwnerId())
-                .addIdentifier("booking_id", bookingId)
-                .build();
-        if (!asyncEventLogger.log(invoiceStep)) {
-            log.warn("Event not queued: {} for booking {}", "Generate Invoice", bookingId);
-        }
+                        "INVOICE_GENERATED");
 
-        // Step 3: Release Kennel — with span_links referencing payment and invoice (fork-join)
-        // span_links via manual builder (Approach 2). For the recommended fluent pattern,
-        // see createBookingHappyPath which uses processLogger.withSpanLinks() (Approach 1).
+        // Step 4: Release Kennel
         booking.setStatus(BookingStatus.CHECKED_OUT);
         booking.setTotalAmount(request.paymentAmount());
         booking.setCheckedOutAt(Instant.now());
@@ -841,53 +735,26 @@ public class BookingService {
 
         try { Thread.sleep(300); } catch (InterruptedException e) { Thread.currentThread().interrupt(); }
 
-        EventLogEntry releaseEvent = EventLogUtils.step(
-                        correlationId, traceId, "CHECK_OUT_PET",
-                        3, "Release Kennel", EventStatus.SUCCESS,
-                        appId, "KENNEL_VENDOR", origin,
+        processLogger
+                .withTargetSystem("KENNEL_VENDOR")
+                .logStep(4, "Release Kennel", EventStatus.SUCCESS,
                         "Kennel " + booking.getKennelNumber() + " released via KENNEL_VENDOR — "
                                 + pet.name() + " checked out after stay",
-                        "KENNEL_RELEASED")
-                .batchId(batchId)
-                .spanId(EventLogUtils.createSpanId())
-                .parentSpanId(rootSpanId)
-                .accountId(booking.getOwnerId())
-                .spanLinks(List.of(paymentSpanId, invoiceSpanId))
-                .addIdentifier("booking_id", bookingId)
-                .build();
-        if (!asyncEventLogger.log(releaseEvent)) {
-            log.warn("Event not queued: {} for booking {}", "Release Kennel", bookingId);
-        }
+                        "KENNEL_RELEASED");
 
-        // Step 4: PROCESS_END
+        // Step 5: PROCESS_END
         int duration = (int) (System.currentTimeMillis() - start);
-        EventLogEntry endEvent = EventLogUtils.processEnd(
-                        correlationId, traceId, "CHECK_OUT_PET",
-                        4, EventStatus.SUCCESS, duration,
-                        appId, "PET_RESORT", origin,
-                        "Check-out completed in " + duration + "ms — " + pet.name()
-                                + " released from kennel " + booking.getKennelNumber()
-                                + ", total $" + request.paymentAmount(),
-                        "CHECK_OUT_COMPLETE")
-                .batchId(batchId)
-                .spanId(EventLogUtils.createSpanId())
-                .parentSpanId(rootSpanId)
-                .accountId(booking.getOwnerId())
-                .httpStatusCode(200)
-                .addIdentifier("booking_id", bookingId)
-                .build();
-        if (!asyncEventLogger.log(endEvent)) {
-            log.warn("Event not queued: {} for booking {}", "Process End", bookingId);
-        }
+        processLogger.withHttpStatusCode(200);
+        processLogger.processEnd(5, EventStatus.SUCCESS,
+                "Check-out completed in " + duration + "ms — " + pet.name()
+                        + " released from kennel " + booking.getKennelNumber()
+                        + ", total $" + request.paymentAmount(),
+                "CHECK_OUT_COMPLETE", duration);
 
         checkoutsCompleted.increment();
         log.info("Booking {} checked out — total: {}", bookingId, request.paymentAmount());
         return booking;
     }
-
-    // ──────────────────────────────────────────────────────────────────────
-    // Approach 3: @LogEvent annotation — simplest approach
-    // ──────────────────────────────────────────────────────────────────────
 
     @LogEvent(process = "GET_BOOKING", step = 1, name = "Retrieve Booking",
               summary = "Retrieved booking details", result = "BOOKING_FOUND",
@@ -922,7 +789,7 @@ public class BookingService {
                 correlationId, traceId, "CANCEL_BOOKING",
                 "BOOKING_CANCELLED",
                 "Booking " + bookingId + " cancelled by user",
-                EventLogUtils.generateSummary("Cancel", "booking", "cancelled"));
+                "Cancel booking — cancelled");
 
         log.info("Booking {} cancelled", bookingId);
         return booking;

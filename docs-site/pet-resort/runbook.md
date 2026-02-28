@@ -17,7 +17,7 @@ All scenarios use `POST /api/bookings` unless noted. Use the `X-Simulate` header
 | 5 | Agent gate | `POST /api/bookings/{id}/check-in` | `agent-gate` | Kennel flagged for maintenance, agent calls facilities (3s), room cleared |
 | 6 | Awaiting approval | `POST /api/bookings/{id}/check-in` | `awaiting-approval` | Returns AWAITING_APPROVAL, requires approve-check-in to complete |
 | 7 | Approve check-in | `POST /api/bookings/{id}/approve-check-in` | _(none)_ | Completes the awaiting-approval flow |
-| 8 | Check-out | `POST /api/bookings/{id}/check-out` | _(none)_ | Payment processed, pet checked out (uses EventLogUtils approach) |
+| 8 | Check-out | `POST /api/bookings/{id}/check-out` | _(none)_ | Payment processed, pet checked out |
 | 9 | Payment failure | `POST /api/bookings/{id}/check-out` | `payment-failure` | Payment declined, process ends with error |
 | 10 | Room service retry | `POST /api/room-service` | `account-retry` | Account lookup fails once, succeeds on retry |
 | 11 | Vet warning | `POST /api/bookings` | `vet-warning` | Booking succeeds, vet check logs WARNING |

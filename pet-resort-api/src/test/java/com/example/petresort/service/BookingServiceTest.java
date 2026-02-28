@@ -46,14 +46,13 @@ class BookingServiceTest {
 
         SimpleMeterRegistry meterRegistry = new SimpleMeterRegistry();
 
-        PaymentService paymentService = new PaymentService(
-                mockEventLogger, "pet-resort-api-test", "PET_RESORT", "PET_RESORT", meterRegistry);
+        PaymentService paymentService = new PaymentService(meterRegistry);
 
         EventLogClient eventLogClient = stubEventLogClient();
 
         bookingService = new BookingService(
                 bookingStore, petStore, kennelService, paymentService,
-                eventLogTemplate, mockEventLogger, eventLogClient, meterRegistry);
+                eventLogTemplate, eventLogClient, meterRegistry);
 
         // Seed a test pet
         petStore.save(new Pet("PET-001", "Buddy", PetSpecies.DOG, "Golden Retriever", 3, "OWN-001", null));

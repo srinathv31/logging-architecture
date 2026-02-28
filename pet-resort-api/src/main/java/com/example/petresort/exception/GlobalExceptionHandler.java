@@ -1,7 +1,6 @@
 package com.example.petresort.exception;
 
 import com.eventlog.sdk.template.EventLogTemplate;
-import com.eventlog.sdk.util.EventLogUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.slf4j.MDC;
@@ -102,7 +101,7 @@ public class GlobalExceptionHandler {
             eventLogTemplate.logError(
                     correlationId, traceId, "ERROR_HANDLER",
                     errorCode, errorMessage,
-                    EventLogUtils.generateSummary("Handle", context, "error", errorCode));
+                    "Handle " + context + " — error (" + errorCode + ")");
         }
     }
 }

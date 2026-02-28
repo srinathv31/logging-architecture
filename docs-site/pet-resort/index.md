@@ -4,11 +4,11 @@ title: Pet Resort
 
 # Pet Resort API — Reference Implementation
 
-Spring Boot 3.4 application demonstrating all three Event Log Java SDK logging approaches in a realistic pet boarding scenario.
+Spring Boot 3.4 application demonstrating both Event Log Java SDK logging approaches in a realistic pet boarding scenario.
 
 ## What This Demonstrates
 
-- **Three SDK approaches**: ProcessLogger (fluent multi-step), EventLogUtils (manual control), @LogEvent (annotation-based)
+- **Two SDK approaches**: ProcessLogger (fluent multi-step) and @LogEvent (annotation-based)
 - **Fork-join with span links**: parallel kennel/vet checks linked to a downstream decision step
 - **MDC correlation propagation**: inbound correlation/trace IDs flow through all child events
 - **Retry and error handling**: kennel timeout, kennel retry, payment failure scenarios
@@ -44,10 +44,10 @@ src/main/java/com/example/petresort/
 │   ├── PetController.java            # /api/pets
 │   └── RoomServiceController.java    # /api/room-service
 ├── service/
-│   ├── BookingService.java           # ProcessLogger + EventLogUtils + @LogEvent
+│   ├── BookingService.java           # ProcessLogger + @LogEvent
 │   ├── KennelService.java            # @LogEvent annotation approach
 │   ├── OwnerService.java             # @LogEvent annotation approach
-│   ├── PaymentService.java           # EventLogUtils manual builder
+│   ├── PaymentService.java           # @LogEvent annotation approach
 │   ├── PetService.java               # @LogEvent annotation approach
 │   └── RoomServiceService.java       # ProcessLogger with retry
 └── store/
