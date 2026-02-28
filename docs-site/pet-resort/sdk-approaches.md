@@ -13,7 +13,7 @@ The Pet Resort API demonstrates both Event Log Java SDK approaches. Use this gui
 | **ProcessLogger** | `BookingService.createBooking()`, `checkIn()`, `approveCheckIn()`, `checkOut()`, `RoomServiceService.fulfillRoomService()` | Multi-step processes with branching, retries, or approval gates |
 | **@LogEvent** | `BookingService.getBooking()`, `PaymentService.processPayment()`, `PetService.getPet()`, `OwnerService.getOwner()`, `KennelService.assignKennel()` | Simple single-step operations needing minimal configuration |
 
-> **Note:** `checkOut()` demonstrates ProcessLogger features not shown elsewhere: `withBatchId()`, `withIdempotencyKey()`, `withRequestPayload()` / `withResponsePayload()` with **PII/PCI masking** via `EventLogUtils.maskLast4()`, per-step HTTP context (`withEndpoint()`, `withHttpMethod()`, `withHttpStatusCode()`), per-step `withTargetSystem()`, and `withErrorCode()` / `withErrorMessage()` on FAILURE steps.
+> **Note:** `checkOut()` demonstrates ProcessLogger features not shown elsewhere: `withBatchId()`, `withIdempotencyKey()`, `withRequestPayload()` / `withResponsePayload()` with **PII/PCI masking** via `EventLogUtils.maskLast4()`, per-step HTTP context (`withEndpoint()`, `withHttpMethod()`, `withHttpStatusCode()`), per-step `withTargetSystem()`, and `withErrorCode()` / `withErrorMessage()` on FAILURE steps. It also powers the **trace-level retry** pattern ([Scenario 12](/pet-resort/runbook#_12-trace-level-retry-checkout)): two HTTP requests sharing the same `traceId`, producing a single unified trace with both the failure and success timelines.
 
 ## ProcessLogger (Fluent Multi-Step)
 

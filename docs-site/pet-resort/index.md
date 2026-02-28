@@ -11,7 +11,7 @@ Spring Boot 3.4 application demonstrating both Event Log Java SDK logging approa
 - **Two SDK approaches**: ProcessLogger (fluent multi-step) and @LogEvent (annotation-based)
 - **Fork-join with span links**: parallel kennel/vet checks linked to a downstream decision step
 - **MDC correlation propagation**: inbound correlation/trace IDs flow through all child events
-- **Retry and error handling**: kennel timeout, kennel retry, payment failure scenarios
+- **Retry and error handling**: kennel timeout, kennel retry, payment failure, and trace-level retry (same traceId across HTTP requests) vs correlation-level retry (same correlationId, different traceIds)
 - **Awaiting approval workflows**: check-in with `withAwaitCompletion()` requiring explicit approval
 - **HTTP request/response logging with PII masking**: `withRequestPayload()` / `withResponsePayload()` capture full HTTP payloads with sensitive fields masked via `EventLogUtils.maskLast4()` — demonstrated in the check-out payment flow (Scenario 8)
 - **Idempotency keys**: correlation IDs generated via `EventLogUtils.createCorrelationId()`

@@ -149,6 +149,10 @@ Returns paginated events for a distributed trace with aggregate metadata.
 }
 ```
 
+::: tip Pet Resort Example
+Scenario 12 ([Trace-Level Retry](/pet-resort/runbook#_12-trace-level-retry-checkout)) demonstrates this endpoint with a real multi-attempt trace. Two checkout requests share the same `traceId` — the first fails (payment decline, 422) and the second succeeds (200). Querying `GET /v1/events/trace/{traceId}` returns all 14 events from both attempts as a single timeline, with `statusCounts` reflecting both the failure and success tallies.
+:::
+
 ---
 
 ## Query by Correlation ID
