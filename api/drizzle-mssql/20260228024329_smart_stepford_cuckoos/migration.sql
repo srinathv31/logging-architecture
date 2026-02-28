@@ -1,0 +1,2 @@
+ALTER TABLE [event_log] DROP CONSTRAINT [ck_event_log_event_status];--> statement-breakpoint
+ALTER TABLE [event_log] ADD CONSTRAINT [ck_event_log_event_status] CHECK ([event_log].[event_status] IN ('SUCCESS', 'FAILURE', 'IN_PROGRESS', 'SKIPPED', 'WARNING'));
