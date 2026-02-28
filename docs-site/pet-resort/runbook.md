@@ -20,6 +20,7 @@ All scenarios use `POST /api/bookings` unless noted. Use the `X-Simulate` header
 | 8 | Check-out | `POST /api/bookings/{id}/check-out` | _(none)_ | Payment processed, pet checked out (uses EventLogUtils approach) |
 | 9 | Payment failure | `POST /api/bookings/{id}/check-out` | `payment-failure` | Payment declined, process ends with error |
 | 10 | Room service retry | `POST /api/room-service` | `account-retry` | Account lookup fails once, succeeds on retry |
+| 11 | Vet warning | `POST /api/bookings` | `vet-warning` | Booking succeeds, vet check logs WARNING |
 
 ## Running Scenarios
 
@@ -88,3 +89,14 @@ curl -X POST http://localhost:8081/api/room-service \
   -H "X-Simulate: account-retry" \
   -d '{"bookingId": "{id}", "service": "grooming"}'
 ```
+
+### 11. Vet Warning
+
+```bash
+curl -X POST http://localhost:8081/api/bookings \
+  -H "Content-Type: application/json" \
+  -H "X-Simulate: vet-warning" \
+  -d '{"petId": "PET-003", "checkInDate": "2026-04-10", "checkOutDate": "2026-04-14"}'
+```
+
+The booking succeeds with HTTP 201, but the veterinary health check step logs with `EventStatus.WARNING` instead of `SUCCESS`. This simulates an expired avian vaccination detected during the vet screening — the bird is approved for boarding with a monitoring advisory. Useful for verifying that WARNING status renders correctly in the dashboard and event queries.

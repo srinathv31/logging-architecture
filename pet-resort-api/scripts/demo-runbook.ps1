@@ -6,7 +6,7 @@
 #   1. Pet Resort API running on :8081  →  cd pet-resort-api; ./mvnw spring-boot:run
 #   2. Event Log API running on :3000   →  cd api; pnpm dev
 #
-# Deterministic on a fresh app start (IDs: BKG-002 through BKG-008)
+# Deterministic on a fresh app start (IDs: BKG-002 through BKG-009)
 #
 # Usage:  pwsh scripts/demo-runbook.ps1
 # ═══════════════════════════════════════════════════════════════════════════
@@ -334,13 +334,30 @@ Write-Host "Both calls share correlationId: $approvalCorrelationId" -ForegroundC
 Write-Host "Dashboard now shows SUCCESS (green) - process complete" -ForegroundColor Cyan
 
 # ───────────────────────────────────────────────────────────────────────────
+Header "Scenario 11: Tweety's Booking with Vet Warning"
+Write-Host "Pet: Tweety (PET-003, BIRD) | Owner: Bob Martinez (OWN-002)"
+Write-Host "Features: EventStatus.WARNING on vet health check, booking still succeeds"
+# ───────────────────────────────────────────────────────────────────────────
+
+Step "Booking Tweety with X-Simulate: vet-warning..."
+$tweetyWarningResponse = Invoke-Api -Method POST -Uri "$BASE_URL/api/bookings" `
+    -Headers @{ "X-Simulate" = "vet-warning" } `
+    -Body '{"petId":"PET-003","checkInDate":"2026-04-10","checkOutDate":"2026-04-14"}'
+$tweetyWarningBookingId = $tweetyWarningResponse.bookingId
+Success "Booking created: $tweetyWarningBookingId (with vet warning)"
+Show-Json $tweetyWarningResponse
+
+Write-Host "  Vet health check logged as WARNING - expired avian vaccination" -ForegroundColor Yellow
+Write-Host "  Booking succeeded (201) despite vet warning - monitoring advisory flagged" -ForegroundColor Cyan
+
+# ───────────────────────────────────────────────────────────────────────────
 Header "Verification Lookups"
 # ───────────────────────────────────────────────────────────────────────────
 
 Step "Alice's bookings (OWN-001 - Buddy CHECKED_OUT + Whiskers CANCELLED + Whiskers CHECKED_IN)..."
 Invoke-Api -Uri "$BASE_URL/api/owners/OWN-001/bookings" | Show-Json
 
-Step "Bob's bookings (OWN-002 - Tweety PENDING + Thumper CHECKED_IN)..."
+Step "Bob's bookings (OWN-002 - Tweety PENDING x2 + Thumper CHECKED_IN)..."
 Invoke-Api -Uri "$BASE_URL/api/owners/OWN-002/bookings" | Show-Json
 
 Step "Carol's bookings (OWN-003 - Scales CHECKED_IN)..."
@@ -357,6 +374,9 @@ Invoke-Api -Uri "$BASE_URL/api/bookings/$whiskersApprovalBookingId" | Show-Json
 
 Step "Thumper's final state ($thumperBookingId - should be CHECKED_IN)..."
 Invoke-Api -Uri "$BASE_URL/api/bookings/$thumperBookingId" | Show-Json
+
+Step "Tweety's vet-warning booking ($tweetyWarningBookingId - should be PENDING)..."
+Invoke-Api -Uri "$BASE_URL/api/bookings/$tweetyWarningBookingId" | Show-Json
 
 # ───────────────────────────────────────────────────────────────────────────
 Header "Event Log API Verification"
@@ -388,6 +408,7 @@ Write-Host "  Tweety (retry):     $tweetyBookingId (successful retry)"
 Write-Host "  Whiskers (cancel):  $whiskersBookingId (book -> lookup -> cancel)"
 Write-Host "  Thumper:            $thumperBookingId (booking + agent-gate check-in)"
 Write-Host "  Whiskers (approve): $whiskersApprovalBookingId (awaitCompletion -> approve)"
+Write-Host "  Tweety (warning):   $tweetyWarningBookingId (vet-warning booking)"
 Write-Host ""
 Write-Host "Verify in Event Log API:"
 Write-Host "  OWN-001 - Buddy: 4 processes (booking, check-in, failed checkout, successful checkout)"
@@ -395,7 +416,8 @@ Write-Host "            Whiskers: 3 processes (booking, getBooking, cancel)"
 Write-Host "            Whiskers (Sc.10): awaitCompletion check-in -> approval (IN_PROGRESS -> SUCCESS)"
 Write-Host "            Checkout retry: correlationId=$sharedCorrelationId (2 attempts, 2 traceIds)"
 Write-Host "            Boarding approval: correlationId=$approvalCorrelationId"
-Write-Host "  OWN-002 - 3 correlation IDs (Tweety fail + Tweety success + Thumper booking/check-in)"
+Write-Host "  OWN-002 - 4 correlation IDs (Tweety fail + Tweety success + Thumper booking/check-in + Tweety vet-warning)"
 Write-Host "            Thumper check-in: step 2 has IN_PROGRESS -> SUCCESS on same spanId"
+Write-Host "            Tweety vet-warning: vet health check step has WARNING status"
 Write-Host "  OWN-003 - events across 2 process types (booking, room service)"
 Write-Host ""

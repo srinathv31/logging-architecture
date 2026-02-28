@@ -8,7 +8,7 @@
 #   2. Event Log API running on :3000   →  cd api && pnpm dev
 #   3. jq installed                     →  brew install jq
 #
-# Deterministic on a fresh app start (IDs: BKG-002 through BKG-008)
+# Deterministic on a fresh app start (IDs: BKG-002 through BKG-009)
 #
 # Usage:  bash scripts/demo-runbook.sh
 # ═══════════════════════════════════════════════════════════════════════════
@@ -318,13 +318,31 @@ echo -e "${CYAN}Both calls share correlationId: $APPROVAL_CORRELATION_ID${NC}"
 echo -e "${CYAN}Dashboard now shows SUCCESS (green) — process complete${NC}"
 
 # ───────────────────────────────────────────────────────────────────────────
+header "Scenario 11: Tweety's Booking with Vet Warning"
+echo "Pet: Tweety (PET-003, BIRD) | Owner: Bob Martinez (OWN-002)"
+echo "Features: EventStatus.WARNING on vet health check, booking still succeeds"
+# ───────────────────────────────────────────────────────────────────────────
+
+step "Booking Tweety with X-Simulate: vet-warning..."
+TWEETY_WARNING_RESPONSE=$(curl -s -X POST "$BASE_URL/api/bookings" \
+  -H "Content-Type: application/json" \
+  -H "X-Simulate: vet-warning" \
+  -d '{"petId":"PET-003","checkInDate":"2026-04-10","checkOutDate":"2026-04-14"}')
+TWEETY_WARNING_BOOKING_ID=$(echo "$TWEETY_WARNING_RESPONSE" | jq -r '.bookingId')
+success "Booking created: $TWEETY_WARNING_BOOKING_ID (with vet warning)"
+echo "$TWEETY_WARNING_RESPONSE" | jq .
+
+echo -e "${YELLOW}  Vet health check logged as WARNING — expired avian vaccination${NC}"
+echo -e "${CYAN}  Booking succeeded (201) despite vet warning — monitoring advisory flagged${NC}"
+
+# ───────────────────────────────────────────────────────────────────────────
 header "Verification Lookups"
 # ───────────────────────────────────────────────────────────────────────────
 
 step "Alice's bookings (OWN-001 — Buddy CHECKED_OUT + Whiskers CANCELLED + Whiskers CHECKED_IN)..."
 curl -s "$BASE_URL/api/owners/OWN-001/bookings" | jq .
 
-step "Bob's bookings (OWN-002 — Tweety PENDING + Thumper CHECKED_IN)..."
+step "Bob's bookings (OWN-002 — Tweety PENDING x2 + Thumper CHECKED_IN)..."
 curl -s "$BASE_URL/api/owners/OWN-002/bookings" | jq .
 
 step "Carol's bookings (OWN-003 — Scales CHECKED_IN)..."
@@ -341,6 +359,9 @@ curl -s "$BASE_URL/api/bookings/$WHISKERS_APPROVAL_BOOKING_ID" | jq .
 
 step "Thumper's final state ($THUMPER_BOOKING_ID — should be CHECKED_IN)..."
 curl -s "$BASE_URL/api/bookings/$THUMPER_BOOKING_ID" | jq .
+
+step "Tweety's vet-warning booking ($TWEETY_WARNING_BOOKING_ID — should be PENDING)..."
+curl -s "$BASE_URL/api/bookings/$TWEETY_WARNING_BOOKING_ID" | jq .
 
 # ───────────────────────────────────────────────────────────────────────────
 header "Event Log API Verification"
@@ -372,6 +393,7 @@ echo "  Tweety (retry):     $TWEETY_BOOKING_ID (successful retry)"
 echo "  Whiskers (cancel):  $WHISKERS_BOOKING_ID (book → lookup → cancel)"
 echo "  Thumper:            $THUMPER_BOOKING_ID (booking + agent-gate check-in)"
 echo "  Whiskers (approve): $WHISKERS_APPROVAL_BOOKING_ID (awaitCompletion → approve)"
+echo "  Tweety (warning):   $TWEETY_WARNING_BOOKING_ID (vet-warning booking)"
 echo ""
 echo "Verify in Event Log API:"
 echo "  OWN-001 — Buddy: 4 processes (booking, check-in, failed checkout, successful checkout)"
@@ -379,7 +401,8 @@ echo "            Whiskers: 3 processes (booking, getBooking, cancel)"
 echo "            Whiskers (Sc.10): awaitCompletion check-in → approval (IN_PROGRESS → SUCCESS)"
 echo "            Checkout retry: correlationId=$SHARED_CORRELATION_ID (2 attempts, 2 traceIds)"
 echo "            Boarding approval: correlationId=$APPROVAL_CORRELATION_ID"
-echo "  OWN-002 — 3 correlation IDs (Tweety fail + Tweety success + Thumper booking/check-in)"
+echo "  OWN-002 — 4 correlation IDs (Tweety fail + Tweety success + Thumper booking/check-in + Tweety vet-warning)"
 echo "            Thumper check-in: step 2 has IN_PROGRESS → SUCCESS on same spanId"
+echo "            Tweety vet-warning: vet health check step has WARNING status"
 echo "  OWN-003 — events across 2 process types (booking, room service)"
 echo ""

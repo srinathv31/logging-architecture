@@ -157,6 +157,8 @@ public class BookingService {
             return createBookingKennelTimeout(processLogger, pet, bookingId);
         } else if ("kennel-retry".equals(simulate)) {
             return createBookingKennelRetry(processLogger, pet, bookingId, request, correlationId, traceId, start);
+        } else if ("vet-warning".equals(simulate)) {
+            return createBookingVetWarning(processLogger, pet, bookingId, request, correlationId, traceId, start);
         } else {
             return createBookingHappyPath(processLogger, pet, bookingId, request, correlationId, traceId, start);
         }
@@ -249,6 +251,64 @@ public class BookingService {
 
         bookingsCreated.increment();
         log.info("Booking {} created for pet {} (owner {}) with kennel retry",
+                bookingId, request.petId(), pet.ownerId());
+        return booking;
+    }
+
+    /**
+     * Scenario 11: Vet warning — booking succeeds but vet health check flags an expired avian vaccination
+     */
+    private Booking createBookingVetWarning(ProcessLogger processLogger, Pet pet, String bookingId,
+                                             CreateBookingRequest request, String correlationId,
+                                             String traceId, long start) {
+        // Step 2: Kennel Availability Check
+        processLogger.withTargetSystem("KENNEL_VENDOR");
+        try { Thread.sleep(800); } catch (InterruptedException e) { Thread.currentThread().interrupt(); }
+
+        processLogger.logStep(2, "Kennel Availability Check", EventStatus.SUCCESS,
+                "Kennel availability confirmed via KENNEL_VENDOR for " + pet.species()
+                        + " in zone " + getZone(pet.species()),
+                "KENNEL_AVAILABLE");
+
+        // Step 3: Veterinary Health Check — WARNING (expired avian vaccination)
+        processLogger.withTargetSystem("VET_CHECK_API");
+        try { Thread.sleep(1500); } catch (InterruptedException e) { Thread.currentThread().interrupt(); }
+
+        processLogger.logStep(3, "Veterinary Health Check", EventStatus.WARNING,
+                "Expired avian vaccination for " + pet.name() + " — PBFD screening overdue by 45 days, "
+                        + "boarding approved with monitoring advisory",
+                "VET_WARNING");
+
+        // Step 4: Confirm Booking (succeeds despite vet warning)
+        Booking booking = new Booking(bookingId, request.petId(), pet.ownerId(),
+                request.checkInDate(), request.checkOutDate());
+        bookingStore.save(booking);
+
+        processLogger.logStep(4, "Confirm Booking", EventStatus.SUCCESS,
+                "Booking " + bookingId + " confirmed for " + pet.name() + " — "
+                        + request.checkInDate() + " to " + request.checkOutDate()
+                        + ", owner: " + pet.ownerId() + " (vet warning noted)",
+                "BOOKING_CONFIRMED");
+
+        // Step 5: PROCESS_END
+        int duration = (int) (System.currentTimeMillis() - start);
+        processLogger.withHttpStatusCode(201);
+        processLogger.processEnd(5, EventStatus.SUCCESS,
+                "Booking " + bookingId + " completed in " + duration + "ms — " + pet.name()
+                        + " (" + pet.species() + ") booked successfully, vet warning flagged, owner " + pet.ownerId(),
+                "BOOKING_CREATED", duration);
+
+        final String corrId = correlationId;
+        CompletableFuture.runAsync(() -> {
+            try {
+                eventLogClient.createCorrelationLink(corrId, pet.ownerId());
+            } catch (Exception e) {
+                log.warn("Failed to create correlation link: {}", e.getMessage());
+            }
+        });
+
+        bookingsCreated.increment();
+        log.info("Booking {} created for pet {} (owner {}) with vet warning",
                 bookingId, request.petId(), pet.ownerId());
         return booking;
     }
