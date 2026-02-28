@@ -4,7 +4,7 @@ title: EventLogClient
 
 # EventLogClient
 
-The synchronous HTTP client for the Event Log API. Use this only when you need confirmation that events were sent (rare). For most use cases, prefer [AsyncEventLogger](/java-sdk/core/async-event-logger).
+The synchronous HTTP client for the Event Log API. In Spring Boot, this bean is auto-configured. Use this only when you need confirmation that events were sent (rare). For most use cases, prefer [AsyncEventLogger](/java-sdk/core/async-event-logger).
 
 ## Creating a Client
 

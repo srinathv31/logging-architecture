@@ -4,6 +4,10 @@ title: Event Builders
 
 # Event Builders (EventLogUtils)
 
+::: tip Prefer EventLogTemplate for most use cases
+[EventLogTemplate](/java-sdk/core/event-log-template) and its `ProcessLogger` API handle shared defaults, MDC integration, span hierarchy, and one-shot fields automatically. Use the raw builders below only when you need full control over every field or are integrating with a custom pipeline.
+:::
+
 The SDK provides helper methods for creating properly structured events with correct `eventType` values.
 
 ## Helper Methods

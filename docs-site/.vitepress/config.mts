@@ -83,40 +83,46 @@ export default withMermaid(
             ],
           },
           {
-            text: 'Spring Boot',
+            text: 'Logging APIs',
+            collapsed: false,
+            items: [
+              { text: 'EventLogTemplate', link: '/java-sdk/core/event-log-template' },
+              { text: '@LogEvent Annotation', link: '/java-sdk/spring-boot/annotations' },
+            ],
+          },
+          {
+            text: 'Setup & Configuration',
             collapsed: false,
             items: [
               { text: 'Auto-Configuration', link: '/java-sdk/spring-boot/auto-configuration' },
               { text: 'Configuration Reference', link: '/java-sdk/spring-boot/configuration' },
-              { text: '@LogEvent Annotation', link: '/java-sdk/spring-boot/annotations' },
+              { text: 'OAuth Provider', link: '/java-sdk/core/oauth' },
               { text: 'Refresh Scope', link: '/java-sdk/spring-boot/refresh-scope' },
             ],
           },
           {
-            text: 'Core',
-            collapsed: false,
+            text: 'Advanced Patterns',
+            collapsed: true,
             items: [
-              { text: 'EventLogClient', link: '/java-sdk/core/event-log-client' },
-              { text: 'AsyncEventLogger', link: '/java-sdk/core/async-event-logger' },
-              { text: 'EventLogTemplate', link: '/java-sdk/core/event-log-template' },
-              { text: 'OAuth Provider', link: '/java-sdk/core/oauth' },
-              { text: 'Event Builders', link: '/java-sdk/core/event-builders' },
-            ],
-          },
-          {
-            text: 'Advanced',
-            collapsed: false,
-            items: [
-              { text: 'Architecture', link: '/java-sdk/advanced/architecture' },
-              { text: 'Spillover', link: '/java-sdk/advanced/spillover' },
               { text: 'Fork-Join', link: '/java-sdk/advanced/fork-join' },
               { text: 'Batch Operations', link: '/java-sdk/advanced/batch-operations' },
+              { text: 'Spillover', link: '/java-sdk/advanced/spillover' },
               { text: 'Custom Components', link: '/java-sdk/advanced/custom-components' },
             ],
           },
           {
+            text: 'Internals',
+            collapsed: true,
+            items: [
+              { text: 'Architecture', link: '/java-sdk/advanced/architecture' },
+              { text: 'AsyncEventLogger', link: '/java-sdk/core/async-event-logger' },
+              { text: 'EventLogClient', link: '/java-sdk/core/event-log-client' },
+              { text: 'Event Builders', link: '/java-sdk/core/event-builders' },
+            ],
+          },
+          {
             text: 'Reference',
-            collapsed: false,
+            collapsed: true,
             items: [
               { text: 'Testing', link: '/java-sdk/testing' },
               { text: 'Migration Guide', link: '/java-sdk/migration' },
@@ -207,6 +213,15 @@ export default withMermaid(
 
     markdown: {
       lineNumbers: true,
+    },
+
+    vite: {
+      optimizeDeps: {
+        include: [
+          'mermaid',
+          'vitepress-plugin-mermaid',
+        ],
+      },
     },
   })
 )

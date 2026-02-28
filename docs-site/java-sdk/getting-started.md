@@ -4,85 +4,19 @@ title: Getting Started
 
 # Getting Started
 
-This guide covers setting up the Java SDK with both Spring Boot and plain Java.
+## Spring Boot Quick Start
 
-## Quick Start (Recommended: Real-Time Async Logging)
+Add the starter dependency:
 
-**Important:** Log events immediately after each step completes, not in batches at the end. This ensures events are captured even if your process crashes mid-way.
-
-```java
-import com.eventlog.sdk.client.EventLogClient;
-import com.eventlog.sdk.client.AsyncEventLogger;
-import com.eventlog.sdk.client.OAuthTokenProvider;
-import com.eventlog.sdk.model.*;
-import static com.eventlog.sdk.util.EventLogUtils.*;
-
-// === SETUP (once at application startup) ===
-
-// 1. Configure OAuth authentication
-OAuthTokenProvider tokenProvider = OAuthTokenProvider.builder()
-    .tokenUrl("https://auth.yourcompany.com/oauth/token")
-    .clientId("your-client-id")
-    .clientSecret("your-client-secret")
-    .scope("eventlog:write eventlog:read")  // optional
-    .build();
-
-// 2. Create client with OAuth
-EventLogClient client = EventLogClient.builder()
-    .baseUrl("https://eventlog-api.yourcompany.com")
-    .tokenProvider(tokenProvider)
-    .build();
-
-// 3. Create async logger (fire-and-forget)
-AsyncEventLogger eventLog = AsyncEventLogger.builder()
-    .client(client)
-    .queueCapacity(10_000)
-    .maxRetries(3)
-    .circuitBreakerThreshold(5)
-    .spilloverPath(Path.of("/var/log/eventlog-spillover"))
-    .build();
-
-// === IN YOUR BUSINESS LOGIC ===
-
-String correlationId = createCorrelationId("auth");
-String traceId = createTraceId();
-
-// Step 1: Do work, then log immediately
-var result = doIdentityVerification();
-eventLog.log(step(correlationId, traceId, "MY_PROCESS", 1, "Identity Check")
-    .eventStatus(result.success ? EventStatus.SUCCESS : EventStatus.FAILURE)
-    .summary("Identity verified - " + result.message)
-    // ... other fields
-    .build());
-// Returns immediately - never blocks your business logic
-
-// Step 2: Do more work, log immediately
-var creditResult = doCreditCheck();
-eventLog.log(step(correlationId, traceId, "MY_PROCESS", 2, "Credit Check")
-    .eventStatus(creditResult.approved ? EventStatus.SUCCESS : EventStatus.FAILURE)
-    .summary("Credit check - FICO " + creditResult.score)
-    .build());
-
-// Metrics
-System.out.println(eventLog.getMetrics());
-// Output: Metrics{queued=2, sent=2, failed=0, spilled=0, depth=0, circuitOpen=false}
+```xml
+<dependency>
+    <groupId>com.yourcompany.eventlog</groupId>
+    <artifactId>eventlog-spring-boot-starter</artifactId>
+    <version>1.0.0</version>
+</dependency>
 ```
 
-### Why Real-Time Logging?
-
-```
-Bad - Batch at end:                Good - Log per step:
-   Step 1 completed (in memory)      Step 1 completed -> sent
-   Step 2 completed (in memory)      Step 2 completed -> sent
-   Step 3 CRASH                      Step 3 CRASH
-   ─────────────────                 ─────────────────
-   Events sent: 0                    Events sent: 2
-   Events lost: 2                    Events lost: 0
-```
-
-## Spring Boot Setup
-
-With the Spring Boot starter, setup is much simpler — just add the dependency and configure properties:
+Configure `application.yml`:
 
 ```yaml
 eventlog:
@@ -102,7 +36,7 @@ eventlog:
     virtual-threads: true
 ```
 
-Then inject and use:
+Inject and use:
 
 ```java
 @Service
@@ -125,9 +59,94 @@ public class OrderService {
 
 See [Auto-Configuration](/java-sdk/spring-boot/auto-configuration) for full Spring Boot setup details.
 
+## Two Ways to Log Events
+
+The SDK provides two APIs for logging events. Choose the one that fits your use case:
+
+| | **EventLogTemplate** | **@LogEvent Annotation** |
+|---|---|---|
+| **Best for** | Multi-step processes with per-step control | Simple method-level logging |
+| **How it works** | Inject template, call `logStep()` per step | Annotate methods, logging happens automatically |
+| **Control level** | Full — payloads, timing, identifiers per step | Convention-based — status derived from method outcome |
+
+```java
+// EventLogTemplate — explicit, step-by-step control
+ProcessLogger process = template.forProcess("ORDER_PROCESSING")
+    .addIdentifier("orderId", order.getId());
+process.logStep(1, "Validate", EventStatus.SUCCESS, "Order validated");
+process.logStep(2, "Reserve", EventStatus.SUCCESS, "Inventory reserved");
+```
+
+```java
+// @LogEvent — automatic, annotation-driven
+@LogEvent(processName = "USER_LOOKUP", stepName = "Find User")
+public User findUser(String userId) {
+    return userRepository.findById(userId);
+}
+```
+
+See [EventLogTemplate](/java-sdk/core/event-log-template) and [@LogEvent Annotation](/java-sdk/spring-boot/annotations) for full details.
+
+## EventLogTemplate Example
+
+**Important:** Log events immediately after each step completes, not in batches at the end. This ensures events are captured even if your process crashes mid-way.
+
+```java
+@Service
+public class AuthUserService {
+    private final EventLogTemplate template;
+
+    public AuthUserService(EventLogTemplate template) {
+        this.template = template;
+    }
+
+    public void onboardUser(String userId) {
+        // IDs read from MDC automatically in Spring Boot
+        ProcessLogger process = template.forProcess("ADD_AUTH_USER")
+            .addIdentifier("auth_user_id", userId);
+
+        // Process start
+        process.processStart("Auth user onboarding initiated", "INITIATED");
+
+        // Step 1: Do work, then log immediately
+        var result = doIdentityVerification();
+        process.withExecutionTimeMs(result.durationMs)
+            .withRequestPayload(result.request)
+            .withResponsePayload(result.response)
+            .logStep(1, "Identity Check",
+                result.success ? EventStatus.SUCCESS : EventStatus.FAILURE,
+                "Identity verified - " + result.message, "IDENTITY_VERIFIED");
+        // Returns immediately - never blocks your business logic
+        // One-shot fields (executionTimeMs, payloads) auto-clear after each emit
+
+        // Step 2: Do more work, log immediately
+        var creditResult = doCreditCheck();
+        process.withExecutionTimeMs(creditResult.durationMs)
+            .logStep(2, "Credit Check",
+                creditResult.approved ? EventStatus.SUCCESS : EventStatus.FAILURE,
+                "Credit check - FICO " + creditResult.score, "CREDIT_CHECKED");
+
+        // Process end with total duration
+        process.processEnd(3, EventStatus.SUCCESS, "Auth user added", "COMPLETED", 3200);
+    }
+}
+```
+
+### Why Real-Time Logging?
+
+```
+Bad - Batch at end:                Good - Log per step:
+   Step 1 completed (in memory)      Step 1 completed -> sent
+   Step 2 completed (in memory)      Step 2 completed -> sent
+   Step 3 CRASH                      Step 3 CRASH
+   ─────────────────                 ─────────────────
+   Events sent: 0                    Events sent: 2
+   Events lost: 2                    Events lost: 0
+```
+
 ## Plain Java Setup
 
-For applications without Spring Boot, use the builder API directly:
+For applications without Spring Boot, build `EventLogTemplate` with the client directly:
 
 ```java
 EventLogClient client = EventLogClient.builder()
@@ -135,32 +154,32 @@ EventLogClient client = EventLogClient.builder()
     .apiKey("your-api-key")
     .build();
 
-String correlationId = createCorrelationId("auth");
-String traceId = createTraceId();
+AsyncEventLogger eventLog = AsyncEventLogger.builder()
+    .client(client)
+    .build();
 
-EventLogEntry event = EventLogEntry.builder()
-    .correlationId(correlationId)
-    .traceId(traceId)
+EventLogTemplate template = EventLogTemplate.builder(eventLog)
     .applicationId("auth-user-service")
     .targetSystem("EXPERIAN")
     .originatingSystem("MOBILE_APP")
-    .processName("ADD_AUTH_USER")
-    .eventType(EventType.STEP)
-    .eventStatus(EventStatus.SUCCESS)
-    .stepSequence(1)
-    .stepName("Validate auth user identity")
-    .summary("Validated authorized user Jane Doe")
-    .result("IDENTITY_VERIFIED")
-    .addIdentifier("auth_user_id", "AU-111222")
     .build();
 
-var response = client.createEvent(event);
-System.out.println("Created event: " + response.getExecutionIds());
+ProcessLogger process = template.forProcess("ADD_AUTH_USER")
+    .withCorrelationId(EventLogUtils.createCorrelationId("auth"))
+    .withTraceId(EventLogUtils.createTraceId())
+    .addIdentifier("auth_user_id", "AU-111222");
+
+process.processStart("Auth user onboarding initiated", "INITIATED");
+
+process.logStep(1, "Validate Identity", EventStatus.SUCCESS,
+    "Validated authorized user Jane Doe", "IDENTITY_VERIFIED");
+
+process.processEnd(2, EventStatus.SUCCESS,
+    "Auth user added successfully", "COMPLETED", 1500);
 ```
 
 ## Next Steps
 
-- [AsyncEventLogger](/java-sdk/core/async-event-logger) — fire-and-forget logging with retry and spillover
 - [EventLogTemplate](/java-sdk/core/event-log-template) — fluent process logging with MDC support
 - [@LogEvent Annotation](/java-sdk/spring-boot/annotations) — automatic method-level logging
 - [Configuration Reference](/java-sdk/spring-boot/configuration) — full property table

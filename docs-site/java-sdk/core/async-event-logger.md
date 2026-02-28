@@ -4,7 +4,7 @@ title: AsyncEventLogger
 
 # AsyncEventLogger
 
-The recommended way to log events. `AsyncEventLogger` provides fire-and-forget logging with automatic retry, circuit breaker, and disk spillover.
+The background engine that powers both `EventLogTemplate` and `@LogEvent`. Handles fire-and-forget delivery with automatic retry, circuit breaker, and disk spillover. In Spring Boot, this bean is auto-configured — you rarely interact with it directly.
 
 ## Features
 
