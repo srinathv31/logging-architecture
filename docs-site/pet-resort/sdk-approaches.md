@@ -13,7 +13,7 @@ The Pet Resort API demonstrates both Event Log Java SDK approaches. Use this gui
 | **ProcessLogger** | `BookingService.createBooking()`, `checkIn()`, `approveCheckIn()`, `checkOut()`, `RoomServiceService.fulfillRoomService()` | Multi-step processes with branching, retries, or approval gates |
 | **@LogEvent** | `BookingService.getBooking()`, `PaymentService.processPayment()`, `PetService.getPet()`, `OwnerService.getOwner()`, `KennelService.assignKennel()` | Simple single-step operations needing minimal configuration |
 
-> **Note:** `checkOut()` demonstrates ProcessLogger features not shown elsewhere: `withBatchId()`, `withIdempotencyKey()`, `withRequestPayload()` / `withResponsePayload()`, per-step `withTargetSystem()`, and `withErrorCode()` / `withErrorMessage()` on FAILURE steps.
+> **Note:** `checkOut()` demonstrates ProcessLogger features not shown elsewhere: `withBatchId()`, `withIdempotencyKey()`, `withRequestPayload()` / `withResponsePayload()` with **PII/PCI masking** via `EventLogUtils.maskLast4()`, per-step HTTP context (`withEndpoint()`, `withHttpMethod()`, `withHttpStatusCode()`), per-step `withTargetSystem()`, and `withErrorCode()` / `withErrorMessage()` on FAILURE steps.
 
 ## ProcessLogger (Fluent Multi-Step)
 
@@ -37,6 +37,27 @@ process.logProcessEnd(3, EventStatus.SUCCESS, "Check-in completed", totalMs);
 - Steps have conditional branching or retries
 - You need progressive identifier accumulation
 - Approval gates are involved
+
+### HTTP Payloads with PII Masking
+
+The `checkOut()` payment step demonstrates capturing outbound HTTP calls with masked sensitive data. Since `withEndpoint()`, `withHttpMethod()`, and `withHttpStatusCode()` are **one-shot** fields (cleared after each emit), you can set different HTTP context per step:
+
+```java
+// Step 2: outbound Stripe call — per-step HTTP context + PCI masking
+processLogger
+    .withTargetSystem("STRIPE")
+    .withEndpoint("/v1/charges")
+    .withHttpMethod(HttpMethod.POST)
+    .withHttpStatusCode(200)
+    .withIdempotencyKey(idempotencyKey)
+    .withRequestPayload("{\"amount\":" + amount
+        + ",\"card_last4\":\"" + EventLogUtils.maskLast4(cardLast4) + "\"...}")
+    .withResponsePayload("{\"charge_id\":\"ch_...\",\"status\":\"succeeded\"}")
+    .addIdentifier("card_number_last4", EventLogUtils.maskLast4(cardLast4))
+    .logStep(2, "Process Payment", EventStatus.SUCCESS, "Payment processed", "PAYMENT_SUCCESS");
+```
+
+Always use `EventLogUtils.maskLast4()` for card numbers, SSNs, or any PCI/PII field that appears in request or response payloads.
 
 ## @LogEvent (Annotation-Based)
 

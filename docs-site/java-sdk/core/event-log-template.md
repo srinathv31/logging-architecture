@@ -74,9 +74,6 @@ These are set once and apply to **all** subsequent events in the process:
 | `withDefaultTargetSystem(String)` | Override template's targetSystem for all events |
 | `withOriginatingSystem(String)` | Override template's originatingSystem |
 | `withAccountId(String)` | Set accountId on all events |
-| `withEndpoint(String)` | Set endpoint on all events |
-| `withHttpMethod(HttpMethod)` | Set HTTP method on all events |
-| `withHttpStatusCode(Integer)` | Set HTTP status code on all events |
 | `withAwaitCompletion()` | Use `IN_PROGRESS` status on processStart |
 | `addIdentifier(String, String)` | Add key-value identifier (stacks forward) |
 | `addMetadata(String, Object)` | Add key-value metadata (stacks forward) |
@@ -88,6 +85,9 @@ These are applied to the **next** emit call only, then automatically cleared:
 | Method | Description |
 |--------|-------------|
 | `withTargetSystem(String)` | Override targetSystem for next event only |
+| `withEndpoint(String)` | Set endpoint for next event only |
+| `withHttpMethod(HttpMethod)` | Set HTTP method for next event only |
+| `withHttpStatusCode(Integer)` | Set HTTP status code for next event only |
 | `withSpanLinks(List<String>)` | Set span links for next event only |
 | `addSpanLink(String)` | Add a span link for next event only |
 | `withRequestPayload(String)` | Set request payload for next event only |
@@ -121,21 +121,22 @@ These are applied to the **next** emit call only, then automatically cleared:
 ```java
 ProcessLogger process = template.forProcess("PARTNER_API_CALL")
     .withCorrelationId(correlationId)
-    .withTraceId(traceId)
-    .withEndpoint("/api/v2/partners/verify")
-    .withHttpMethod(HttpMethod.POST);
+    .withTraceId(traceId);
 
 process.processStart("Calling partner verification API", "INITIATED");
 
 var response = httpClient.send(request);
 
-process.withRequestPayload(requestBody)
+process.withEndpoint("/api/v2/partners/verify")
+    .withHttpMethod(HttpMethod.POST)
+    .withHttpStatusCode(response.statusCode())
+    .withRequestPayload(requestBody)
     .withResponsePayload(response.body())
     .withExecutionTimeMs((int) response.duration().toMillis())
-    .withHttpStatusCode(response.statusCode())
     .logStep(1, "Partner Verify", EventStatus.SUCCESS,
         "Partner verified successfully", "VERIFIED");
 
+// endpoint, httpMethod, httpStatusCode are auto-cleared along with payloads
 process.processEnd(2, EventStatus.SUCCESS, "API call complete", "DONE", totalMs);
 ```
 

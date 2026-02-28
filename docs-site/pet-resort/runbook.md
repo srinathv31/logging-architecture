@@ -81,6 +81,20 @@ curl -X POST http://localhost:8081/api/bookings/{id}/check-out \
   -H "X-Simulate: payment-failure"
 ```
 
+**What to Look For — Scenario 8 (Check-out):**
+
+- The payment step (step 2) captures the full HTTP round-trip to Stripe: `endpoint` = `/v1/charges`, `httpMethod` = `POST`, `httpStatusCode` = `200`
+- `requestPayload` contains the charge request with card numbers masked via `EventLogUtils.maskLast4()` — you should see `***` instead of actual card digits
+- `responsePayload` captures the Stripe charge response (charge ID, status, amount)
+- `idempotencyKey` is recorded on the payment step for debugging duplicate-charge scenarios
+- The inbound API endpoint (`/api/bookings/{id}/check-out`) is set on `processStart`, while the outbound Stripe endpoint (`/v1/charges`) is set per-step — demonstrating one-shot HTTP field behavior
+
+**What to Look For — Scenario 9 (Payment failure):**
+
+- The payment step logs with `EventStatus.FAILURE` and captures `endpoint` = `/v1/charges`, `httpMethod` = `POST`, `httpStatusCode` = `402`
+- `errorCode` = `PAYMENT_DECLINED` and `errorMessage` contain the decline reason
+- The process ends with `httpStatusCode` = `422` on the `processEnd` step, reflecting the API response back to the caller
+
 ### 10. Room Service Retry
 
 ```bash

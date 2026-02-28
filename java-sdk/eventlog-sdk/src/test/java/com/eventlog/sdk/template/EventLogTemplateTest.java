@@ -4,6 +4,7 @@ import com.eventlog.sdk.client.AsyncEventLogger;
 import com.eventlog.sdk.model.EventLogEntry;
 import com.eventlog.sdk.model.EventStatus;
 import com.eventlog.sdk.model.EventType;
+import com.eventlog.sdk.model.HttpMethod;
 import com.eventlog.sdk.template.EventLogTemplate.ContextProvider;
 import com.eventlog.sdk.template.EventLogTemplate.EventLogContext;
 import org.junit.jupiter.api.BeforeEach;
@@ -612,6 +613,67 @@ class EventLogTemplateTest {
         EventLogEntry second = captor.getAllValues().get(1);
         assertNull(second.getErrorCode(), "errorCode should be cleared after emit");
         assertNull(second.getErrorMessage(), "errorMessage should be cleared after emit");
+    }
+
+    // ========================================================================
+    // One-shot HTTP field tests (endpoint, httpMethod, httpStatusCode)
+    // ========================================================================
+
+    @Test
+    void withEndpointClearsAfterEmit() {
+        EventLogTemplate template = createTemplate();
+        EventLogTemplate.ProcessLogger proc = template.forProcess("PROC")
+                .withCorrelationId("corr").withTraceId("trace");
+
+        proc.withEndpoint("/api/v1/users")
+                .logStep(1, "Call Users API", EventStatus.SUCCESS, "Called", "OK");
+
+        proc.logStep(2, "Next", EventStatus.SUCCESS, "Done", "OK");
+
+        ArgumentCaptor<EventLogEntry> captor = ArgumentCaptor.forClass(EventLogEntry.class);
+        verify(mockLogger, times(2)).log(captor.capture());
+
+        assertEquals("/api/v1/users", captor.getAllValues().get(0).getEndpoint());
+        assertNull(captor.getAllValues().get(1).getEndpoint(),
+                "endpoint should be cleared after emit");
+    }
+
+    @Test
+    void withHttpMethodClearsAfterEmit() {
+        EventLogTemplate template = createTemplate();
+        EventLogTemplate.ProcessLogger proc = template.forProcess("PROC")
+                .withCorrelationId("corr").withTraceId("trace");
+
+        proc.withHttpMethod(HttpMethod.POST)
+                .logStep(1, "POST Request", EventStatus.SUCCESS, "Posted", "OK");
+
+        proc.logStep(2, "Next", EventStatus.SUCCESS, "Done", "OK");
+
+        ArgumentCaptor<EventLogEntry> captor = ArgumentCaptor.forClass(EventLogEntry.class);
+        verify(mockLogger, times(2)).log(captor.capture());
+
+        assertEquals(HttpMethod.POST, captor.getAllValues().get(0).getHttpMethod());
+        assertNull(captor.getAllValues().get(1).getHttpMethod(),
+                "httpMethod should be cleared after emit");
+    }
+
+    @Test
+    void withHttpStatusCodeClearsAfterEmit() {
+        EventLogTemplate template = createTemplate();
+        EventLogTemplate.ProcessLogger proc = template.forProcess("PROC")
+                .withCorrelationId("corr").withTraceId("trace");
+
+        proc.withHttpStatusCode(200)
+                .logStep(1, "API Response", EventStatus.SUCCESS, "Got 200", "OK");
+
+        proc.logStep(2, "Next", EventStatus.SUCCESS, "Done", "OK");
+
+        ArgumentCaptor<EventLogEntry> captor = ArgumentCaptor.forClass(EventLogEntry.class);
+        verify(mockLogger, times(2)).log(captor.capture());
+
+        assertEquals(200, captor.getAllValues().get(0).getHttpStatusCode());
+        assertNull(captor.getAllValues().get(1).getHttpStatusCode(),
+                "httpStatusCode should be cleared after emit");
     }
 
     @Test

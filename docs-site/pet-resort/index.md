@@ -13,8 +13,36 @@ Spring Boot 3.4 application demonstrating both Event Log Java SDK logging approa
 - **MDC correlation propagation**: inbound correlation/trace IDs flow through all child events
 - **Retry and error handling**: kennel timeout, kennel retry, payment failure scenarios
 - **Awaiting approval workflows**: check-in with `withAwaitCompletion()` requiring explicit approval
-- **PII masking**: `EventLogUtils.maskLast4()` for sensitive fields
+- **HTTP request/response logging with PII masking**: `withRequestPayload()` / `withResponsePayload()` capture full HTTP payloads with sensitive fields masked via `EventLogUtils.maskLast4()` — demonstrated in the check-out payment flow (Scenario 8)
 - **Idempotency keys**: correlation IDs generated via `EventLogUtils.createCorrelationId()`
+
+## HTTP Logging with PII/PCI Masking
+
+The check-out payment flow (Scenario 8) showcases per-step HTTP context with masked PII/PCI data. When the service calls Stripe to process a payment, it captures the full HTTP round-trip on that step:
+
+```java
+processLogger
+    .withTargetSystem("STRIPE")
+    .withEndpoint("/v1/charges")              // outbound Stripe endpoint
+    .withHttpMethod(HttpMethod.POST)          // per-step HTTP method (one-shot)
+    .withHttpStatusCode(200)                  // per-step status code (one-shot)
+    .withIdempotencyKey(idempotencyKey)       // payment safety
+    .withRequestPayload("{\"amount\":" + amount
+        + ",\"currency\":\"USD\",\"card_last4\":\""
+        + EventLogUtils.maskLast4(cardLast4)  // PCI: mask card number
+        + "\"...}")
+    .withResponsePayload("{\"charge_id\":\"ch_...\"...}")
+    .addIdentifier("card_number_last4", EventLogUtils.maskLast4(cardLast4))
+    .logStep(2, "Process Payment", EventStatus.SUCCESS,
+        "Payment processed via STRIPE", "PAYMENT_SUCCESS");
+```
+
+**Key points:**
+
+- **Per-step HTTP context** — `withEndpoint()`, `withHttpMethod()`, and `withHttpStatusCode()` are one-shot fields, so they apply only to the next emit and then clear. This lets you set different HTTP context per step (e.g., the inbound API endpoint on `processStart()`, then the outbound Stripe endpoint on the payment step).
+- **PCI masking** — card numbers in `requestPayload` are masked via `EventLogUtils.maskLast4()`, ensuring sensitive data never reaches the event log in cleartext.
+- **Idempotency** — `withIdempotencyKey()` records the payment idempotency key for debugging duplicate-charge scenarios.
+- **Error path** — the payment failure scenario (Scenario 9) captures the same HTTP context with `withHttpStatusCode(402)` and `withErrorCode("PAYMENT_DECLINED")`.
 
 ## Prerequisites
 

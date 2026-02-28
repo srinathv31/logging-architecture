@@ -65,15 +65,15 @@ public class RoomServiceService {
                 .withCorrelationId(correlationId)
                 .withTraceId(traceId)
                 .withAccountId(pet.ownerId())
-                .withEndpoint("/api/room-service")
-                .withHttpMethod(HttpMethod.POST)
                 .addIdentifier("order_id", orderId)
                 .addIdentifier("pet_id", request.petId())
                 .addIdentifier("booking_id", request.bookingId())
                 .addIdentifier("owner_id", pet.ownerId());
 
         // Step 0: PROCESS_START
-        processLogger.processStart(
+        processLogger.withEndpoint("/api/room-service")
+                .withHttpMethod(HttpMethod.POST)
+                .processStart(
                 "Room service order " + orderId + " initiated for " + pet.name()
                         + " — " + request.quantity() + "x " + request.item(),
                 "ORDER_STARTED");

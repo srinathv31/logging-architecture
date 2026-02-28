@@ -296,9 +296,9 @@ public final class EventLogTemplate {
         private final Map<String, String> identifiers = new HashMap<>();
         private final Map<String, Object> metadata = new HashMap<>();
         private String accountId;
-        private String endpoint;
-        private HttpMethod httpMethod;
-        private Integer httpStatusCode;
+        private String pendingEndpoint;
+        private HttpMethod pendingHttpMethod;
+        private Integer pendingHttpStatusCode;
         private boolean awaitCompletion = false;
         private String pendingRequestPayload;
         private String pendingResponsePayload;
@@ -386,17 +386,17 @@ public final class EventLogTemplate {
         }
 
         public ProcessLogger withEndpoint(String endpoint) {
-            this.endpoint = endpoint;
+            this.pendingEndpoint = endpoint;
             return this;
         }
 
         public ProcessLogger withHttpMethod(HttpMethod httpMethod) {
-            this.httpMethod = httpMethod;
+            this.pendingHttpMethod = httpMethod;
             return this;
         }
 
         public ProcessLogger withHttpStatusCode(Integer httpStatusCode) {
-            this.httpStatusCode = httpStatusCode;
+            this.pendingHttpStatusCode = httpStatusCode;
             return this;
         }
 
@@ -582,9 +582,9 @@ public final class EventLogTemplate {
                     .eventType(eventType);
 
             if (hasText(accountId)) builder.accountId(accountId);
-            if (hasText(endpoint)) builder.endpoint(endpoint);
-            if (httpMethod != null) builder.httpMethod(httpMethod);
-            if (httpStatusCode != null) builder.httpStatusCode(httpStatusCode);
+            if (hasText(pendingEndpoint)) builder.endpoint(pendingEndpoint);
+            if (pendingHttpMethod != null) builder.httpMethod(pendingHttpMethod);
+            if (pendingHttpStatusCode != null) builder.httpStatusCode(pendingHttpStatusCode);
             if (!identifiers.isEmpty()) {
                 builder.identifiers(new HashMap<>(identifiers));
             }
@@ -624,6 +624,9 @@ public final class EventLogTemplate {
             } finally {
                 pendingTargetSystem = null;
                 pendingSpanLinks = null;
+                pendingEndpoint = null;
+                pendingHttpMethod = null;
+                pendingHttpStatusCode = null;
                 pendingRequestPayload = null;
                 pendingResponsePayload = null;
                 pendingExecutionTimeMs = null;

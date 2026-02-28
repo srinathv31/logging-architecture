@@ -105,8 +105,6 @@ public class BookingService {
                 .withTraceId(traceId)
                 .withSpanId(spanId)
                 .withParentSpanId(parentSpanId)
-                .withEndpoint("/api/bookings")
-                .withHttpMethod(HttpMethod.POST)
                 .addIdentifier("pet_id", request.petId())
                 .addIdentifier("booking_id", bookingId);
 
@@ -123,10 +121,12 @@ public class BookingService {
         }
 
         // Step 0: PROCESS_START
-        processLogger.processStart(
-                "Initiating booking " + bookingId + " for "
-                        + (pet != null ? pet.name() + " (" + pet.species() + ")" : request.petId()),
-                "BOOKING_STARTED");
+        processLogger.withEndpoint("/api/bookings")
+                .withHttpMethod(HttpMethod.POST)
+                .processStart(
+                        "Initiating booking " + bookingId + " for "
+                                + (pet != null ? pet.name() + " (" + pet.species() + ")" : request.petId()),
+                        "BOOKING_STARTED");
 
         // Step 1: Validate Pet
         if (pet == null) {
@@ -393,9 +393,7 @@ public class BookingService {
         ProcessLogger processLogger = eventLogTemplate.forProcess("CHECK_IN_PET")
                 .withCorrelationId(correlationId)
                 .withTraceId(traceId)
-                .withParentSpanId(parentSpanId)
-                .withEndpoint("/api/bookings/" + bookingId + "/check-in")
-                .withHttpMethod(HttpMethod.POST);
+                .withParentSpanId(parentSpanId);
 
         if (booking != null) {
             processLogger
@@ -409,9 +407,11 @@ public class BookingService {
         processLogger.addMetadata("request_payload",
                 request != null && request.kennelPreference() != null
                         ? "{\"kennelPreference\":\"" + request.kennelPreference() + "\"}" : "{}");
-        processLogger.processStart(
-                "Initiating check-in for booking " + bookingId,
-                "CHECK_IN_STARTED");
+        processLogger.withEndpoint("/api/bookings/" + bookingId + "/check-in")
+                .withHttpMethod(HttpMethod.POST)
+                .processStart(
+                        "Initiating check-in for booking " + bookingId,
+                        "CHECK_IN_STARTED");
 
         // Step 1: Verify Booking
         if (booking == null) {
@@ -562,15 +562,15 @@ public class BookingService {
                 .withCorrelationId(correlationId)
                 .withTraceId(traceId)
                 .withParentSpanId(parentSpanId)
-                .withEndpoint("/api/bookings/" + bookingId + "/approve-check-in")
-                .withHttpMethod(HttpMethod.POST)
                 .withAccountId(booking.getOwnerId())
                 .addIdentifier("booking_id", bookingId)
                 .addIdentifier("pet_id", booking.getPetId())
                 .addIdentifier("owner_id", booking.getOwnerId());
 
         // Step 3: Vet Diet Approval Granted
-        processLogger.withTargetSystem("VET_DIET_APPROVAL");
+        processLogger.withEndpoint("/api/bookings/" + bookingId + "/approve-check-in")
+                .withHttpMethod(HttpMethod.POST)
+                .withTargetSystem("VET_DIET_APPROVAL");
         try { Thread.sleep(100); } catch (InterruptedException e) { Thread.currentThread().interrupt(); }
         processLogger.logStep(3, "Vet Diet Approval Granted", EventStatus.SUCCESS,
                 "Vet diet approval granted for " + pet.name() + " — special dietary plan confirmed",
@@ -627,8 +627,6 @@ public class BookingService {
                 .withTraceId(traceId)
                 .withParentSpanId(parentSpanId)
                 .withBatchId(EventLogUtils.createBatchId("checkout"))
-                .withEndpoint("/api/bookings/" + bookingId + "/check-out")
-                .withHttpMethod(HttpMethod.POST)
                 .addIdentifier("booking_id", bookingId);
 
         if (booking != null) {
@@ -636,10 +634,12 @@ public class BookingService {
         }
 
         // Step 0: PROCESS_START
-        processLogger.processStart(
-                "Initiating check-out for booking " + bookingId
-                        + (pet != null ? " — " + pet.name() + " (" + pet.species() + ")" : ""),
-                "CHECK_OUT_STARTED");
+        processLogger.withEndpoint("/api/bookings/" + bookingId + "/check-out")
+                .withHttpMethod(HttpMethod.POST)
+                .processStart(
+                        "Initiating check-out for booking " + bookingId
+                                + (pet != null ? " — " + pet.name() + " (" + pet.species() + ")" : ""),
+                        "CHECK_OUT_STARTED");
 
         // Step 1: Verify Check-In
         if (booking == null) {
@@ -678,6 +678,9 @@ public class BookingService {
 
             processLogger
                     .withTargetSystem("STRIPE")
+                    .withEndpoint("/v1/charges")
+                    .withHttpMethod(HttpMethod.POST)
+                    .withHttpStatusCode(200)
                     .withIdempotencyKey(idempotencyKey)
                     .withRequestPayload("{\"amount\":" + request.paymentAmount()
                             + ",\"currency\":\"USD\",\"card_last4\":\""
@@ -697,6 +700,9 @@ public class BookingService {
 
             processLogger
                     .withTargetSystem("STRIPE")
+                    .withEndpoint("/v1/charges")
+                    .withHttpMethod(HttpMethod.POST)
+                    .withHttpStatusCode(402)
                     .withErrorCode("PAYMENT_DECLINED")
                     .withErrorMessage(e.getMessage())
                     .logStep(2, "Process Payment", EventStatus.FAILURE,
