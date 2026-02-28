@@ -242,6 +242,59 @@ public class EventLogClient implements AutoCloseable {
     }
 
     // ========================================================================
+    // Package-private - single attempt, no retry (used by AsyncEventLogger)
+    // ========================================================================
+
+    /**
+     * Single-attempt event creation, bypassing client-level retry.
+     * Used by {@link AsyncEventLogger} which manages its own retry, circuit breaker, and spillover logic.
+     */
+    CreateEventResponse createEventDirect(EventLogEntry event) {
+        return postDirect("/v1/events", event, CreateEventResponse.class);
+    }
+
+    /**
+     * Single-attempt batch event creation, bypassing client-level retry.
+     * Used by {@link AsyncEventLogger} which manages its own retry, circuit breaker, and spillover logic.
+     */
+    BatchCreateEventResponse createEventsDirect(List<EventLogEntry> events) {
+        return postDirect("/v1/events/batch", Map.of("events", events), BatchCreateEventResponse.class);
+    }
+
+    private <T> T postDirect(String path, Object body, Class<T> responseClass) {
+        try {
+            String url = buildUrl(path, null);
+            String json = objectMapper.writeValueAsString(body);
+            EventLogRequest request = buildRequest(url, "POST", json);
+            return executeSingle(request, responseClass);
+        } catch (EventLogException e) {
+            throw e;
+        } catch (Exception e) {
+            throw new EventLogException("Failed to execute POST request: " + path, e);
+        }
+    }
+
+    private <T> T executeSingle(EventLogRequest request, Class<T> responseClass) {
+        try {
+            EventLogResponse response = transport.send(request);
+            int status = response.getStatusCode();
+            String responseBody = response.getBody();
+
+            if (status >= 200 && status < 300) {
+                return objectMapper.readValue(responseBody, responseClass);
+            }
+            throw new EventLogException(
+                    "API error: " + status + " - " + responseBody,
+                    status,
+                    extractErrorCode(responseBody));
+        } catch (EventLogException e) {
+            throw e;
+        } catch (Exception e) {
+            throw new EventLogException("Request failed: " + e.getMessage(), e);
+        }
+    }
+
+    // ========================================================================
     // HTTP Methods
     // ========================================================================
 

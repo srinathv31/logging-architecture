@@ -439,7 +439,7 @@ public class AsyncEventLogger implements AutoCloseable {
 
     private void sendSingle(QueuedEvent queued) {
         try {
-            client.createEvent(queued.event);
+            client.createEventDirect(queued.event);
             onSuccess();
             eventsSent.incrementAndGet();
             log.trace("Event sent: correlationId={}", queued.event.getCorrelationId());
@@ -454,7 +454,7 @@ public class AsyncEventLogger implements AutoCloseable {
             for (QueuedEvent q : batch) {
                 events.add(q.event);
             }
-            ApiResponses.BatchCreateEventResponse response = client.createEvents(events);
+            ApiResponses.BatchCreateEventResponse response = client.createEventsDirect(events);
             onSuccess();
 
             List<ApiResponses.BatchError> errors = response.getErrors();
@@ -705,7 +705,7 @@ public class AsyncEventLogger implements AutoCloseable {
             if (line.isBlank()) { sent++; continue; }
             try {
                 EventLogEntry event = spilloverObjectMapper.readValue(line, EventLogEntry.class);
-                client.createEvent(event);
+                client.createEventDirect(event);
                 eventsReplayed.incrementAndGet();
                 sent++;
             } catch (IOException e) {
