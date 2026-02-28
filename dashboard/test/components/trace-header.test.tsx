@@ -10,6 +10,7 @@ vi.mock('@/lib/constants', () => ({
     FAILURE: (props: any) => <span data-testid="failure-icon" {...props}>F</span>,
     IN_PROGRESS: (props: any) => <span data-testid="inprogress-icon" {...props}>I</span>,
     SKIPPED: (props: any) => <span data-testid="skipped-icon" {...props}>K</span>,
+    WARNING: (props: any) => <span data-testid="warning-icon" {...props}>W</span>,
   },
 }));
 
@@ -111,7 +112,7 @@ describe('TraceHeader', () => {
 
   it('renders status counts for each status', () => {
     const detail = makeTraceDetail({
-      statusCounts: { SUCCESS: 5, FAILURE: 2, IN_PROGRESS: 1, SKIPPED: 0 },
+      statusCounts: { SUCCESS: 5, FAILURE: 2, WARNING: 0, IN_PROGRESS: 1, SKIPPED: 0 },
     });
 
     const { container } = render(

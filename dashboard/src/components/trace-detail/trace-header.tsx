@@ -16,11 +16,12 @@ function formatDuration(ms: number | null): string {
   return `${(ms / 60000).toFixed(1)}m`;
 }
 
-const STATUS_ORDER = ["SUCCESS", "FAILURE", "IN_PROGRESS", "SKIPPED"] as const;
+const STATUS_ORDER = ["SUCCESS", "FAILURE", "WARNING", "IN_PROGRESS", "SKIPPED"] as const;
 
 const STATUS_COLORS: Record<string, string> = {
   SUCCESS: "from-green-500/20 to-green-500/5 border-green-500/30",
   FAILURE: "from-red-500/20 to-red-500/5 border-red-500/30",
+  WARNING: "from-amber-500/20 to-amber-500/5 border-amber-500/30",
   IN_PROGRESS: "from-yellow-500/20 to-yellow-500/5 border-yellow-500/30",
   SKIPPED: "from-gray-500/20 to-gray-500/5 border-gray-500/30",
 };
@@ -28,6 +29,7 @@ const STATUS_COLORS: Record<string, string> = {
 const STATUS_ICON_COLORS: Record<string, string> = {
   SUCCESS: "text-green-600 dark:text-green-400",
   FAILURE: "text-red-600 dark:text-red-400",
+  WARNING: "text-amber-600 dark:text-amber-400",
   IN_PROGRESS: "text-yellow-600 dark:text-yellow-400",
   SKIPPED: "text-gray-500 dark:text-gray-400",
 };
@@ -110,12 +112,13 @@ export function TraceHeader({ traceId, detail, retryInfo }: TraceHeaderProps) {
         : "IN_PROGRESS"
     : null;
   const hasFailures = (detail.statusCounts["FAILURE"] ?? 0) > 0;
+  const hasWarnings = (detail.statusCounts["WARNING"] ?? 0) > 0;
   const hasInProgress = (detail.statusCounts["IN_PROGRESS"] ?? 0) > 0;
   const processEndSuccess = detail.events.some(
     (e) => e.eventType === "PROCESS_END" && e.eventStatus === "SUCCESS"
   );
   const overallStatus = retryOverallStatus
-    ?? (processEndSuccess ? "SUCCESS" : hasFailures ? "FAILURE" : hasInProgress ? "IN_PROGRESS" : "SUCCESS");
+    ?? (processEndSuccess ? "SUCCESS" : hasFailures ? "FAILURE" : hasWarnings ? "WARNING" : hasInProgress ? "IN_PROGRESS" : "SUCCESS");
 
   return (
     <div className="space-y-4">
@@ -197,7 +200,7 @@ export function TraceHeader({ traceId, detail, retryInfo }: TraceHeaderProps) {
           </div>
 
           {/* Status summary grid */}
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-6">
+          <div className="grid grid-cols-2 sm:grid-cols-5 gap-3 mb-6">
             {STATUS_ORDER.map((status) => {
               const count = detail.statusCounts[status] ?? 0;
               const Icon = STATUS_ICONS[status];

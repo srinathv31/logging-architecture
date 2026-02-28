@@ -9,7 +9,8 @@ public enum EventStatus {
     SUCCESS("SUCCESS"),
     FAILURE("FAILURE"),
     IN_PROGRESS("IN_PROGRESS"),
-    SKIPPED("SKIPPED");
+    SKIPPED("SKIPPED"),
+    WARNING("WARNING");
 
     private final String value;
 

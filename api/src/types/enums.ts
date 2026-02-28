@@ -14,6 +14,7 @@ export const EventStatus = {
   FAILURE: 'FAILURE',
   IN_PROGRESS: 'IN_PROGRESS',
   SKIPPED: 'SKIPPED',
+  WARNING: 'WARNING',
 } as const;
 
 export type EventStatus = (typeof EventStatus)[keyof typeof EventStatus];

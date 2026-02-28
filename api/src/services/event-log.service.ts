@@ -400,6 +400,7 @@ export async function getByTrace(
       failureCount: sql<number>`cast(sum(case when ${eventLogs.eventStatus} = 'FAILURE' then 1 else 0 end) as int)`,
       inProgressCount: sql<number>`cast(sum(case when ${eventLogs.eventStatus} = 'IN_PROGRESS' then 1 else 0 end) as int)`,
       skippedCount: sql<number>`cast(sum(case when ${eventLogs.eventStatus} = 'SKIPPED' then 1 else 0 end) as int)`,
+      warningCount: sql<number>`cast(sum(case when ${eventLogs.eventStatus} = 'WARNING' then 1 else 0 end) as int)`,
       processName: sql<string | null>`min(case when ${eventLogs.eventType} = 'PROCESS_START' then ${eventLogs.processName} end)`,
       accountId: sql<string | null>`min(${eventLogs.accountId})`,
     })
@@ -439,6 +440,7 @@ export async function getByTrace(
       failure: agg.failureCount ?? 0,
       inProgress: agg.inProgressCount ?? 0,
       skipped: agg.skippedCount ?? 0,
+      warning: agg.warningCount ?? 0,
     },
     processName: agg.processName ?? null,
     accountId: agg.accountId ?? null,

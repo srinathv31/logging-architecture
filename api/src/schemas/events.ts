@@ -225,6 +225,7 @@ export const getEventsByTraceResponseSchema = z.object({
     failure: z.number().int(),
     inProgress: z.number().int(),
     skipped: z.number().int(),
+    warning: z.number().int(),
   }),
   processName: z.string().nullable(),
   accountId: z.string().nullable(),

@@ -3,6 +3,7 @@ import {
   XCircle,
   Clock,
   MinusCircle,
+  AlertTriangle,
   Play,
   ArrowRight,
   Square,
@@ -12,7 +13,7 @@ import {
 
 export const EVENT_TYPES = ["PROCESS_START", "STEP", "PROCESS_END", "ERROR"] as const;
 
-export const EVENT_STATUSES = ["SUCCESS", "FAILURE", "IN_PROGRESS", "SKIPPED"] as const;
+export const EVENT_STATUSES = ["SUCCESS", "FAILURE", "IN_PROGRESS", "SKIPPED", "WARNING"] as const;
 
 export const HTTP_METHODS = ["GET", "POST", "PUT", "DELETE", "PATCH", "HEAD", "OPTIONS"] as const;
 
@@ -21,6 +22,7 @@ export const STATUS_COLORS: Record<string, string> = {
   FAILURE: "bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200",
   IN_PROGRESS: "bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200",
   SKIPPED: "bg-gray-100 text-gray-800 dark:bg-gray-900 dark:text-gray-200",
+  WARNING: "bg-amber-100 text-amber-800 dark:bg-amber-900 dark:text-amber-200",
 };
 
 export const STATUS_DOT_COLORS: Record<string, string> = {
@@ -28,6 +30,7 @@ export const STATUS_DOT_COLORS: Record<string, string> = {
   FAILURE: "bg-red-500",
   IN_PROGRESS: "bg-yellow-500",
   SKIPPED: "bg-gray-400",
+  WARNING: "bg-amber-500",
 };
 
 export const EVENT_TYPE_COLORS: Record<string, string> = {
@@ -42,6 +45,7 @@ export const STATUS_ICONS: Record<string, LucideIcon> = {
   FAILURE: XCircle,
   IN_PROGRESS: Clock,
   SKIPPED: MinusCircle,
+  WARNING: AlertTriangle,
 };
 
 export const EVENT_TYPE_ICONS: Record<string, LucideIcon> = {
@@ -56,6 +60,7 @@ export const STATUS_LEFT_BORDER: Record<string, string> = {
   FAILURE: "border-l-red-500",
   IN_PROGRESS: "border-l-yellow-500",
   SKIPPED: "border-l-gray-400",
+  WARNING: "border-l-amber-500",
 };
 
 export const HTTP_METHOD_COLORS: Record<string, string> = {

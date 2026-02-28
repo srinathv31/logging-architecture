@@ -1017,6 +1017,7 @@ describe('getByTrace', () => {
             failureCount: 0,
             inProgressCount: 0,
             skippedCount: 0,
+            warningCount: 0,
             processName: 'test-process',
             accountId: 'test-account',
           },
@@ -1045,7 +1046,7 @@ describe('getByTrace', () => {
     expect(result.totalDurationMs).toBe(5000);
     expect(result.totalCount).toBe(2);
     expect(result.hasMore).toBe(false);
-    expect(result.statusCounts).toEqual({ success: 2, failure: 0, inProgress: 0, skipped: 0 });
+    expect(result.statusCounts).toEqual({ success: 2, failure: 0, inProgress: 0, skipped: 0, warning: 0 });
     expect(result.processName).toBe('test-process');
     expect(result.accountId).toBe('test-account');
     expect(result.startTime).toBe('2024-01-01T10:00:00.000Z');
@@ -1069,6 +1070,7 @@ describe('getByTrace', () => {
           failureCount: 0,
           inProgressCount: 0,
           skippedCount: 0,
+          warningCount: 0,
           processName: null,
           accountId: null,
         }]),
@@ -1093,7 +1095,7 @@ describe('getByTrace', () => {
     expect(result.events).toHaveLength(0);
     expect(result.systemsInvolved).toEqual([]);
     expect(result.totalCount).toBe(0);
-    expect(result.statusCounts).toEqual({ success: 0, failure: 0, inProgress: 0, skipped: 0 });
+    expect(result.statusCounts).toEqual({ success: 0, failure: 0, inProgress: 0, skipped: 0, warning: 0 });
     expect(result.processName).toBeNull();
     expect(result.accountId).toBeNull();
     expect(result.startTime).toBeNull();
@@ -1118,6 +1120,7 @@ describe('getByTrace', () => {
             failureCount: 2,
             inProgressCount: 0,
             skippedCount: 0,
+            warningCount: 0,
             processName: 'test-process',
             accountId: 'test-account',
           },

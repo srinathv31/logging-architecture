@@ -28,6 +28,7 @@ let mockGetByTrace: (
     failure: number;
     inProgress: number;
     skipped: number;
+    warning: number;
   };
   processName: string | null;
   accountId: string | null;
@@ -88,6 +89,7 @@ function buildTestApp() {
               failure: statusCounts.failure,
               inProgress: statusCounts.inProgress,
               skipped: statusCounts.skipped,
+              warning: statusCounts.warning,
             },
             processName,
             accountId,
@@ -122,7 +124,7 @@ describe("GET /v1/events/trace/:traceId", () => {
       totalDurationMs: null,
       totalCount: 0,
       hasMore: false,
-      statusCounts: { success: 0, failure: 0, inProgress: 0, skipped: 0 },
+      statusCounts: { success: 0, failure: 0, inProgress: 0, skipped: 0, warning: 0 },
       processName: null,
       accountId: null,
       startTime: null,
@@ -149,7 +151,7 @@ describe("GET /v1/events/trace/:traceId", () => {
         totalDurationMs: 5000,
         totalCount: 2,
         hasMore: false,
-        statusCounts: { success: 2, failure: 0, inProgress: 0, skipped: 0 },
+        statusCounts: { success: 2, failure: 0, inProgress: 0, skipped: 0, warning: 0 },
         processName: "test-process",
         accountId: "test-account-id",
         startTime: "2024-01-01T10:00:00.000Z",
@@ -176,6 +178,7 @@ describe("GET /v1/events/trace/:traceId", () => {
         failure: 0,
         inProgress: 0,
         skipped: 0,
+        warning: 0,
       });
       expect(body.processName).toBe("test-process");
       expect(body.accountId).toBe("test-account-id");
@@ -190,7 +193,7 @@ describe("GET /v1/events/trace/:traceId", () => {
         totalDurationMs: null,
         totalCount: 0,
         hasMore: false,
-        statusCounts: { success: 0, failure: 0, inProgress: 0, skipped: 0 },
+        statusCounts: { success: 0, failure: 0, inProgress: 0, skipped: 0, warning: 0 },
         processName: null,
         accountId: null,
         startTime: null,
@@ -216,7 +219,7 @@ describe("GET /v1/events/trace/:traceId", () => {
         totalDurationMs: 1000,
         totalCount: 1,
         hasMore: false,
-        statusCounts: { success: 1, failure: 0, inProgress: 0, skipped: 0 },
+        statusCounts: { success: 1, failure: 0, inProgress: 0, skipped: 0, warning: 0 },
         processName: "test-process",
         accountId: "test-account-id",
         startTime: "2024-01-01T10:00:00.000Z",
@@ -241,7 +244,7 @@ describe("GET /v1/events/trace/:traceId", () => {
         totalDurationMs: 0,
         totalCount: 1,
         hasMore: false,
-        statusCounts: { success: 1, failure: 0, inProgress: 0, skipped: 0 },
+        statusCounts: { success: 1, failure: 0, inProgress: 0, skipped: 0, warning: 0 },
         processName: "test-process",
         accountId: "test-account-id",
         startTime: "2024-01-01T10:00:00.000Z",
@@ -268,7 +271,7 @@ describe("GET /v1/events/trace/:traceId", () => {
         totalDurationMs: 100,
         totalCount: 10,
         hasMore: true,
-        statusCounts: { success: 1, failure: 0, inProgress: 0, skipped: 0 },
+        statusCounts: { success: 1, failure: 0, inProgress: 0, skipped: 0, warning: 0 },
         processName: "test-process",
         accountId: "test-account-id",
         startTime: "2024-01-01T10:00:00.000Z",

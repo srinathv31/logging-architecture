@@ -64,6 +64,7 @@ export interface GetEventsByTraceResponse {
     failure: number;
     inProgress: number;
     skipped: number;
+    warning: number;
   };
   processName: string | null;
   accountId: string | null;

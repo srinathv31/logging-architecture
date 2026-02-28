@@ -1,6 +1,6 @@
 "use client";
 
-import { CheckCircle2, XCircle, Clock, Network, RefreshCw } from "lucide-react";
+import { CheckCircle2, XCircle, Clock, AlertTriangle, Network, RefreshCw } from "lucide-react";
 import type { TraceEvent } from "@/data/queries";
 import {
   buildStepFlow,
@@ -19,23 +19,26 @@ interface SystemsFlowProps {
   retryInfo?: RetryInfo | null;
 }
 
-type StepStatus = "success" | "failure" | "inProgress";
+type StepStatus = "success" | "failure" | "inProgress" | "warning";
 
 const STATUS_ICONS = {
   success: CheckCircle2,
   failure: XCircle,
   inProgress: Clock,
+  warning: AlertTriangle,
 };
 
 const STATUS_COLORS = {
   success: "text-green-500 bg-green-500/10 border-green-500/30",
   failure: "text-red-500 bg-red-500/10 border-red-500/30",
   inProgress: "text-yellow-500 bg-yellow-500/10 border-yellow-500/30",
+  warning: "text-amber-500 bg-amber-500/10 border-amber-500/30",
 };
 
 function getStepStatus(status: string): StepStatus {
   if (status === "FAILURE") return "failure";
   if (status === "IN_PROGRESS") return "inProgress";
+  if (status === "WARNING") return "warning";
   return "success";
 }
 

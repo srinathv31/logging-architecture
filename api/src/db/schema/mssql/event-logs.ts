@@ -73,7 +73,7 @@ export const eventLogs = mssqlTable(
     ),
     check(
       'ck_event_log_event_status',
-      sql`${table.eventStatus} IN ('SUCCESS', 'FAILURE', 'IN_PROGRESS', 'SKIPPED')`,
+      sql`${table.eventStatus} IN ('SUCCESS', 'FAILURE', 'IN_PROGRESS', 'SKIPPED', 'WARNING')`,
     ),
     check(
       'ck_event_log_http_method',

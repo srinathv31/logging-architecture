@@ -14,6 +14,7 @@ const STATUS_ICON_COLORS: Record<string, string> = {
   FAILURE: "text-red-500",
   IN_PROGRESS: "text-yellow-500",
   SKIPPED: "text-gray-400",
+  WARNING: "text-amber-500",
 };
 
 const STATUS_BG_COLORS: Record<string, string> = {
@@ -21,6 +22,7 @@ const STATUS_BG_COLORS: Record<string, string> = {
   FAILURE: "bg-red-500",
   IN_PROGRESS: "bg-yellow-500",
   SKIPPED: "bg-gray-400",
+  WARNING: "bg-amber-500",
 };
 
 const STATUS_RING_COLORS: Record<string, string> = {
@@ -28,6 +30,7 @@ const STATUS_RING_COLORS: Record<string, string> = {
   FAILURE: "ring-red-500/20",
   IN_PROGRESS: "ring-yellow-500/20",
   SKIPPED: "ring-gray-400/20",
+  WARNING: "ring-amber-500/20",
 };
 
 interface StepCardProps {

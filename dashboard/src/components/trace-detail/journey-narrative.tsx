@@ -53,6 +53,8 @@ export function JourneyNarrative({ detail, retryInfo }: JourneyNarrativeProps) {
   const systemCount = detail.systemsInvolved.length;
   const hasFailures = (detail.statusCounts["FAILURE"] ?? 0) > 0;
   const failureCount = detail.statusCounts["FAILURE"] ?? 0;
+  const hasWarnings = (detail.statusCounts["WARNING"] ?? 0) > 0;
+  const warningCount = detail.statusCounts["WARNING"] ?? 0;
   const isParallel = hasParallelExecution(detail.events);
   const flow = buildStepFlow(detail.events);
   const retryNodes = flow.filter((n) => n.type === "retry");
@@ -94,6 +96,9 @@ export function JourneyNarrative({ detail, retryInfo }: JourneyNarrativeProps) {
   } else if (hasFailures) {
     outcomeText = `encountered ${failureCount} error${failureCount > 1 ? "s" : ""}`;
     outcomeClass = "text-red-600 dark:text-red-400";
+  } else if (hasWarnings) {
+    outcomeText = `completed with ${warningCount} warning${warningCount > 1 ? "s" : ""}`;
+    outcomeClass = "text-amber-600 dark:text-amber-400";
   } else if (processEndSuccess) {
     outcomeText = "completed successfully";
     outcomeClass = "text-green-600 dark:text-green-400";
