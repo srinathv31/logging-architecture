@@ -1,8 +1,6 @@
 import "server-only";
 
-import { getDb } from "@/db/drivers/mssql";
-import { eventLogs } from "@/db/schema/event-logs";
-import { sql, eq, like, and, gte, lte } from "drizzle-orm";
+import { apiGet } from "@/lib/api-client";
 
 export interface TraceListFilters {
   processName?: string;
@@ -19,7 +17,6 @@ export interface TraceSummary {
   traceId: string;
   processName: string;
   accountId: string | null;
-  batchId: string | null;
   eventCount: number;
   hasErrors: boolean;
   latestStatus: string;
@@ -36,82 +33,56 @@ export interface TraceListResult {
   totalPages: number;
 }
 
+interface ApiTracesResponse {
+  traces: Array<{
+    traceId: string;
+    eventCount: number;
+    hasErrors: boolean;
+    latestStatus: string;
+    durationMs: number | null;
+    processName: string | null;
+    accountId: string | null;
+    startTime: string;
+    endTime: string;
+  }>;
+  totalCount: number;
+  page: number;
+  pageSize: number;
+  hasMore: boolean;
+}
+
 export async function getTraces(filters: TraceListFilters): Promise<TraceListResult> {
-  const db = await getDb();
   const page = filters.page ?? 1;
   const pageSize = filters.pageSize ?? 25;
-  const offset = (page - 1) * pageSize;
 
-  const conditions = [eq(eventLogs.isDeleted, false)];
+  const params: Record<string, string> = {
+    page: String(page),
+    pageSize: String(pageSize),
+  };
+  if (filters.processName) params.processName = filters.processName;
+  if (filters.accountId) params.accountId = filters.accountId;
+  if (filters.eventStatus) params.eventStatus = filters.eventStatus;
+  if (filters.startDate) params.startDate = filters.startDate;
+  if (filters.endDate) params.endDate = filters.endDate;
 
-  if (filters.processName) {
-    conditions.push(like(eventLogs.processName, `%${filters.processName}%`));
-  }
-  if (filters.batchId) {
-    conditions.push(eq(eventLogs.batchId, filters.batchId));
-  }
-  if (filters.accountId) {
-    conditions.push(eq(eventLogs.accountId, filters.accountId));
-  }
-  if (filters.eventStatus) {
-    conditions.push(eq(eventLogs.eventStatus, filters.eventStatus));
-  }
-  if (filters.startDate) {
-    conditions.push(gte(eventLogs.eventTimestamp, new Date(filters.startDate)));
-  }
-  if (filters.endDate) {
-    conditions.push(lte(eventLogs.eventTimestamp, new Date(filters.endDate)));
-  }
-
-  const whereClause = and(...conditions);
-
-  const [traces, countResult] = await Promise.all([
-    db
-      .select({
-        traceId: eventLogs.traceId,
-        processName: sql<string>`min(${eventLogs.processName})`,
-        accountId: sql<string | null>`min(${eventLogs.accountId})`,
-        batchId: sql<string | null>`min(${eventLogs.batchId})`,
-        eventCount: sql<number>`COUNT(*)`,
-        hasErrors: sql<boolean>`CAST(MAX(CASE WHEN ${eventLogs.eventStatus} = 'FAILURE' THEN 1 ELSE 0 END) AS BIT)`,
-        latestStatus: sql<string>`COALESCE(
-          (SELECT TOP 1 e2.event_status FROM event_log e2
-           WHERE e2.trace_id = [event_log].[trace_id] AND e2.is_deleted = 0
-             AND e2.event_type = 'PROCESS_END'
-           ORDER BY e2.event_timestamp DESC),
-          CASE
-            WHEN MAX(CASE WHEN ${eventLogs.eventStatus} = 'FAILURE' THEN 1 ELSE 0 END) = 1 THEN 'FAILURE'
-            WHEN MAX(CASE WHEN ${eventLogs.eventStatus} = 'IN_PROGRESS' THEN 1 ELSE 0 END) = 1 THEN 'IN_PROGRESS'
-            ELSE 'SUCCESS'
-          END
-        )`,
-        firstEventAt: sql<string>`CONVERT(VARCHAR(50), MIN(${eventLogs.eventTimestamp}), 127) + 'Z'`,
-        lastEventAt: sql<string>`CONVERT(VARCHAR(50), MAX(${eventLogs.eventTimestamp}), 127) + 'Z'`,
-        totalDurationMs: sql<number | null>`DATEDIFF(MILLISECOND, MIN(${eventLogs.eventTimestamp}), MAX(${eventLogs.eventTimestamp}))`,
-      })
-      .from(eventLogs)
-      .where(whereClause)
-      .groupBy(eventLogs.traceId)
-      .orderBy(sql`max(${eventLogs.eventTimestamp}) DESC`)
-      .offset(offset)
-      .fetch(pageSize),
-
-    db
-      .select({
-        totalCount: sql<number>`COUNT(DISTINCT ${eventLogs.traceId})`,
-      })
-      .from(eventLogs)
-      .where(whereClause),
-  ]);
-
-  const totalCount = countResult[0]?.totalCount ?? 0;
+  const data = await apiGet<ApiTracesResponse>("/v1/traces", params);
 
   return {
-    traces,
-    totalCount,
-    page,
-    pageSize,
-    totalPages: Math.ceil(totalCount / pageSize),
+    traces: data.traces.map((t) => ({
+      traceId: t.traceId,
+      processName: t.processName ?? "Unknown",
+      accountId: t.accountId,
+      eventCount: t.eventCount,
+      hasErrors: t.hasErrors,
+      latestStatus: t.latestStatus,
+      firstEventAt: t.startTime,
+      lastEventAt: t.endTime,
+      totalDurationMs: t.durationMs,
+    })),
+    totalCount: data.totalCount,
+    page: data.page,
+    pageSize: data.pageSize,
+    totalPages: Math.ceil(data.totalCount / data.pageSize),
   };
 }
 
@@ -168,117 +139,141 @@ export interface DashboardStats {
   systemNames: string[];
 }
 
+interface ApiDashboardStatsResponse {
+  totalTraces: number;
+  totalAccounts: number;
+  totalEvents: number;
+  successRate: number;
+  systemNames: string[];
+}
+
 export async function getDashboardStats(): Promise<DashboardStats> {
-  const db = await getDb();
-
-  const [statsResult, targetSystems, originatingSystems] = await Promise.all([
-    db
-      .select({
-        totalTraces: sql<number>`COUNT(DISTINCT ${eventLogs.traceId})`,
-        totalAccounts: sql<number>`COUNT(DISTINCT ${eventLogs.accountId})`,
-        totalEvents: sql<number>`COUNT(*)`,
-        successCount: sql<number>`SUM(CASE WHEN ${eventLogs.eventStatus} = 'SUCCESS' THEN 1 ELSE 0 END)`,
-      })
-      .from(eventLogs)
-      .where(eq(eventLogs.isDeleted, false)),
-
-    db
-      .selectDistinct({ system: eventLogs.targetSystem })
-      .from(eventLogs)
-      .where(eq(eventLogs.isDeleted, false)),
-
-    db
-      .selectDistinct({ system: eventLogs.originatingSystem })
-      .from(eventLogs)
-      .where(eq(eventLogs.isDeleted, false)),
-  ]);
-
-  const stats = statsResult[0];
-  const allSystems = new Set([
-    ...targetSystems.map((r) => r.system).filter(Boolean),
-    ...originatingSystems.map((r) => r.system).filter(Boolean),
-  ]);
-
-  const successRate = stats.totalEvents > 0
-    ? Math.round((stats.successCount / stats.totalEvents) * 1000) / 10
-    : 0;
+  const data = await apiGet<ApiDashboardStatsResponse>("/v1/dashboard/stats");
 
   return {
-    totalTraces: stats.totalTraces ?? 0,
-    totalAccounts: stats.totalAccounts ?? 0,
-    totalSystems: allSystems.size,
-    successRate,
-    totalEvents: stats.totalEvents ?? 0,
-    systemNames: Array.from(allSystems),
+    totalTraces: data.totalTraces,
+    totalAccounts: data.totalAccounts,
+    totalSystems: data.systemNames.length,
+    successRate: data.successRate,
+    totalEvents: data.totalEvents,
+    systemNames: data.systemNames,
   };
 }
 
+interface ApiTraceDetailResponse {
+  traceId: string;
+  events: Array<{
+    eventLogId: number;
+    executionId: string;
+    correlationId: string;
+    accountId: string | null;
+    traceId: string;
+    spanId: string | null;
+    parentSpanId: string | null;
+    batchId: string | null;
+    applicationId: string;
+    targetSystem: string;
+    originatingSystem: string;
+    processName: string;
+    stepSequence: number | null;
+    stepName: string | null;
+    eventType: string;
+    eventStatus: string;
+    identifiers: unknown;
+    summary: string;
+    result: string;
+    metadata: unknown;
+    eventTimestamp: string;
+    createdAt: string;
+    executionTimeMs: number | null;
+    endpoint: string | null;
+    httpStatusCode: number | null;
+    httpMethod: string | null;
+    errorCode: string | null;
+    errorMessage: string | null;
+    requestPayload: string | null;
+    responsePayload: string | null;
+  }>;
+  systemsInvolved: string[];
+  totalDurationMs: number | null;
+  totalCount: number;
+  page: number;
+  pageSize: number;
+  hasMore: boolean;
+  statusCounts: {
+    success: number;
+    failure: number;
+    inProgress: number;
+    skipped: number;
+    warning: number;
+  };
+  processName: string | null;
+  accountId: string | null;
+  startTime: string | null;
+  endTime: string | null;
+}
+
 export async function getTraceDetail(traceId: string): Promise<TraceDetail | null> {
-  const db = await getDb();
+  let data: ApiTraceDetailResponse;
+  try {
+    data = await apiGet<ApiTraceDetailResponse>(`/v1/events/trace/${traceId}`, {
+      pageSize: "500",
+    });
+  } catch (err) {
+    if (err instanceof Error && "status" in err && (err as { status: number }).status === 404) {
+      return null;
+    }
+    throw err;
+  }
 
-  const rows = await db
-    .select()
-    .from(eventLogs)
-    .where(and(eq(eventLogs.traceId, traceId), eq(eventLogs.isDeleted, false)))
-    .orderBy(eventLogs.eventTimestamp, eventLogs.eventLogId);
+  if (data.events.length === 0) return null;
 
-  if (rows.length === 0) return null;
-
-  const systems = new Set<string>();
   const statusCounts: Record<string, number> = {};
-
-  const events: TraceEvent[] = rows.map((row) => {
-    systems.add(row.targetSystem);
-    systems.add(row.originatingSystem);
-    statusCounts[row.eventStatus] = (statusCounts[row.eventStatus] ?? 0) + 1;
-
-    return {
-      eventLogId: row.eventLogId,
-      executionId: row.executionId,
-      correlationId: row.correlationId,
-      accountId: row.accountId,
-      traceId: row.traceId,
-      spanId: row.spanId,
-      parentSpanId: row.parentSpanId,
-      batchId: row.batchId,
-      applicationId: row.applicationId,
-      targetSystem: row.targetSystem,
-      originatingSystem: row.originatingSystem,
-      processName: row.processName,
-      stepSequence: row.stepSequence,
-      stepName: row.stepName,
-      eventType: row.eventType,
-      eventStatus: row.eventStatus,
-      identifiers: row.identifiers,
-      summary: row.summary,
-      result: row.result,
-      metadata: row.metadata,
-      eventTimestamp: row.eventTimestamp.toISOString(),
-      createdAt: row.createdAt.toISOString(),
-      executionTimeMs: row.executionTimeMs,
-      endpoint: row.endpoint,
-      httpStatusCode: row.httpStatusCode,
-      httpMethod: row.httpMethod,
-      errorCode: row.errorCode,
-      errorMessage: row.errorMessage,
-      requestPayload: row.requestPayload,
-      responsePayload: row.responsePayload,
-    };
-  });
-
-  const timestamps = rows.map((r) => r.eventTimestamp.getTime());
-  const minTs = Math.min(...timestamps);
-  const maxTs = Math.max(...timestamps);
-  const totalDurationMs = maxTs - minTs;
+  if (data.statusCounts.success) statusCounts["SUCCESS"] = data.statusCounts.success;
+  if (data.statusCounts.failure) statusCounts["FAILURE"] = data.statusCounts.failure;
+  if (data.statusCounts.inProgress) statusCounts["IN_PROGRESS"] = data.statusCounts.inProgress;
+  if (data.statusCounts.skipped) statusCounts["SKIPPED"] = data.statusCounts.skipped;
+  if (data.statusCounts.warning) statusCounts["WARNING"] = data.statusCounts.warning;
 
   return {
-    events,
-    systemsInvolved: Array.from(systems),
-    totalDurationMs: totalDurationMs > 0 ? totalDurationMs : null,
+    events: data.events.map((e) => ({
+      eventLogId: e.eventLogId,
+      executionId: e.executionId,
+      correlationId: e.correlationId,
+      accountId: e.accountId,
+      traceId: e.traceId,
+      spanId: e.spanId,
+      parentSpanId: e.parentSpanId,
+      batchId: e.batchId,
+      applicationId: e.applicationId,
+      targetSystem: e.targetSystem,
+      originatingSystem: e.originatingSystem,
+      processName: e.processName,
+      stepSequence: e.stepSequence,
+      stepName: e.stepName,
+      eventType: e.eventType,
+      eventStatus: e.eventStatus,
+      identifiers: e.identifiers,
+      summary: e.summary,
+      result: e.result,
+      metadata: e.metadata,
+      eventTimestamp: e.eventTimestamp,
+      createdAt: e.createdAt,
+      executionTimeMs: e.executionTimeMs,
+      endpoint: e.endpoint,
+      httpStatusCode: e.httpStatusCode,
+      httpMethod: e.httpMethod,
+      errorCode: e.errorCode,
+      errorMessage: e.errorMessage,
+      requestPayload: e.requestPayload,
+      responsePayload: e.responsePayload,
+    })),
+    systemsInvolved: data.systemsInvolved,
+    totalDurationMs: data.totalDurationMs,
     statusCounts,
-    processName: rows[0].processName,
-    accountId: rows[0].accountId,
-    startTime: new Date(minTs).toISOString(),
-    endTime: new Date(maxTs).toISOString(),
+    processName: data.processName ?? "Unknown",
+    accountId: data.accountId,
+    startTime: data.startTime ?? new Date().toISOString(),
+    endTime: data.endTime ?? new Date().toISOString(),
   };
 }

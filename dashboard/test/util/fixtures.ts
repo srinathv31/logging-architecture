@@ -41,7 +41,6 @@ export function makeTraceSummary(overrides: Partial<TraceSummary> = {}): TraceSu
     traceId: 'trace-1',
     processName: 'test-process',
     accountId: null,
-    batchId: null,
     eventCount: 3,
     hasErrors: false,
     latestStatus: 'SUCCESS',

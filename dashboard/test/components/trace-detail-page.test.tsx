@@ -26,7 +26,7 @@ vi.mock('next/link', () => ({
 
 vi.mock('nuqs', () => ({
   useQueryState: () => [null, vi.fn()],
-  parseAsInteger: { withDefault: () => ({}) },
+  parseAsInteger: { withDefault: () => ({ withOptions: () => ({}) }) },
   parseAsString: { withDefault: () => ({}) },
 }));
 

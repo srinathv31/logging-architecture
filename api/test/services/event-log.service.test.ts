@@ -1162,21 +1162,23 @@ describe('listTraces', () => {
       from: vi.fn().mockReturnValue({
         where: vi.fn().mockReturnValue({
           groupBy: vi.fn().mockReturnValue({
-            orderBy: vi.fn().mockReturnValue({
-              offset: vi.fn().mockReturnValue({
-                fetch: vi.fn().mockResolvedValue([
-                  {
-                    traceId: 'trace-1',
-                    eventCount: 5,
-                    errorCount: 1,
-                    latestStatus: 'FAILURE',
-                    startTime,
-                    endTime,
-                    processName: 'Onboarding',
-                    accountId: 'ACC-1',
-                    _totalCount: 1,
-                  },
-                ]),
+            having: vi.fn().mockReturnValue({
+              orderBy: vi.fn().mockReturnValue({
+                offset: vi.fn().mockReturnValue({
+                  fetch: vi.fn().mockResolvedValue([
+                    {
+                      traceId: 'trace-1',
+                      eventCount: 5,
+                      errorCount: 1,
+                      latestStatus: 'FAILURE',
+                      startTime,
+                      endTime,
+                      processName: 'Onboarding',
+                      accountId: 'ACC-1',
+                      _totalCount: 1,
+                    },
+                  ]),
+                }),
               }),
             }),
           }),
@@ -1203,9 +1205,11 @@ describe('listTraces', () => {
       from: vi.fn().mockReturnValue({
         where: vi.fn().mockReturnValue({
           groupBy: vi.fn().mockReturnValue({
-            orderBy: vi.fn().mockReturnValue({
-              offset: vi.fn().mockReturnValue({
-                fetch: vi.fn().mockResolvedValue([]),
+            having: vi.fn().mockReturnValue({
+              orderBy: vi.fn().mockReturnValue({
+                offset: vi.fn().mockReturnValue({
+                  fetch: vi.fn().mockResolvedValue([]),
+                }),
               }),
             }),
           }),
@@ -1225,9 +1229,11 @@ describe('listTraces', () => {
       from: vi.fn().mockReturnValue({
         where: vi.fn().mockReturnValue({
           groupBy: vi.fn().mockReturnValue({
-            orderBy: vi.fn().mockReturnValue({
-              offset: vi.fn().mockReturnValue({
-                fetch: vi.fn().mockResolvedValue([]),
+            having: vi.fn().mockReturnValue({
+              orderBy: vi.fn().mockReturnValue({
+                offset: vi.fn().mockReturnValue({
+                  fetch: vi.fn().mockResolvedValue([]),
+                }),
               }),
             }),
           }),
@@ -1253,21 +1259,23 @@ describe('listTraces', () => {
       from: vi.fn().mockReturnValue({
         where: vi.fn().mockReturnValue({
           groupBy: vi.fn().mockReturnValue({
-            orderBy: vi.fn().mockReturnValue({
-              offset: vi.fn().mockReturnValue({
-                fetch: vi.fn().mockResolvedValue([
-                  {
-                    traceId: 'trace-ok',
-                    eventCount: 3,
-                    errorCount: 0,
-                    latestStatus: 'SUCCESS',
-                    startTime: new Date('2024-01-01T10:00:00Z'),
-                    endTime: new Date('2024-01-01T10:00:01Z'),
-                    processName: null,
-                    accountId: null,
-                    _totalCount: 1,
-                  },
-                ]),
+            having: vi.fn().mockReturnValue({
+              orderBy: vi.fn().mockReturnValue({
+                offset: vi.fn().mockReturnValue({
+                  fetch: vi.fn().mockResolvedValue([
+                    {
+                      traceId: 'trace-ok',
+                      eventCount: 3,
+                      errorCount: 0,
+                      latestStatus: 'SUCCESS',
+                      startTime: new Date('2024-01-01T10:00:00Z'),
+                      endTime: new Date('2024-01-01T10:00:01Z'),
+                      processName: null,
+                      accountId: null,
+                      _totalCount: 1,
+                    },
+                  ]),
+                }),
               }),
             }),
           }),

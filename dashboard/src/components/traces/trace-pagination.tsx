@@ -10,7 +10,7 @@ interface TracePaginationProps {
 }
 
 export function TracePagination({ page, totalPages, totalCount }: TracePaginationProps) {
-  const [, setPage] = useQueryState("page", parseAsInteger.withDefault(1));
+  const [, setPage] = useQueryState("page", parseAsInteger.withDefault(1).withOptions({ shallow: false }));
 
   if (totalPages <= 1) {
     return (

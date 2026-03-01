@@ -11,6 +11,7 @@ import {
   max,
   inArray,
   getColumns,
+  like,
   type SQL,
 } from "drizzle-orm";
 import { getDb } from "../db/client";
@@ -468,24 +469,28 @@ export async function listTraces(filters: {
     conditions.push(lte(eventLogs.eventTimestamp, new Date(filters.endDate)));
   }
   if (filters.processName) {
-    conditions.push(eq(eventLogs.processName, filters.processName));
-  }
-  if (filters.eventStatus) {
-    conditions.push(eq(eventLogs.eventStatus, filters.eventStatus));
+    conditions.push(like(eventLogs.processName, `%${filters.processName}%`));
   }
   if (filters.accountId) {
-    conditions.push(eq(eventLogs.accountId, filters.accountId));
+    conditions.push(like(eventLogs.accountId, `%${filters.accountId}%`));
   }
 
   const where = and(...conditions);
   const offset = (filters.page - 1) * filters.pageSize;
+
+  const statusExpr = sql`CASE
+    WHEN sum(case when ${eventLogs.eventType} = 'PROCESS_END' and ${eventLogs.eventStatus} = 'SUCCESS' then 1 else 0 end) > 0 THEN 'SUCCESS'
+    WHEN sum(case when ${eventLogs.eventStatus} = 'FAILURE' then 1 else 0 end) > 0 THEN 'FAILURE'
+    WHEN sum(case when ${eventLogs.eventStatus} = 'WARNING' then 1 else 0 end) > 0 THEN 'WARNING'
+    ELSE 'IN_PROGRESS'
+  END`;
 
   const rows = await db
     .select({
       traceId: eventLogs.traceId,
       eventCount: sql<number>`cast(count(*) as int)`,
       errorCount: sql<number>`cast(sum(case when ${eventLogs.eventStatus} = 'FAILURE' then 1 else 0 end) as int)`,
-      latestStatus: sql<string>`(select top 1 e2.event_status from [event_log] e2 where e2.trace_id = ${eventLogs.traceId} and e2.is_deleted = 0 order by e2.event_timestamp desc)`,
+      latestStatus: sql<string>`${statusExpr}`,
       startTime: min(eventLogs.eventTimestamp),
       endTime: max(eventLogs.eventTimestamp),
       processName: sql<string | null>`min(case when ${eventLogs.eventType} = 'PROCESS_START' then ${eventLogs.processName} end)`,
@@ -495,6 +500,9 @@ export async function listTraces(filters: {
     .from(eventLogs)
     .where(where)
     .groupBy(eventLogs.traceId)
+    .having(filters.eventStatus
+      ? sql`${statusExpr} = ${filters.eventStatus}`
+      : undefined)
     .orderBy(sql`max(${eventLogs.eventTimestamp}) desc`)
     .offset(offset)
     .fetch(filters.pageSize);
