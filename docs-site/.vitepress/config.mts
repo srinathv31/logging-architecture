@@ -144,6 +144,8 @@ export default withMermaid(
             text: 'Core',
             collapsed: false,
             items: [
+              { text: 'EventLogTemplate', link: '/node-sdk/core/event-log-template' },
+              { text: 'Context Propagation', link: '/node-sdk/core/context' },
               { text: 'EventLogClient', link: '/node-sdk/core/event-log-client' },
               { text: 'AsyncEventLogger', link: '/node-sdk/core/async-event-logger' },
               { text: 'OAuth Provider', link: '/node-sdk/core/oauth' },
