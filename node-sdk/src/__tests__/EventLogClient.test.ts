@@ -210,6 +210,31 @@ describe('EventLogClient', () => {
     });
   });
 
+  describe('retryDelay config', () => {
+    it('uses custom retryDelay for backoff', async () => {
+      const start = Date.now();
+      const mockFetch = createMockFetch([
+        { status: 500, body: { error: 'fail' }, ok: false },
+        { status: 200, body: { success: true, execution_ids: ['e1'], correlation_id: 'c1' } },
+      ]);
+
+      const client = new EventLogClient({
+        baseUrl: 'https://api.example.com',
+        apiKey: 'key',
+        maxRetries: 1,
+        retryDelay: 100, // 100ms instead of default 500ms
+        fetch: mockFetch as typeof fetch,
+      });
+
+      await client.createEvent(makeEvent());
+      const elapsed = Date.now() - start;
+      // With retryDelay=100, first retry delay is 100 * 2^1 = 200ms
+      // Much less than default 500 * 2^1 = 1000ms
+      expect(elapsed).toBeLessThan(800);
+      expect(mockFetch).toHaveBeenCalledTimes(2);
+    });
+  });
+
   describe('query endpoints', () => {
     it('getEventsByCorrelation sends GET with encoded ID', async () => {
       const mockFetch = createMockFetch([

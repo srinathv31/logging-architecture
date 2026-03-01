@@ -41,6 +41,9 @@ export interface AsyncEventLoggerConfig {
   /** Number of events to drain per processing tick (default: 25). Set to 1 to disable batching. */
   batchSize?: number;
 
+  /** Maximum time in ms to wait before sending a partial batch (default: 100) */
+  maxBatchWaitMs?: number;
+
   /** Max payload size in bytes before truncation (default: 32768 = 32KB) */
   maxPayloadSize?: number;
 
@@ -63,6 +66,12 @@ export interface AsyncEventLoggerConfig {
 
   /** Called when the circuit breaker resets */
   onCircuitClose?: () => void;
+
+  /** Callback that replays spillover events. Called periodically when queue has capacity. */
+  onSpilloverReplay?: (requeue: (events: EventLogEntry[]) => number) => Promise<number>;
+
+  /** Interval in ms between spillover replay attempts (default: 10000) */
+  replayIntervalMs?: number;
 }
 
 interface QueuedEvent {
@@ -77,6 +86,7 @@ export interface AsyncEventLoggerMetrics {
   eventsSent: number;
   eventsFailed: number;
   eventsSpilled: number;
+  eventsReplayed: number;
   currentQueueDepth: number;
   circuitOpen: boolean;
 }
@@ -115,6 +125,7 @@ export class AsyncEventLogger {
   private readonly onSpillover?: (event: EventLogEntry) => void;
   private readonly applicationId?: string;
   private readonly batchSize: number;
+  private readonly maxBatchWaitMs: number;
   private readonly maxPayloadSize: number;
   private readonly logger: EventLogLogger;
   private readonly validateBeforeQueue: boolean;
@@ -122,6 +133,8 @@ export class AsyncEventLogger {
   private readonly onBatchFailed?: (events: EventLogEntry[], error: Error) => void;
   private readonly onCircuitOpen?: (consecutiveFailures: number) => void;
   private readonly onCircuitClose?: () => void;
+  private readonly onSpilloverReplay?: (requeue: (events: EventLogEntry[]) => number) => Promise<number>;
+  private readonly replayIntervalMs: number;
 
   // Circuit breaker state
   private circuitOpen = false;
@@ -133,10 +146,13 @@ export class AsyncEventLogger {
   private _eventsSent = 0;
   private _eventsFailed = 0;
   private _eventsSpilled = 0;
+  private _eventsReplayed = 0;
 
   // Processing state
   private isShuttingDown = false;
   private processingTimer: ReturnType<typeof setTimeout> | null = null;
+  private replayTimer: ReturnType<typeof setTimeout> | null = null;
+  private lastBatchItemTime = 0; // timestamp when first item was added to a pending batch
 
   // Signal handler references for cleanup
   private readonly _onSigterm: (() => void) | null = null;
@@ -154,6 +170,7 @@ export class AsyncEventLogger {
     this.onSpillover = config.onSpillover;
     this.applicationId = config.applicationId;
     this.batchSize = config.batchSize ?? 25;
+    this.maxBatchWaitMs = config.maxBatchWaitMs ?? 100;
     this.maxPayloadSize = config.maxPayloadSize ?? 32_768;
     this.logger = resolveLogger(config.logger);
     this.validateBeforeQueue = config.validateBeforeQueue ?? true;
@@ -161,9 +178,16 @@ export class AsyncEventLogger {
     this.onBatchFailed = config.onBatchFailed;
     this.onCircuitOpen = config.onCircuitOpen;
     this.onCircuitClose = config.onCircuitClose;
+    this.onSpilloverReplay = config.onSpilloverReplay;
+    this.replayIntervalMs = config.replayIntervalMs ?? 10_000;
 
     // Start processing loop
     this.startProcessing();
+
+    // Start spillover replay if configured
+    if (this.onSpilloverReplay) {
+      this.startReplayLoop();
+    }
 
     // Register shutdown handlers (once to prevent accumulation)
     if (typeof process !== 'undefined') {
@@ -247,6 +271,9 @@ export class AsyncEventLogger {
 
     this.queue.push(queued);
     this._eventsQueued++;
+    if (this.lastBatchItemTime === 0) {
+      this.lastBatchItemTime = Date.now();
+    }
     return true;
   }
 
@@ -285,6 +312,7 @@ export class AsyncEventLogger {
       eventsSent: this._eventsSent,
       eventsFailed: this._eventsFailed,
       eventsSpilled: this._eventsSpilled,
+      eventsReplayed: this._eventsReplayed,
       currentQueueDepth: this.queue.length,
       circuitOpen: this.circuitOpen,
     };
@@ -324,10 +352,14 @@ export class AsyncEventLogger {
       if (this._onSigint) process.removeListener('SIGINT', this._onSigint);
     }
 
-    // Stop the processing timer
+    // Stop timers
     if (this.processingTimer) {
       clearTimeout(this.processingTimer);
       this.processingTimer = null;
+    }
+    if (this.replayTimer) {
+      clearTimeout(this.replayTimer);
+      this.replayTimer = null;
     }
 
     // Flush remaining events with timeout
@@ -354,14 +386,68 @@ export class AsyncEventLogger {
   private startProcessing(): void {
     const scheduleNext = () => {
       if (this.isShuttingDown) return;
-      // Immediate when queue has items, 50ms idle poll
-      const delay = this.queue.length > 0 ? 0 : 50;
+
+      let delay: number;
+      if (this.queue.length >= this.batchSize) {
+        // Full batch ready — send immediately
+        delay = 0;
+      } else if (this.queue.length > 0) {
+        // Partial batch — wait up to maxBatchWaitMs from when first item arrived
+        if (this.lastBatchItemTime === 0) {
+          this.lastBatchItemTime = Date.now();
+        }
+        const elapsed = Date.now() - this.lastBatchItemTime;
+        delay = Math.max(0, this.maxBatchWaitMs - elapsed);
+      } else {
+        // Empty queue — idle poll
+        delay = 50;
+        this.lastBatchItemTime = 0;
+      }
+
       this.processingTimer = setTimeout(async () => {
         await this.processQueue();
+        if (this.queue.length === 0) this.lastBatchItemTime = 0;
         scheduleNext();
       }, delay);
     };
     scheduleNext();
+  }
+
+  private startReplayLoop(): void {
+    const scheduleReplay = () => {
+      if (this.isShuttingDown) return;
+      this.replayTimer = setTimeout(async () => {
+        await this.attemptReplay();
+        scheduleReplay();
+      }, this.replayIntervalMs);
+    };
+    scheduleReplay();
+  }
+
+  private async attemptReplay(): Promise<void> {
+    if (!this.onSpilloverReplay) return;
+    if (this.circuitOpen) return;
+    if (this.queue.length >= this.maxQueueSize * 0.8) return; // don't replay when queue is nearly full
+
+    try {
+      const replayed = await this.onSpilloverReplay((events) => {
+        let count = 0;
+        for (const event of events) {
+          if (this.queue.length < this.maxQueueSize) {
+            this.queue.push({ event, attempts: 0, firstAttempt: new Date() });
+            this._eventsQueued++;
+            count++;
+          }
+        }
+        return count;
+      });
+      if (replayed > 0) {
+        this._eventsReplayed += replayed;
+        this.logger.info(`[EventLog] Replayed ${replayed} spillover events`);
+      }
+    } catch (err) {
+      this.logger.warn(`[EventLog] Spillover replay failed: ${err}`);
+    }
   }
 
   private async processQueue(): Promise<void> {

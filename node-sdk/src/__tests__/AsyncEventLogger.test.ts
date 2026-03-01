@@ -519,4 +519,58 @@ describe('AsyncEventLogger', () => {
       expect(logger.getMetrics().eventsQueued).toBe(3);
     });
   });
+
+  describe('maxBatchWaitMs', () => {
+    it('waits for maxBatchWaitMs before sending partial batch', async () => {
+      const client = createMockClient();
+      logger = new AsyncEventLogger({
+        client,
+        logger: 'silent',
+        batchSize: 10, // large batch size
+        maxBatchWaitMs: 50, // short wait
+      });
+
+      // Log a single event (partial batch)
+      logger.log(makeEvent());
+
+      // Wait for maxBatchWaitMs to elapse
+      await new Promise((r) => setTimeout(r, 200));
+
+      // Should have sent after the wait
+      expect(client.createEvent).toHaveBeenCalled();
+    });
+  });
+
+  describe('spillover replay', () => {
+    it('replays spillover events via onSpilloverReplay', async () => {
+      const client = createMockClient();
+      const replayEvents = [makeEvent(), makeEvent()];
+
+      logger = new AsyncEventLogger({
+        client,
+        logger: 'silent',
+        batchSize: 1,
+        replayIntervalMs: 50,
+        onSpilloverReplay: async (requeue) => {
+          return requeue(replayEvents);
+        },
+      });
+
+      // Wait for replay to fire
+      await new Promise((r) => setTimeout(r, 200));
+      await logger.flush(5000);
+
+      expect(logger.getMetrics().eventsReplayed).toBeGreaterThanOrEqual(2);
+    });
+
+    it('tracks eventsReplayed in metrics', async () => {
+      const client = createMockClient();
+      logger = new AsyncEventLogger({
+        client,
+        logger: 'silent',
+      });
+
+      expect(logger.getMetrics().eventsReplayed).toBe(0);
+    });
+  });
 });

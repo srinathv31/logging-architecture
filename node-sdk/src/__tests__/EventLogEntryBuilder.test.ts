@@ -89,6 +89,72 @@ describe('EventLogEntryBuilder', () => {
   });
 });
 
+describe('EventLogEntryBuilder.fromEntry', () => {
+  it('copies all fields from an existing entry', () => {
+    const original = eventBuilder()
+      .correlationId('corr-1')
+      .traceId('trace-1')
+      .applicationId('app')
+      .targetSystem('target')
+      .originatingSystem('origin')
+      .processName('TestProcess')
+      .eventType(EventType.STEP)
+      .eventStatus(EventStatus.SUCCESS)
+      .stepSequence(1)
+      .stepName('Step1')
+      .summary('Original summary')
+      .result('OK')
+      .identifier('customer_id', 'c123')
+      .metadata({ key: 'val' })
+      .spanId('span-1')
+      .spanLinks(['link-1'])
+      .build();
+
+    const copy = EventLogEntryBuilder.fromEntry(original)
+      .summary('Modified summary')
+      .stepSequence(2)
+      .build();
+
+    // Modified fields
+    expect(copy.summary).toBe('Modified summary');
+    expect(copy.step_sequence).toBe(2);
+
+    // Preserved fields
+    expect(copy.correlation_id).toBe('corr-1');
+    expect(copy.trace_id).toBe('trace-1');
+    expect(copy.application_id).toBe('app');
+    expect(copy.step_name).toBe('Step1');
+    expect(copy.span_id).toBe('span-1');
+    expect(copy.identifiers.customer_id).toBe('c123');
+    expect(copy.metadata).toEqual({ key: 'val' });
+  });
+
+  it('creates independent copies (no shared references)', () => {
+    const original = eventBuilder()
+      .correlationId('corr-1')
+      .traceId('trace-1')
+      .applicationId('app')
+      .targetSystem('target')
+      .originatingSystem('origin')
+      .processName('TestProcess')
+      .eventType(EventType.STEP)
+      .eventStatus(EventStatus.SUCCESS)
+      .summary('Test')
+      .result('OK')
+      .identifier('customer_id', 'c123')
+      .metadata({ key: 'val' })
+      .build();
+
+    const copy = EventLogEntryBuilder.fromEntry(original)
+      .identifier('new_id', 'new_val')
+      .build();
+
+    // Original should not be affected
+    expect(original.identifiers.new_id).toBeUndefined();
+    expect(copy.identifiers.new_id).toBe('new_val');
+  });
+});
+
 describe('eventBuilder factory', () => {
   it('returns a new EventLogEntryBuilder', () => {
     expect(eventBuilder()).toBeInstanceOf(EventLogEntryBuilder);

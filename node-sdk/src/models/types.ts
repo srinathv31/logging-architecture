@@ -21,6 +21,7 @@ export const EventStatus = {
   FAILURE: 'FAILURE',
   IN_PROGRESS: 'IN_PROGRESS',
   SKIPPED: 'SKIPPED',
+  WARNING: 'WARNING',
 } as const;
 
 export type EventStatus = (typeof EventStatus)[keyof typeof EventStatus];
@@ -237,7 +238,10 @@ export interface EventLogClientConfig {
   
   /** Maximum retry attempts for failed requests (default: 3) */
   maxRetries?: number;
-  
+
+  /** Base retry delay in milliseconds for exponential backoff (default: 500) */
+  retryDelay?: number;
+
   /** Custom fetch implementation (for testing or custom environments) */
   fetch?: typeof fetch;
 

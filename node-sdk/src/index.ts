@@ -70,8 +70,19 @@ export {
 } from './utils/EventLogEntryBuilder';
 
 // Disk Spillover
-export { createDiskSpillover } from './utils/diskSpillover';
+export {
+  createDiskSpillover,
+  type DiskSpilloverConfig,
+  type DiskSpilloverResult,
+} from './utils/diskSpillover';
 
 // Template System
 export { EventLogTemplate } from './client/EventLogTemplate';
-export { ProcessLogger } from './client/ProcessLogger';
+export { ProcessLogger, type EventOptions } from './client/ProcessLogger';
+
+// Context Propagation
+export {
+  EventLogContext,
+  eventLogContext,
+  type EventLogContextData,
+} from './context/EventLogContext';

@@ -65,6 +65,7 @@ export class MockAsyncEventLogger {
       eventsSent: this.capturedEvents.length,
       eventsFailed: 0,
       eventsSpilled: 0,
+      eventsReplayed: 0,
       currentQueueDepth: 0,
       circuitOpen: false,
     };
@@ -113,6 +114,19 @@ export class MockAsyncEventLogger {
     }
 
     return match;
+  }
+
+  /**
+   * Assert that exactly `expected` events have been logged.
+   * Throws if the count does not match.
+   */
+  assertEventCount(expected: number): void {
+    if (this.capturedEvents.length !== expected) {
+      throw new Error(
+        `Expected ${expected} events, but got ${this.capturedEvents.length}. ` +
+          `Events: ${this.capturedEvents.map((e) => `${e.process_name}/${e.event_type}`).join(', ')}`
+      );
+    }
   }
 
   /** Clear all captured events */

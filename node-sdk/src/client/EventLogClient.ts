@@ -66,6 +66,7 @@ export class EventLogClient {
   private readonly tokenProvider?: TokenProvider;
   private readonly timeout: number;
   private readonly maxRetries: number;
+  private readonly retryDelay: number;
   private readonly fetchFn: typeof fetch;
 
   constructor(config: EventLogClientConfig) {
@@ -76,6 +77,7 @@ export class EventLogClient {
     this.baseUrl = config.baseUrl.replace(/\/$/, '');
     this.timeout = config.timeout ?? 30000;
     this.maxRetries = config.maxRetries ?? 3;
+    this.retryDelay = config.retryDelay ?? 500;
     this.fetchFn = config.fetch ?? fetch;
 
     this.staticHeaders = {
@@ -213,7 +215,7 @@ export class EventLogClient {
       try {
         if (attempt > 0) {
           // Exponential backoff with 30s cap
-          await this.sleep(Math.min(500 * Math.pow(2, attempt), 30_000));
+          await this.sleep(Math.min(this.retryDelay * Math.pow(2, attempt), 30_000));
         }
 
         // Build headers with auth

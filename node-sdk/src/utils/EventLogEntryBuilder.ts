@@ -205,6 +205,23 @@ export class EventLogEntryBuilder {
     return this;
   }
 
+  // --- Copy ---
+
+  /**
+   * Create a new builder pre-populated from an existing EventLogEntry.
+   * Useful for creating variations of an existing event.
+   */
+  static fromEntry(entry: EventLogEntry): EventLogEntryBuilder {
+    const builder = new EventLogEntryBuilder();
+    builder.entry = {
+      ...entry,
+      identifiers: { ...entry.identifiers },
+      span_links: entry.span_links ? [...entry.span_links] : undefined,
+      metadata: entry.metadata ? { ...entry.metadata } : undefined,
+    };
+    return builder;
+  }
+
   // --- Build ---
 
   /**
