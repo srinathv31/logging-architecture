@@ -46,8 +46,23 @@ Full property reference for the Spring Boot starter.
 | `eventlog.async.circuit-breaker-threshold` | int | `5` | Failures before circuit opens |
 | `eventlog.async.circuit-breaker-reset-ms` | long | `30000` | Circuit reset time |
 | `eventlog.async.spillover-path` | path | — | Spillover directory for disk persistence |
+| `eventlog.async.replay-interval-ms` | long | `10000` | How often the replay loop retries spilled events (ms) |
+| `eventlog.async.max-spillover-events` | int | `10000` | Max events per spillover file before dropping |
+| `eventlog.async.max-spillover-size-mb` | int | `50` | Max spillover file size in MB before dropping |
 | `eventlog.async.virtual-threads` | boolean | `false` | Use virtual threads for async logging |
 | `eventlog.async.executor` | string | — | `virtual` \| `spring` \| bean name |
+
+### MDC Filter
+
+| Property | Type | Default | Description |
+| --- | --- | --- | --- |
+| `eventlog.mdc-filter.url-patterns` | string | — | Comma-separated URL patterns for the MDC propagation servlet filter |
+
+### Metrics
+
+| Property | Type | Default | Description |
+| --- | --- | --- | --- |
+| `eventlog.metrics.enabled` | boolean | `true` | Publish Micrometer gauges when Micrometer is on the classpath |
 
 ### Annotation
 
@@ -65,3 +80,7 @@ Full property reference for the Spring Boot starter.
 
 - `eventlog.application-id` defaults to `spring.application.name` for annotation-based logging when unset.
 - Profile-aware defaults apply when the active profile includes `dev`, `local`, or `test`.
+- Spillover replay properties (`replay-interval-ms`, `max-spillover-events`, `max-spillover-size-mb`) only take effect when `spillover-path` is set.
+- `mdc-filter.url-patterns` registers a servlet filter that populates SLF4J MDC with `correlationId`, `traceId`, and `spanId` for matching requests.
+- Metrics gauges are published automatically when Micrometer is on the classpath. Add `spring-boot-starter-actuator` and expose the `metrics` endpoint to query them.
+- See the [Application YAML Guide](/java-sdk/spring-boot/application-yml-guide) for a complete, copy-paste-ready configuration example.

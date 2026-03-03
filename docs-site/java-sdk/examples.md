@@ -21,6 +21,7 @@ This document provides concrete examples for every user-facing feature.
 | Query by account/correlation/trace | [EventLogClient](/java-sdk/core/event-log-client) |
 | EventLogTemplate convenience | [EventLogTemplate](/java-sdk/core/event-log-template) |
 | Annotation-based logging | [@LogEvent](/java-sdk/spring-boot/annotations) |
+| Complete application.yml (all options) | [Application YAML Guide](/java-sdk/spring-boot/application-yml-guide) |
 | Testing with MockAsyncEventLogger | [Testing](/java-sdk/testing) |
 
 ## MDC Context Propagation

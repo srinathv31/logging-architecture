@@ -155,6 +155,10 @@ Setting `spilloverPath` to a non-null value enables the entire spillover subsyst
 
 ### Micrometer Gauges
 
+::: tip Actuator Setup
+To expose these metrics via HTTP, add `spring-boot-starter-actuator` to your dependencies and configure the management endpoints. See the [Application YAML Guide — Metrics & Actuator](/java-sdk/spring-boot/application-yml-guide#metrics-actuator) for the full setup.
+:::
+
 When `eventlog.metrics.enabled=true` (default) and Micrometer is on the classpath:
 
 | Metric Name | Description |

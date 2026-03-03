@@ -180,6 +180,7 @@ process.processEnd(2, EventStatus.SUCCESS,
 
 ## Next Steps
 
+- [Application YAML Guide](/java-sdk/spring-boot/application-yml-guide) — complete, copy-paste-ready `application.yml` with all options
 - [EventLogTemplate](/java-sdk/core/event-log-template) — fluent process logging with MDC support
 - [@LogEvent Annotation](/java-sdk/spring-boot/annotations) — automatic method-level logging
 - [Configuration Reference](/java-sdk/spring-boot/configuration) — full property table

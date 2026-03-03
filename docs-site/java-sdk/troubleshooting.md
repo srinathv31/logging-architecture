@@ -44,6 +44,34 @@ title: Troubleshooting
 - Increase `eventlog.connect-timeout` and `eventlog.request-timeout`.
 - For OAuth, also adjust `eventlog.oauth.connect-timeout` and `eventlog.oauth.request-timeout`.
 
+## Metrics Not Showing in Actuator
+
+- Ensure `spring-boot-starter-actuator` is in your `pom.xml`.
+- Verify the metrics endpoint is exposed:
+  ```yaml
+  management:
+    endpoints:
+      web:
+        exposure:
+          include: health,metrics
+  ```
+- Check that `eventlog.metrics.enabled` is not set to `false` (it defaults to `true`).
+- Confirm Micrometer is on the classpath (included by the actuator starter).
+- Query `curl http://localhost:8080/actuator/metrics` and look for names starting with `eventlog.`.
+- See the [Application YAML Guide — Metrics & Actuator](/java-sdk/spring-boot/application-yml-guide#metrics-actuator) for the complete setup.
+
+## MDC Values Not Propagating
+
+- Ensure `eventlog.mdc-filter.url-patterns` is set and matches your request paths:
+  ```yaml
+  eventlog:
+    mdc-filter:
+      url-patterns: "/api/*"
+  ```
+- Verify your URLs match the pattern — the filter only applies to matching paths.
+- Check that `correlationId` and `traceId` are present in the incoming request headers.
+- If using async processing, MDC values may not propagate to child threads. Use `MDC.getCopyOfContextMap()` and set it on the child thread.
+
 ## Serialization Errors
 
 - If using Spring Boot, ensure Jackson modules are on the classpath.

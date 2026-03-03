@@ -21,6 +21,7 @@ export default withMermaid(
 
       nav: [
         { text: 'Overview', link: '/overview/introduction' },
+        { text: 'Core Concepts', link: '/concepts/' },
         {
           text: 'Libraries',
           items: [
@@ -30,10 +31,22 @@ export default withMermaid(
           ],
         },
         { text: 'Pet Resort', link: '/pet-resort/' },
+        { text: 'AI Skills', link: '/ai-skills/' },
         { text: 'Contributing', link: '/contributing/' },
       ],
 
       sidebar: {
+        '/concepts/': [
+          {
+            text: 'Core Concepts',
+            items: [
+              { text: 'What is Event Logging', link: '/concepts/' },
+              { text: 'Event Model', link: '/concepts/event-model' },
+              { text: 'Your First Trace', link: '/concepts/your-first-trace' },
+            ],
+          },
+        ],
+
         '/overview/': [
           {
             text: 'Overview',
@@ -95,6 +108,7 @@ export default withMermaid(
             collapsed: false,
             items: [
               { text: 'Auto-Configuration', link: '/java-sdk/spring-boot/auto-configuration' },
+              { text: 'Application YAML Guide', link: '/java-sdk/spring-boot/application-yml-guide' },
               { text: 'Configuration Reference', link: '/java-sdk/spring-boot/configuration' },
               { text: 'OAuth Provider', link: '/java-sdk/core/oauth' },
               { text: 'Refresh Scope', link: '/java-sdk/spring-boot/refresh-scope' },
@@ -178,6 +192,16 @@ export default withMermaid(
               { text: 'Overview', link: '/pet-resort/' },
               { text: 'Runbook', link: '/pet-resort/runbook' },
               { text: 'SDK Approaches', link: '/pet-resort/sdk-approaches' },
+            ],
+          },
+        ],
+
+        '/ai-skills/': [
+          {
+            text: 'AI Skills',
+            items: [
+              { text: 'Introduction', link: '/ai-skills/' },
+              { text: 'Skills Catalog', link: '/ai-skills/catalog' },
             ],
           },
         ],

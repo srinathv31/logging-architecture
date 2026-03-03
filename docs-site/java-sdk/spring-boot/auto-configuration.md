@@ -43,6 +43,10 @@ eventlog:
     # executor: virtual | spring | <bean-name>
 ```
 
+::: tip Full YAML Reference
+This page shows a partial configuration example. For a complete, production-ready `application.yml` with all options (spillover, MDC filter, actuator metrics, and more), see the [Application YAML Guide](/java-sdk/spring-boot/application-yml-guide).
+:::
+
 ## Transport Selection
 
 By default the starter auto-selects the best available transport:

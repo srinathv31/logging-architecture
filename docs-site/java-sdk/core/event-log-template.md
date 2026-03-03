@@ -140,6 +140,52 @@ process.withEndpoint("/api/v2/partners/verify")
 process.processEnd(2, EventStatus.SUCCESS, "API call complete", "DONE", totalMs);
 ```
 
+### Error Handling
+
+Error handling has 3 layers, each producing a different event type:
+
+```java
+ProcessLogger process = template.forProcess("ORDER_PROCESSING")
+    .addIdentifier("order_id", orderId);
+
+try {
+    process.processStart("Processing order " + orderId, "INITIATED");
+
+    try {
+        reserveInventory(order);
+        process.logStep(1, "Reserve Inventory", EventStatus.SUCCESS,
+            "Inventory reserved", "RESERVED");
+    } catch (OutOfStockException e) {
+        // Layer 1: Known error → STEP event with step context preserved
+        process.withErrorCode("OUT_OF_STOCK")
+            .withErrorMessage(e.getMessage())
+            .logStep(1, "Reserve Inventory", EventStatus.FAILURE,
+                "Item " + e.getSkuId() + " out of stock", "FAILED");
+
+        // Layer 2: Close the process → PROCESS_END event
+        process.processEnd(2, EventStatus.FAILURE,
+            "Order failed — inventory unavailable", "FAILED", null);
+        throw e;
+    }
+
+    process.processEnd(2, EventStatus.SUCCESS, "Order complete", "COMPLETED", totalMs);
+
+} catch (Exception e) {
+    // Layer 3: Unhandled exception → ERROR event (step_sequence = null)
+    process.error("UNHANDLED_ERROR", e.getMessage(),
+        "Unexpected error — " + e.getClass().getSimpleName(), "FAILED");
+    throw e;
+}
+```
+
+| Layer | Method | Event Type | Step Context | Use For |
+|-------|--------|-----------|-------------|---------|
+| 1 | `withErrorCode().withErrorMessage().logStep(FAILURE)` | `STEP` | Preserved | Known business errors |
+| 2 | `processEnd(FAILURE)` | `PROCESS_END` | Step sequence only | Formally closing the process |
+| 3 | `error()` | `ERROR` | Always `null` | Unhandled exceptions only |
+
+AI agents use step context to diagnose failures automatically. When `step_sequence` and `step_name` are present, the agent knows exactly which step failed. When they're `null` (ERROR events), the agent escalates to a human.
+
 ### Warning Steps with Error Context
 
 Use `withErrorCode()` and `withErrorMessage()` on non-error events to capture partial failure context:
