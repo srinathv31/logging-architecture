@@ -4,9 +4,11 @@ import { apiGet } from "@/lib/api-client";
 
 export interface TraceListFilters {
   processName?: string;
-  batchId?: string;
   accountId?: string;
+  traceId?: string;
+  correlationId?: string;
   eventStatus?: string;
+  hasErrors?: string;
   startDate?: string;
   endDate?: string;
   page?: number;
@@ -61,7 +63,10 @@ export async function getTraces(filters: TraceListFilters): Promise<TraceListRes
   };
   if (filters.processName) params.processName = filters.processName;
   if (filters.accountId) params.accountId = filters.accountId;
+  if (filters.traceId) params.traceId = filters.traceId;
+  if (filters.correlationId) params.correlationId = filters.correlationId;
   if (filters.eventStatus) params.eventStatus = filters.eventStatus;
+  if (filters.hasErrors) params.hasErrors = filters.hasErrors;
   if (filters.startDate) params.startDate = filters.startDate;
   if (filters.endDate) params.endDate = filters.endDate;
 

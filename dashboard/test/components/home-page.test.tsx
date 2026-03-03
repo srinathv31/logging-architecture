@@ -15,9 +15,11 @@ vi.mock('@/lib/search-params', () => ({
   searchParamsCache: {
     parse: (params: any) => ({
       processName: '',
-      batchId: '',
       accountId: '',
+      traceId: '',
+      correlationId: '',
       eventStatus: '',
+      hasErrors: '',
       startDate: '',
       endDate: '',
       page: 1,
@@ -43,8 +45,15 @@ vi.mock('next/link', () => ({
 }));
 
 vi.mock('@/lib/constants', () => ({
-  EVENT_STATUSES: ['SUCCESS', 'FAILURE', 'IN_PROGRESS', 'SKIPPED'],
+  EVENT_STATUSES: ['SUCCESS', 'FAILURE', 'IN_PROGRESS', 'SKIPPED', 'WARNING'],
   STATUS_ICONS: {},
+  STATUS_DOT_COLORS: {
+    SUCCESS: 'bg-green-500',
+    FAILURE: 'bg-red-500',
+    IN_PROGRESS: 'bg-yellow-500',
+    SKIPPED: 'bg-gray-400',
+    WARNING: 'bg-amber-500',
+  },
 }));
 
 import HomePage from '@/app/page';

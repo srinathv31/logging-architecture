@@ -107,23 +107,25 @@ export default async function HomePage({
         </ErrorBoundary>
 
         {/* Filters and Table Section */}
-        <div className="space-y-4">
-          <TraceFilters />
-
+        <TraceFilters>
           <ErrorBoundary fallback={<TraceTableError />}>
             <Suspense key={filterHash} fallback={<TraceTableSkeleton />}>
               <TraceTableServer
                 filters={{
                   processName: params.processName || undefined,
-                  batchId: params.batchId || undefined,
                   accountId: params.accountId || undefined,
+                  traceId: params.traceId || undefined,
+                  correlationId: params.correlationId || undefined,
                   eventStatus: params.eventStatus || undefined,
+                  hasErrors: params.hasErrors || undefined,
+                  startDate: params.startDate || undefined,
+                  endDate: params.endDate || undefined,
                   page: params.page,
                 }}
               />
             </Suspense>
           </ErrorBoundary>
-        </div>
+        </TraceFilters>
       </div>
     </NuqsAdapter>
   );
