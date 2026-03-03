@@ -6,8 +6,11 @@ export const listTracesQuerySchema = paginationQuerySchema
   .merge(dateRangeQuerySchema)
   .extend({
     processName: z.string().optional(),
-    eventStatus: z.enum(EVENT_STATUSES).optional(),
+    eventStatus: z.string().optional(),
     accountId: z.string().max(64).optional(),
+    traceId: z.string().max(200).optional(),
+    correlationId: z.string().max(200).optional(),
+    hasErrors: z.coerce.boolean().optional(),
   });
 
 export const traceSummarySchema = z.object({

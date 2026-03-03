@@ -1289,6 +1289,178 @@ describe('listTraces', () => {
     expect(result.traces[0].processName).toBeNull();
     expect(result.traces[0].accountId).toBeNull();
   });
+
+  it('should pass traceId filter', async () => {
+    mockDb.select.mockReturnValueOnce({
+      from: vi.fn().mockReturnValue({
+        where: vi.fn().mockReturnValue({
+          groupBy: vi.fn().mockReturnValue({
+            having: vi.fn().mockReturnValue({
+              orderBy: vi.fn().mockReturnValue({
+                offset: vi.fn().mockReturnValue({
+                  fetch: vi.fn().mockResolvedValue([]),
+                }),
+              }),
+            }),
+          }),
+        }),
+      }),
+    });
+
+    const result = await listTraces({ traceId: 'trace-123', page: 1, pageSize: 20 });
+
+    expect(result.traces).toHaveLength(0);
+    expect(result.totalCount).toBe(0);
+  });
+
+  it('should pass correlationId filter', async () => {
+    mockDb.select.mockReturnValueOnce({
+      from: vi.fn().mockReturnValue({
+        where: vi.fn().mockReturnValue({
+          groupBy: vi.fn().mockReturnValue({
+            having: vi.fn().mockReturnValue({
+              orderBy: vi.fn().mockReturnValue({
+                offset: vi.fn().mockReturnValue({
+                  fetch: vi.fn().mockResolvedValue([]),
+                }),
+              }),
+            }),
+          }),
+        }),
+      }),
+    });
+
+    const result = await listTraces({ correlationId: 'corr-456', page: 1, pageSize: 20 });
+
+    expect(result.traces).toHaveLength(0);
+    expect(result.totalCount).toBe(0);
+  });
+
+  it('should pass hasErrors filter', async () => {
+    mockDb.select.mockReturnValueOnce({
+      from: vi.fn().mockReturnValue({
+        where: vi.fn().mockReturnValue({
+          groupBy: vi.fn().mockReturnValue({
+            having: vi.fn().mockReturnValue({
+              orderBy: vi.fn().mockReturnValue({
+                offset: vi.fn().mockReturnValue({
+                  fetch: vi.fn().mockResolvedValue([]),
+                }),
+              }),
+            }),
+          }),
+        }),
+      }),
+    });
+
+    const result = await listTraces({ hasErrors: true, page: 1, pageSize: 20 });
+
+    expect(result.traces).toHaveLength(0);
+    expect(result.totalCount).toBe(0);
+  });
+
+  it('should pass single eventStatus filter', async () => {
+    mockDb.select.mockReturnValueOnce({
+      from: vi.fn().mockReturnValue({
+        where: vi.fn().mockReturnValue({
+          groupBy: vi.fn().mockReturnValue({
+            having: vi.fn().mockReturnValue({
+              orderBy: vi.fn().mockReturnValue({
+                offset: vi.fn().mockReturnValue({
+                  fetch: vi.fn().mockResolvedValue([]),
+                }),
+              }),
+            }),
+          }),
+        }),
+      }),
+    });
+
+    const result = await listTraces({ eventStatus: 'FAILURE', page: 1, pageSize: 20 });
+
+    expect(result.traces).toHaveLength(0);
+    expect(result.totalCount).toBe(0);
+  });
+
+  it('should pass comma-separated multi-status filter', async () => {
+    mockDb.select.mockReturnValueOnce({
+      from: vi.fn().mockReturnValue({
+        where: vi.fn().mockReturnValue({
+          groupBy: vi.fn().mockReturnValue({
+            having: vi.fn().mockReturnValue({
+              orderBy: vi.fn().mockReturnValue({
+                offset: vi.fn().mockReturnValue({
+                  fetch: vi.fn().mockResolvedValue([]),
+                }),
+              }),
+            }),
+          }),
+        }),
+      }),
+    });
+
+    const result = await listTraces({ eventStatus: 'FAILURE,WARNING', page: 1, pageSize: 20 });
+
+    expect(result.traces).toHaveLength(0);
+    expect(result.totalCount).toBe(0);
+  });
+
+  it('should filter out invalid statuses in comma-separated list', async () => {
+    mockDb.select.mockReturnValueOnce({
+      from: vi.fn().mockReturnValue({
+        where: vi.fn().mockReturnValue({
+          groupBy: vi.fn().mockReturnValue({
+            having: vi.fn().mockReturnValue({
+              orderBy: vi.fn().mockReturnValue({
+                offset: vi.fn().mockReturnValue({
+                  fetch: vi.fn().mockResolvedValue([]),
+                }),
+              }),
+            }),
+          }),
+        }),
+      }),
+    });
+
+    const result = await listTraces({ eventStatus: 'INVALID', page: 1, pageSize: 20 });
+
+    expect(result.traces).toHaveLength(0);
+    expect(result.totalCount).toBe(0);
+  });
+
+  it('should combine multiple filters', async () => {
+    mockDb.select.mockReturnValueOnce({
+      from: vi.fn().mockReturnValue({
+        where: vi.fn().mockReturnValue({
+          groupBy: vi.fn().mockReturnValue({
+            having: vi.fn().mockReturnValue({
+              orderBy: vi.fn().mockReturnValue({
+                offset: vi.fn().mockReturnValue({
+                  fetch: vi.fn().mockResolvedValue([]),
+                }),
+              }),
+            }),
+          }),
+        }),
+      }),
+    });
+
+    const result = await listTraces({
+      traceId: 'trace-1',
+      correlationId: 'corr-1',
+      hasErrors: true,
+      eventStatus: 'FAILURE,WARNING',
+      processName: 'Test',
+      accountId: 'ACC-1',
+      startDate: '2024-01-01T00:00:00Z',
+      endDate: '2024-12-31T23:59:59Z',
+      page: 1,
+      pageSize: 20,
+    });
+
+    expect(result.traces).toHaveLength(0);
+    expect(result.totalCount).toBe(0);
+  });
 });
 
 describe('getDashboardStats', () => {

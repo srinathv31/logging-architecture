@@ -20,7 +20,7 @@ export async function listTracesRoute(app: FastifyInstance) {
       },
     },
     async (request, reply) => {
-      const { page, pageSize, startDate, endDate, processName, eventStatus, accountId } =
+      const { page, pageSize, startDate, endDate, processName, eventStatus, accountId, traceId, correlationId, hasErrors } =
         request.query;
 
       const { traces, totalCount, hasMore } = await eventLogService.listTraces({
@@ -29,6 +29,9 @@ export async function listTracesRoute(app: FastifyInstance) {
         processName,
         eventStatus,
         accountId,
+        traceId,
+        correlationId,
+        hasErrors,
         page,
         pageSize,
       });

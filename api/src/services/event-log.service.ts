@@ -456,6 +456,9 @@ export async function listTraces(filters: {
   processName?: string;
   eventStatus?: string;
   accountId?: string;
+  traceId?: string;
+  correlationId?: string;
+  hasErrors?: boolean;
   page: number;
   pageSize: number;
 }) {
@@ -469,10 +472,17 @@ export async function listTraces(filters: {
     conditions.push(lte(eventLogs.eventTimestamp, new Date(filters.endDate)));
   }
   if (filters.processName) {
-    conditions.push(like(eventLogs.processName, `%${filters.processName}%`));
+    const normalizedName = filters.processName.replace(/ /g, '_');
+    conditions.push(like(eventLogs.processName, `%${normalizedName}%`));
   }
   if (filters.accountId) {
     conditions.push(like(eventLogs.accountId, `%${filters.accountId}%`));
+  }
+  if (filters.traceId) {
+    conditions.push(eq(eventLogs.traceId, filters.traceId));
+  }
+  if (filters.correlationId) {
+    conditions.push(eq(eventLogs.correlationId, filters.correlationId));
   }
 
   const where = and(...conditions);
@@ -484,6 +494,30 @@ export async function listTraces(filters: {
     WHEN sum(case when ${eventLogs.eventStatus} = 'WARNING' then 1 else 0 end) > 0 THEN 'WARNING'
     ELSE 'IN_PROGRESS'
   END`;
+
+  // Build HAVING conditions
+  const havingConditions: SQL[] = [];
+
+  if (filters.eventStatus) {
+    const validStatuses = ['SUCCESS', 'FAILURE', 'IN_PROGRESS', 'SKIPPED', 'WARNING'];
+    const statuses = filters.eventStatus.split(',').filter(s => validStatuses.includes(s));
+    if (statuses.length === 1) {
+      havingConditions.push(sql`${statusExpr} = ${statuses[0]}`);
+    } else if (statuses.length > 1) {
+      const statusList = sql.join(statuses.map(s => sql`${s}`), sql`, `);
+      havingConditions.push(sql`${statusExpr} IN (${statusList})`);
+    }
+  }
+
+  if (filters.hasErrors) {
+    havingConditions.push(
+      sql`sum(case when ${eventLogs.eventStatus} = 'FAILURE' then 1 else 0 end) > 0`
+    );
+  }
+
+  const havingClause = havingConditions.length > 0
+    ? and(...havingConditions)
+    : undefined;
 
   const rows = await db
     .select({
@@ -500,9 +534,7 @@ export async function listTraces(filters: {
     .from(eventLogs)
     .where(where)
     .groupBy(eventLogs.traceId)
-    .having(filters.eventStatus
-      ? sql`${statusExpr} = ${filters.eventStatus}`
-      : undefined)
+    .having(havingClause)
     .orderBy(sql`max(${eventLogs.eventTimestamp}) desc`)
     .offset(offset)
     .fetch(filters.pageSize);

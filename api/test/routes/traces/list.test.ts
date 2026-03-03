@@ -16,6 +16,9 @@ let mockListTraces: (filters: {
   processName?: string;
   eventStatus?: string;
   accountId?: string;
+  traceId?: string;
+  correlationId?: string;
+  hasErrors?: boolean;
   page: number;
   pageSize: number;
 }) => Promise<{
@@ -55,7 +58,7 @@ function buildTestApp() {
         },
       },
       async (request, reply) => {
-        const { page, pageSize, startDate, endDate, processName, eventStatus, accountId } =
+        const { page, pageSize, startDate, endDate, processName, eventStatus, accountId, traceId, correlationId, hasErrors } =
           request.query;
 
         const { traces, totalCount, hasMore } = await mockListTraces({
@@ -64,6 +67,9 @@ function buildTestApp() {
           processName,
           eventStatus,
           accountId,
+          traceId,
+          correlationId,
+          hasErrors,
           page,
           pageSize,
         });
@@ -253,16 +259,64 @@ describe('GET /v1/traces', () => {
       expect(capturedFilters.startDate).toBe('2024-01-01T00:00:00.000Z');
       expect(capturedFilters.endDate).toBe('2024-01-31T23:59:59.000Z');
     });
+
+    it('should pass traceId and correlationId filters', async () => {
+      let capturedFilters: Record<string, unknown> = {};
+      mockListTraces = async (filters) => {
+        capturedFilters = filters;
+        return { traces: [], totalCount: 0, hasMore: false };
+      };
+
+      await app.inject({
+        method: 'GET',
+        url: '/v1/traces?traceId=trace-abc&correlationId=corr-xyz',
+      });
+
+      expect(capturedFilters.traceId).toBe('trace-abc');
+      expect(capturedFilters.correlationId).toBe('corr-xyz');
+    });
+
+    it('should pass hasErrors filter', async () => {
+      let capturedFilters: Record<string, unknown> = {};
+      mockListTraces = async (filters) => {
+        capturedFilters = filters;
+        return { traces: [], totalCount: 0, hasMore: false };
+      };
+
+      await app.inject({
+        method: 'GET',
+        url: '/v1/traces?hasErrors=true',
+      });
+
+      expect(capturedFilters.hasErrors).toBe(true);
+    });
+
+    it('should pass comma-separated eventStatus', async () => {
+      let capturedFilters: Record<string, unknown> = {};
+      mockListTraces = async (filters) => {
+        capturedFilters = filters;
+        return { traces: [], totalCount: 0, hasMore: false };
+      };
+
+      await app.inject({
+        method: 'GET',
+        url: '/v1/traces?eventStatus=FAILURE,WARNING',
+      });
+
+      expect(capturedFilters.eventStatus).toBe('FAILURE,WARNING');
+    });
   });
 
   describe('validation', () => {
-    it('should reject invalid eventStatus', async () => {
+    it('should accept any string for eventStatus (validated in service layer)', async () => {
       const response = await app.inject({
         method: 'GET',
         url: '/v1/traces?eventStatus=INVALID',
       });
 
-      expect(response.statusCode).toBe(400);
+      // eventStatus is now a free-form string to support comma-separated multi-status
+      // Invalid values are filtered out in the service layer
+      expect(response.statusCode).toBe(200);
     });
 
     it('should reject pageSize > 100', async () => {
