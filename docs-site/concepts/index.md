@@ -72,8 +72,8 @@ Event logs and application logs serve different purposes. They complement each o
 |---|---|
 | **Event** | A single structured record capturing one step in a business process. |
 | **Process** | A named business workflow (e.g., `ORDER_PROCESSING`, `USER_ONBOARDING`). A process consists of multiple events. |
-| **Trace** | A group of events sharing the same `trace_id`, representing a complete business process. The `trace_id` is the primary identifier used by the dashboard. |
-| **Correlation ID** | A team-defined custom label for a process instance (e.g., `add-auth-user-abc123`). Used alongside `trace_id` for human-readable identification and account linking. |
+| **Trace** | A group of events sharing the same `trace_id`, representing a complete business process. The `trace_id` is the flexible, human-readable primary identifier (1-200 chars, accepts any format including external system IDs). The dashboard groups and queries by this field. |
+| **Correlation ID** | A W3C-compliant system-generated identifier (`correlation_id`, 32 lowercase hex chars). Used for future W3C interop and account linking via `correlation_links`. |
 | **Span** | A single operation within a trace, identified by a `span_id`. Spans form a hierarchy via `parent_span_id`. |
 
 ## Next Steps
