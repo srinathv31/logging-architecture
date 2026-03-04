@@ -56,7 +56,7 @@ const client = new EventLogClient({
 });
 
 async function processAddAuthUser(accountId: string, authUserSsn: string) {
-  const correlationId = createCorrelationId('auth');
+  const correlationId = createCorrelationId();
   const traceId = createTraceId();
   const processName = 'ADD_AUTH_USER';
   const startTime = Date.now();

@@ -45,7 +45,7 @@ public class QuickStartExample {
         // trace_id: Spans the entire request (propagate via traceparent header)
         // span_id: Unique per step, creates the execution tree
         
-        String correlationId = createCorrelationId("demo");  // e.g., "demo-m5k2x9a-7h3j"
+        String correlationId = createCorrelationId();             // e.g., "4bf92f3577b34da6a3ce929d0e0e4736"
         String traceId = createTraceId();                    // e.g., "4bf92f3577b34da6a3ce929d0e0e4736"
         String accountId = "AC-1234567890";
         String processName = "CUSTOMER_ONBOARDING";

@@ -114,7 +114,7 @@ const template = new EventLogTemplate(asyncLogger, {
 
 // Scoped process logger
 const process = template.forProcess('ADD_AUTH_USER', {
-  correlationId: createCorrelationId('user'),
+  correlationId: createCorrelationId(),
   traceId: createTraceId(),
   accountId: 'AC-9876',
 });

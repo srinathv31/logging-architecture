@@ -50,8 +50,8 @@ public class OrderService {
 Set correlation IDs once at request entry (filter/interceptor), then let `EventLogTemplate` read them automatically:
 
 ```java
-// In your filter/interceptor - use your team's prefix
-MDC.put("correlationId", EventLogUtils.createCorrelationId("orders"));
+// In your filter/interceptor
+MDC.put("correlationId", EventLogUtils.createCorrelationId());
 MDC.put("traceId", EventLogUtils.createTraceId());
 ```
 

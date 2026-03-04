@@ -161,8 +161,8 @@ In non-Spring apps, build it manually via `EventLogTemplate.builder(eventLog)`.
 Set correlation IDs once at request entry (filter/interceptor), then let `EventLogTemplate` read them automatically:
 
 ```java
-// In your filter/interceptor - use your team's prefix
-MDC.put("correlationId", EventLogUtils.createCorrelationId("orders"));  // "orders-abc123-xyz"
+// In your filter/interceptor
+MDC.put("correlationId", EventLogUtils.createCorrelationId());  // 32 lowercase hex (W3C)
 MDC.put("traceId", EventLogUtils.createTraceId());
 ```
 
@@ -287,7 +287,7 @@ AsyncEventLogger eventLog = AsyncEventLogger.builder()
 
 // === IN YOUR BUSINESS LOGIC ===
 
-String correlationId = createCorrelationId("auth");
+String correlationId = createCorrelationId();
 String traceId = createTraceId();
 
 // Step 1: Do work, then log immediately
@@ -373,7 +373,7 @@ EventLogClient client = EventLogClient.builder()
     .build();
 
 // Generate IDs
-String correlationId = createCorrelationId("auth");
+String correlationId = createCorrelationId();
 String traceId = createTraceId();
 
 // Create and send an event
@@ -409,7 +409,7 @@ The SDK provides helper methods for creating properly structured events:
 ```java
 import static com.eventlog.sdk.util.EventLogUtils.*;
 
-String correlationId = createCorrelationId("emp");
+String correlationId = createCorrelationId();
 String traceId = createTraceId();
 
 // Process Start
@@ -532,7 +532,7 @@ var filteredEvents = client.getEventsByAccount("AC-1234567890", Map.of(
 ));
 
 // Get events by correlation ID
-var processEvents = client.getEventsByCorrelation("corr-emp-20250126-a1b2c3");
+var processEvents = client.getEventsByCorrelation("4bf92f3577b34da6a3ce929d0e0e4736");
 
 // Get events by trace ID (distributed tracing)
 var traceEvents = client.getEventsByTrace("4bf92f3577b34da6a3ce929d0e0e4736");

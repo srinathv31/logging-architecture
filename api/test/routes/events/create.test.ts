@@ -144,11 +144,11 @@ describe("POST /v1/events", () => {
       expect(response.statusCode).toBe(400);
     });
 
-    it("should reject non-hex traceId", async () => {
+    it("should reject non-hex correlationId", async () => {
       const response = await app.inject({
         method: "POST",
         url: "/v1/events",
-        payload: createEventFixture({ traceId: "not-a-valid-hex-trace-id!!" }),
+        payload: createEventFixture({ correlationId: "not-a-valid-hex-id!!" }),
       });
 
       expect(response.statusCode).toBe(400);

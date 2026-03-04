@@ -35,7 +35,7 @@ const eventLog = new AsyncEventLogger({ client });
 // ============================================================================
 
 const auditEvent = eventBuilder()
-  .correlationId(createCorrelationId('audit'))
+  .correlationId(createCorrelationId())
   .traceId(createTraceId())
   .spanId(createSpanId())
   .applicationId('admin-portal')
@@ -59,7 +59,7 @@ eventLog.log(auditEvent);
 // ============================================================================
 
 const webhookEvent = eventBuilder()
-  .correlationId(createCorrelationId('webhook'))
+  .correlationId(createCorrelationId())
   .traceId(createTraceId())
   .spanId(createSpanId())
   .applicationId('webhook-handler')

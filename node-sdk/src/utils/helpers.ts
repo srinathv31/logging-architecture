@@ -9,14 +9,10 @@ import { EventLogEntry, EventType, EventStatus } from '../models/types';
 // ----------------------------------------------------------------------------
 
 /**
- * Generate a correlation ID with optional prefix
- * @param prefix - Prefix for the ID (default: 'corr')
- * @returns Unique correlation ID in format "{prefix}-{timestamp}-{random}"
+ * Generate a W3C-compliant correlation ID (32 lowercase hex characters)
  */
-export function createCorrelationId(prefix: string = 'corr'): string {
-  const timestamp = Date.now().toString(36);
-  const random = Math.random().toString(36).substring(2, 10);
-  return `${prefix}-${timestamp}-${random}`;
+export function createCorrelationId(): string {
+  return crypto.randomUUID().replace(/-/g, '');
 }
 
 /**
@@ -31,7 +27,8 @@ export function createBatchId(source: string = 'batch'): string {
 }
 
 /**
- * Generate a W3C-compliant trace ID (32 hex characters)
+ * Generate a W3C-compliant trace ID (32 hex characters).
+ * The API accepts any string 1-200 chars; the SDK generates W3C format by default.
  */
 export function createTraceId(): string {
   return crypto.randomUUID().replace(/-/g, '');

@@ -80,12 +80,13 @@ const endEvent = createProcessEndEvent({
 ## ID Generation Helpers
 
 ```typescript
-// Correlation ID with team prefix
-const correlationId = createCorrelationId('auth');
-// e.g., "auth-a1b2c3d4-e5f6g7h8"
+// W3C correlation ID (32 lowercase hex chars)
+const correlationId = createCorrelationId();
+// e.g., "4bf92f3577b34da6a3ce929d0e0e4736"
 
-// W3C Trace Context trace ID (32 lowercase hex chars)
+// Trace ID (32 hex chars by default, but API accepts any string 1-200 chars)
 const traceId = createTraceId();
+// e.g., "4bf92f3577b34da6a3ce929d0e0e4736"
 
 // Span ID (16 lowercase hex chars)
 const spanId = createSpanId();

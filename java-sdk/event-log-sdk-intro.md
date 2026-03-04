@@ -76,8 +76,7 @@ public class CorrelationFilter extends OncePerRequestFilter {
                                     HttpServletResponse response,
                                     FilterChain chain) throws ServletException, IOException {
         try {
-            // Use your team's prefix for easy identification in logs
-            MDC.put("correlationId", EventLogUtils.createCorrelationId("payment"));
+            MDC.put("correlationId", EventLogUtils.createCorrelationId());
             MDC.put("traceId", EventLogUtils.createTraceId());
             chain.doFilter(request, response);
         } finally {
@@ -315,11 +314,11 @@ The `EventLogUtils` class provides helpers for common patterns:
 
 ```java
 // ID Generation
-String correlationId = EventLogUtils.createCorrelationId("payment");
-// Result: "payment-20240115143052-a1b2c3"
+String correlationId = EventLogUtils.createCorrelationId();
+// Result: "4bf92f3577b34da6a3ce929d0e0e4736" (32 hex chars, W3C format)
 
 String traceId = EventLogUtils.createTraceId();
-// Result: "4bf92f3577b34da6a3ce929d0e0e4736" (32 hex chars, W3C format)
+// Result: "a1b2c3d4e5f6a7b8a1b2c3d4e5f6a7b8" (32 hex chars)
 
 String spanId = EventLogUtils.createSpanId();
 // Result: "00f067aa0ba902b7" (16 hex chars)
@@ -542,7 +541,7 @@ public void processOrder(Order order) {
 
 ```java
 // Set context at request entry point (e.g., filter or interceptor)
-MDC.put("correlationId", EventLogUtils.createCorrelationId("api"));
+MDC.put("correlationId", EventLogUtils.createCorrelationId());
 MDC.put("traceId", EventLogUtils.createTraceId());
 MDC.put("spanId", EventLogUtils.createSpanId());
 
@@ -557,7 +556,7 @@ try {
 ### Pattern 3: Parallel Operations (Span Links)
 
 ```java
-String correlationId = EventLogUtils.createCorrelationId("parallel");
+String correlationId = EventLogUtils.createCorrelationId();
 String traceId = EventLogUtils.createTraceId();
 String parentSpanId = EventLogUtils.createSpanId();
 

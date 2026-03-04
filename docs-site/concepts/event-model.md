@@ -12,8 +12,8 @@ These are the fields you interact with most when logging events through the SDK:
 
 | Field | Required | Description |
 |---|---|---|
-| `correlation_id` | Yes | Team-defined custom identifier for the process instance (e.g., `add-auth-user-abc123`) |
-| `trace_id` | Yes | Primary process identifier (32 lowercase hex chars) — same across all events in a process |
+| `correlation_id` | Yes | W3C-compliant process identifier (32 lowercase hex chars) — system-generated, used for future W3C interop |
+| `trace_id` | Yes | Primary process identifier (1-200 chars) — same across all events in a process. Accepts any format, enabling external system IDs. |
 | `process_name` | Yes | Business process identifier (e.g., `ORDER_PROCESSING`) |
 | `step_sequence` | No | Step order within the process (0, 1, 2, ...) |
 | `step_name` | No | Human-readable step description (e.g., "Validate Order") |
@@ -90,12 +90,12 @@ Events are connected through a set of identifiers. `trace_id` and `correlation_i
 │      Example: CSV upload of 100 orders                                  │
 │                                                                         │
 │      ├── trace_id (1 per process instance)                              │
-│      │   Primary process identifier — system-generated, 32 hex chars    │
+│      │   Primary process identifier — any string (1-200 chars)          │
 │      │   The dashboard groups and queries by this field                  │
 │      │                                                                  │
 │      └── correlation_id (1 per process instance)  ← parallel to trace   │
-│          Team-defined custom label for human readability                 │
-│          Example: add-auth-user-jkljerw3i2                              │
+│          W3C-compliant identifier — 32 lowercase hex chars              │
+│          Example: 4bf92f3577b34da6a3ce929d0e0e4736                      │
 │          Links processes to accounts via correlation_links              │
 │                                                                         │
 │      span_id / parent_span_id (1 per operation within a trace)          │
@@ -114,8 +114,8 @@ Events are connected through a set of identifiers. `trace_id` and `correlation_i
 | Identifier | Scope | Description | Example |
 |---|---|---|---|
 | `batch_id` | Multiple processes | Groups multiple process instances into a single batch | `batch-20250126-hr-upload` |
-| `trace_id` | Single process instance | Primary identifier — same across all events in a business process. The dashboard groups and queries by this field. 32 lowercase hex chars. | `4bf92f3577b34da6a3ce929d0e0e4736` |
-| `correlation_id` | Single process instance | Team-defined custom label for human readability. Teams typically prepend their app/process name (e.g., `add-auth-user-jkljerw3i2`). Also used to link to accounts via correlation_links. | `add-auth-user-jkljerw3i2` |
+| `trace_id` | Single process instance | Primary identifier — same across all events in a business process. The dashboard groups and queries by this field. Accepts any string (1-200 chars), enabling external system IDs. | `4bf92f3577b34da6a3ce929d0e0e4736` or `EXT-ORDER-12345` |
+| `correlation_id` | Single process instance | W3C-compliant identifier (32 lowercase hex chars). System-generated for future W3C interop. Also used to link to accounts via correlation_links. | `4bf92f3577b34da6a3ce929d0e0e4736` |
 | `span_id` | Single operation | Each step/call within a trace | `a1b2c3d4e5f60001` |
 | `parent_span_id` | Call hierarchy | Creates parent-child relationships between spans | Points to the triggering span |
 | `span_links` | Fork-join dependencies | References spans this operation waited for | `["span-003", "span-004"]` |
@@ -123,8 +123,8 @@ Events are connected through a set of identifiers. `trace_id` and `correlation_i
 ### Understanding the Relationships
 
 - **`trace_id` and `correlation_id` are parallel** — both identify the same process instance. They don't nest; they sit side-by-side.
-- **`trace_id` is the system identifier** — machine-friendly, auto-generated, and the primary key in the dashboard. All events in a process share the same `trace_id`, even across multiple HTTP requests.
-- **`correlation_id` is the team identifier** — human-friendly, with a custom prefix chosen by the team (e.g., `add-auth-user-...`). Used for human readability and to link processes to accounts via correlation_links.
+- **`trace_id` is the primary identifier** — the dashboard groups and queries by this field. Accepts any string (1-200 chars), so enterprise teams can pass IDs from their existing systems (e.g., `EXT-ORDER-12345`). The SDK generates W3C-compliant 32 hex by default.
+- **`correlation_id` is the W3C identifier** — 32 lowercase hex chars, system-generated. Ensures every trace has a W3C-compliant ID for future interoperability. Also used to link processes to accounts via correlation_links.
 - **One `trace_id`** contains **multiple `span_id`s** — within a process, each step or downstream call gets its own span.
 - **`batch_id`** groups multiple process instances — each with their own `trace_id` + `correlation_id`. Only use it when a single action triggers multiple independent processes (e.g., bulk CSV import).
 

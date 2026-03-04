@@ -13,7 +13,7 @@ String batchId = createBatchId("hr-upload");
 
 List<EventLogEntry> events = csvRows.stream()
     .map(row -> {
-        String corrId = createCorrelationId("emp");
+        String corrId = createCorrelationId();
         return processStart(corrId, createTraceId(), "EMPLOYEE_CARD_ORIGINATION")
             .batchId(batchId)  // Group all rows under same batch
             .applicationId("employee-origination-service")

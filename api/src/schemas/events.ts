@@ -10,9 +10,9 @@ const MAX_SEARCH_WINDOW_DAYS = 30;
 const MAX_SEARCH_WINDOW_MS = MAX_SEARCH_WINDOW_DAYS * 24 * 60 * 60 * 1000; // 30 days in milliseconds
 
 export const eventLogEntrySchema = z.object({
-  correlationId: z.string().min(1).max(200),
+  correlationId: z.string().regex(/^[0-9a-f]{32}$/, 'Must be 32 lowercase hex characters (W3C Trace Context)'),
   accountId: z.string().max(64).nullish(),
-  traceId: z.string().regex(/^[0-9a-f]{32}$/, 'Must be 32 lowercase hex characters (W3C Trace Context)'),
+  traceId: z.string().min(1).max(200),
   spanId: z.string().regex(/^[0-9a-f]{16}$/, 'Must be 16 lowercase hex characters').optional(),
   parentSpanId: z.string().regex(/^[0-9a-f]{16}$/, 'Must be 16 lowercase hex characters').optional(),
   spanLinks: z.array(z.string().regex(/^[0-9a-f]{16}$/)).optional(),

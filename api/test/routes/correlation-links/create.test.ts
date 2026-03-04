@@ -89,12 +89,12 @@ describe('POST /v1/correlation-links', () => {
 
     it('should create with required fields only', async () => {
       const fixture = {
-        correlationId: 'corr-123',
+        correlationId: 'a1a2a3a4b5b6c7d8a1a2a3a4b5b6c7d8',
         accountId: 'acc-456',
       };
 
       mockCreateCorrelationLink = async () => createCorrelationLinkDbRecord({
-        correlationId: 'corr-123',
+        correlationId: 'a1a2a3a4b5b6c7d8a1a2a3a4b5b6c7d8',
         accountId: 'acc-456',
         applicationId: null,
         customerId: null,
@@ -109,7 +109,7 @@ describe('POST /v1/correlation-links', () => {
 
       expect(response.statusCode).toBe(201);
       const body = response.json();
-      expect(body.correlationId).toBe('corr-123');
+      expect(body.correlationId).toBe('a1a2a3a4b5b6c7d8a1a2a3a4b5b6c7d8');
       expect(body.accountId).toBe('acc-456');
     });
 
@@ -171,7 +171,7 @@ describe('POST /v1/correlation-links', () => {
         method: 'POST',
         url: '/v1/correlation-links',
         payload: {
-          correlationId: 'corr-123',
+          correlationId: 'a1a2a3a4b5b6c7d8a1a2a3a4b5b6c7d8',
         },
       });
 
@@ -196,7 +196,7 @@ describe('POST /v1/correlation-links', () => {
         method: 'POST',
         url: '/v1/correlation-links',
         payload: {
-          correlationId: 'corr-123',
+          correlationId: 'a1a2a3a4b5b6c7d8a1a2a3a4b5b6c7d8',
           accountId: 'acc-123',
           cardNumberLast4: '123', // Should be 4 characters
         },

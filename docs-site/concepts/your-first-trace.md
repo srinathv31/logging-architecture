@@ -76,8 +76,8 @@ The code above produces 4 events. Here's what each one looks like in the API:
 
 ```json
 {
-  "correlation_id": "corr-order-20250301-x7k9m2",
-  "trace_id": "4bf92f3577b34da6a3ce929d0e0e4736",
+  "correlation_id": "a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6",
+  "trace_id": "order-20250301-x7k9m2",
   "process_name": "ORDER_PROCESSING",
   "step_sequence": 0,
   "step_name": null,
@@ -98,8 +98,8 @@ The code above produces 4 events. Here's what each one looks like in the API:
 
 ```json
 {
-  "correlation_id": "corr-order-20250301-x7k9m2",
-  "trace_id": "4bf92f3577b34da6a3ce929d0e0e4736",
+  "correlation_id": "a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6",
+  "trace_id": "order-20250301-x7k9m2",
   "process_name": "ORDER_PROCESSING",
   "step_sequence": 1,
   "step_name": "Validate Order",
@@ -120,8 +120,8 @@ The code above produces 4 events. Here's what each one looks like in the API:
 
 ```json
 {
-  "correlation_id": "corr-order-20250301-x7k9m2",
-  "trace_id": "4bf92f3577b34da6a3ce929d0e0e4736",
+  "correlation_id": "a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6",
+  "trace_id": "order-20250301-x7k9m2",
   "process_name": "ORDER_PROCESSING",
   "step_sequence": 2,
   "step_name": "Reserve Inventory",
@@ -144,8 +144,8 @@ The code above produces 4 events. Here's what each one looks like in the API:
 
 ```json
 {
-  "correlation_id": "corr-order-20250301-x7k9m2",
-  "trace_id": "4bf92f3577b34da6a3ce929d0e0e4736",
+  "correlation_id": "a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6",
+  "trace_id": "order-20250301-x7k9m2",
   "process_name": "ORDER_PROCESSING",
   "step_sequence": 3,
   "step_name": null,
@@ -240,8 +240,8 @@ This produces 4 events. The first two are the same as before. Instead of an ERRO
 
 ```json
 {
-  "correlation_id": "corr-order-20250301-x7k9m2",
-  "trace_id": "4bf92f3577b34da6a3ce929d0e0e4736",
+  "correlation_id": "a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6",
+  "trace_id": "order-20250301-x7k9m2",
   "process_name": "ORDER_PROCESSING",
   "step_sequence": 2,
   "step_name": "Reserve Inventory",
@@ -264,8 +264,8 @@ This produces 4 events. The first two are the same as before. Instead of an ERRO
 
 ```json
 {
-  "correlation_id": "corr-order-20250301-x7k9m2",
-  "trace_id": "4bf92f3577b34da6a3ce929d0e0e4736",
+  "correlation_id": "a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6",
+  "trace_id": "order-20250301-x7k9m2",
   "process_name": "ORDER_PROCESSING",
   "step_sequence": 3,
   "step_name": null,
@@ -376,8 +376,8 @@ The `error()` catch-all produces an ERROR event with no step context:
 
 ```json
 {
-  "correlation_id": "corr-order-20250301-x7k9m2",
-  "trace_id": "4bf92f3577b34da6a3ce929d0e0e4736",
+  "correlation_id": "a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6",
+  "trace_id": "order-20250301-x7k9m2",
   "process_name": "ORDER_PROCESSING",
   "step_sequence": null,
   "step_name": null,

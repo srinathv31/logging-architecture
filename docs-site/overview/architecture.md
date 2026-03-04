@@ -103,7 +103,8 @@ The platform uses W3C Trace Context identifiers:
 
 | Identifier | Format | Purpose |
 |------------|--------|---------|
-| `traceId` | 32 lowercase hex chars | Groups all events in a distributed trace |
+| `traceId` | Any string (1-200 chars) | Groups all events in a distributed trace |
+| `correlationId` | 32 lowercase hex chars | W3C-compliant identifier for future interop |
 | `spanId` | 16 lowercase hex chars | Identifies a specific operation |
 | `parentSpanId` | 16 lowercase hex chars | Links child to parent operation |
 | `spanLinks` | Array of 16-char hex strings | Links to causally-related spans (fork-join) |

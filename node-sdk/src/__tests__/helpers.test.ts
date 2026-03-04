@@ -20,14 +20,9 @@ import { EventType, EventStatus } from '../models/types';
 // ============================================================================
 
 describe('createCorrelationId', () => {
-  it('generates a unique ID with default prefix', () => {
+  it('generates 32 lowercase hex characters', () => {
     const id = createCorrelationId();
-    expect(id).toMatch(/^corr-[a-z0-9]+-[a-z0-9]+$/);
-  });
-
-  it('uses custom prefix', () => {
-    const id = createCorrelationId('acct');
-    expect(id.startsWith('acct-')).toBe(true);
+    expect(id).toMatch(/^[a-f0-9]{32}$/);
   });
 
   it('generates unique values', () => {

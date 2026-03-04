@@ -63,7 +63,7 @@ public class RealTimeLoggingExample {
         // YOUR BUSINESS PROCESS
         // ====================================================================
         
-        String correlationId = createCorrelationId("onboard");
+        String correlationId = createCorrelationId();
         String traceId = createTraceId();
         String accountId = "AC-1234567890";
         String processName = "CUSTOMER_ONBOARDING";

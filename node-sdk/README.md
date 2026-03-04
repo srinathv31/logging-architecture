@@ -55,7 +55,7 @@ const eventLog = new AsyncEventLogger({
 
 // === IN YOUR BUSINESS LOGIC ===
 
-const correlationId = createCorrelationId('auth');
+const correlationId = createCorrelationId();
 const traceId = createTraceId();
 
 // Step 1: Do work, then log immediately
@@ -166,7 +166,7 @@ const client = new EventLogClient({
 });
 
 // Generate IDs
-const correlationId = createCorrelationId('auth');
+const correlationId = createCorrelationId();
 const traceId = createTraceId();
 
 // Create events using helper functions
@@ -213,7 +213,7 @@ const client = new EventLogClient({
 });
 
 async function processAddAuthUser(accountId: string, authUserSsn: string) {
-  const correlationId = createCorrelationId('auth');
+  const correlationId = createCorrelationId();
   const traceId = createTraceId();
   const processName = 'ADD_AUTH_USER';
   const startTime = Date.now();
@@ -312,7 +312,7 @@ const batchId = createBatchId('hr-upload');
 
 // Process each CSV row
 const events = csvRows.map((row) => {
-  const correlationId = createCorrelationId('emp');
+  const correlationId = createCorrelationId();
   
   return createProcessStartEvent({
     correlation_id: correlationId,
@@ -385,7 +385,7 @@ const dependentStep = createStepEvent({
 ```typescript
 // After account is provisioned
 await client.createCorrelationLink({
-  correlation_id: 'corr-emp-20250126-a1b2c3',
+  correlation_id: 'a1b2c3d4e5f60718293a4b5c6d7e8f90',
   account_id: 'AC-EMP-001234',
   application_id: 'APP-998877',
   customer_id: 'EMP-456',
@@ -408,7 +408,7 @@ const filtered = await client.getEventsByAccount('AC-1234567890', {
 });
 
 // Get by correlation ID
-const processEvents = await client.getEventsByCorrelation('corr-emp-20250126-a1b2c3');
+const processEvents = await client.getEventsByCorrelation('a1b2c3d4e5f60718293a4b5c6d7e8f90');
 
 // Get by trace ID (distributed tracing)
 const traceEvents = await client.getEventsByTrace('4bf92f3577b34da6a3ce929d0e0e4736');

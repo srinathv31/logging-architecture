@@ -125,7 +125,7 @@ const client = new EventLogClient({
 
 const eventLog = new AsyncEventLogger({ client });
 
-const correlationId = createCorrelationId('auth');
+const correlationId = createCorrelationId();
 const traceId = createTraceId();
 
 eventLog.log(createStepEvent({

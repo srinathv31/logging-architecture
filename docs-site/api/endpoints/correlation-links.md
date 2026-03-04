@@ -14,7 +14,7 @@ Create or update a correlation-to-account mapping. Used to link a process correl
 
 ```json
 {
-  "correlationId": "corr-emp-20250126-a1b2c3",
+  "correlationId": "a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6",
   "accountId": "AC-EMP-001234",
   "applicationId": "APP-998877",
   "customerId": "EMP-456",
@@ -24,7 +24,7 @@ Create or update a correlation-to-account mapping. Used to link a process correl
 
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
-| `correlationId` | string | Yes | Correlation identifier (1-200 chars) |
+| `correlationId` | string | Yes | Correlation ID (32 lowercase hex chars, W3C format) |
 | `accountId` | string | Yes | Account identifier (1-64 chars) |
 | `applicationId` | string | No | Application identifier (max 100 chars) |
 | `customerId` | string | No | Customer/employee ID (max 100 chars) |
@@ -35,7 +35,7 @@ Create or update a correlation-to-account mapping. Used to link a process correl
 ```json
 {
   "success": true,
-  "correlationId": "corr-emp-20250126-a1b2c3",
+  "correlationId": "a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6",
   "accountId": "AC-EMP-001234",
   "linkedAt": "2026-03-01T10:15:30.123Z"
 }
@@ -53,7 +53,7 @@ Retrieve a correlation link by its correlation ID.
 
 ```json
 {
-  "correlationId": "corr-emp-20250126-a1b2c3",
+  "correlationId": "a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6",
   "accountId": "AC-EMP-001234",
   "applicationId": "APP-998877",
   "customerId": "EMP-456",

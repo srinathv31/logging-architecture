@@ -43,7 +43,7 @@ const eventLog = new AsyncEventLogger({
 ## Usage
 
 ```typescript
-const correlationId = createCorrelationId('auth');
+const correlationId = createCorrelationId();
 const traceId = createTraceId();
 
 // Log a step event (returns immediately)

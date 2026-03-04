@@ -15,7 +15,7 @@ const batchId = createBatchId('hr-upload');
 
 // Process each CSV row
 const events = csvRows.map((row) => {
-  const correlationId = createCorrelationId('emp');
+  const correlationId = createCorrelationId();
 
   return createProcessStartEvent({
     correlation_id: correlationId,

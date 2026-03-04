@@ -107,7 +107,7 @@ public class LogEventAspect {
 
         String correlationId = firstNonBlank(
                 mdcValue("correlationId", "correlation_id", "correlation-id"),
-                EventLogUtils.createCorrelationId(sanitizePrefix(processName)));
+                EventLogUtils.createCorrelationId());
         String traceId = firstNonBlank(
                 mdcValue("traceId", "trace_id", "trace-id"),
                 EventLogUtils.createTraceId());

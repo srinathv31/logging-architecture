@@ -7,7 +7,7 @@ export function createCorrelationLinkFixture(
   overrides: Partial<CreateCorrelationLinkRequest> = {}
 ): CreateCorrelationLinkRequest {
   return {
-    correlationId: 'test-correlation-id',
+    correlationId: 'c1d2e3f4a5b6c7d8c1d2e3f4a5b6c7d8',
     accountId: 'test-account-id',
     applicationId: 'test-app',
     customerId: 'test-customer-id',
@@ -21,7 +21,7 @@ export function createCorrelationLinkFixture(
  */
 export function createCorrelationLinkDbRecord(overrides: Partial<Record<string, unknown>> = {}) {
   return {
-    correlationId: 'test-correlation-id',
+    correlationId: 'c1d2e3f4a5b6c7d8c1d2e3f4a5b6c7d8',
     accountId: 'test-account-id',
     applicationId: 'test-app',
     customerId: 'test-customer-id',

@@ -136,6 +136,6 @@ describe('ProcessLogger + EventLogContext integration', () => {
     expect(process.correlationId).toBeTruthy();
     expect(process.traceId).toBeTruthy();
     // Should be auto-generated format
-    expect(process.correlationId).toMatch(/^corr-/);
+    expect(process.correlationId).toMatch(/^[a-f0-9]{32}$/);
   });
 });

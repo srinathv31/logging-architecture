@@ -10,15 +10,10 @@ import static org.junit.jupiter.api.Assertions.*;
 class EventLogUtilsTest {
 
     @Test
-    void createCorrelationIdUsesDefaultPrefix() {
+    void createCorrelationIdIs32LowercaseHex() {
         String id = EventLogUtils.createCorrelationId();
-        assertTrue(id.startsWith("corr-"));
-    }
-
-    @Test
-    void createCorrelationIdUsesCustomPrefix() {
-        String id = EventLogUtils.createCorrelationId("auth");
-        assertTrue(id.startsWith("auth-"));
+        assertEquals(32, id.length());
+        assertTrue(id.matches("[0-9a-f]{32}"), "correlationId must be 32 lowercase hex chars");
     }
 
     @Test

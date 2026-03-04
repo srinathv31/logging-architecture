@@ -165,7 +165,7 @@ EventLogTemplate template = EventLogTemplate.builder(eventLog)
     .build();
 
 ProcessLogger process = template.forProcess("ADD_AUTH_USER")
-    .withCorrelationId(EventLogUtils.createCorrelationId("auth"))
+    .withCorrelationId(EventLogUtils.createCorrelationId())
     .withTraceId(EventLogUtils.createTraceId())
     .addIdentifier("auth_user_id", "AU-111222");
 

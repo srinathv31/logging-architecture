@@ -41,7 +41,7 @@ async function handleOrder(order: Order) {
   const process = template.forProcess('ORDER_PROCESSING');
 
   // correlationId and traceId are automatically read from context
-  console.log(process.correlationId); // "corr-abc123..."
+  console.log(process.correlationId); // "a1b2c3d4e5f6..."
 
   process.logStart('Order processing initiated');
   // ...
@@ -64,7 +64,7 @@ Run a function within a context scope. Context is available to all sync and asyn
 
 ```typescript
 eventLogContext.run(
-  { correlationId: 'corr-123', traceId: 'trace-abc' },
+  { correlationId: 'a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6', traceId: 'trace-abc' },
   () => {
     // Context available here and in any async calls
     handleRequest();
@@ -127,7 +127,7 @@ eventLogContext.run({ correlationId: 'from-context' }, () => {
 
 // 3. Auto-generated when neither is set
 const process = template.forProcess('P');
-process.correlationId; // "corr-a1b2c3..."
+process.correlationId; // "a1b2c3d4e5f6a7b8..."
 ```
 
 ## Framework Examples

@@ -64,12 +64,13 @@ EventLogEntry end = processEnd(correlationId, traceId, "EMPLOYEE_CARD_ORIGINATIO
 ## ID Generation Helpers
 
 ```java
-// Correlation ID with team prefix
-String correlationId = createCorrelationId("auth");
-// e.g., "auth-a1b2c3d4-e5f6g7h8"
+// W3C correlation ID (32 lowercase hex chars)
+String correlationId = createCorrelationId();
+// e.g., "4bf92f3577b34da6a3ce929d0e0e4736"
 
-// W3C Trace Context trace ID (32 lowercase hex chars)
+// Trace ID (32 hex chars by default, but API accepts any string 1-200 chars)
 String traceId = createTraceId();
+// e.g., "4bf92f3577b34da6a3ce929d0e0e4736"
 
 // Span ID (16 lowercase hex chars)
 String spanId = createSpanId();

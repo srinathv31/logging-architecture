@@ -34,7 +34,7 @@ AsyncEventLogger eventLog = AsyncEventLogger.builder()
 ## Usage
 
 ```java
-String correlationId = createCorrelationId("auth");
+String correlationId = createCorrelationId();
 String traceId = createTraceId();
 
 // Log a step event (returns immediately)

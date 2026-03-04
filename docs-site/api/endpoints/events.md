@@ -14,8 +14,8 @@ Create a single event log entry.
 
 ```json
 {
-  "correlationId": "corr-auth-20260301-abc123",
-  "traceId": "4bf92f3577b34da6a3ce929d0e0e4736",
+  "correlationId": "a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6",
+  "traceId": "auth-20260301-abc123",
   "applicationId": "auth-user-service",
   "targetSystem": "EXPERIAN",
   "originatingSystem": "MOBILE_APP",
@@ -35,9 +35,9 @@ Create a single event log entry.
 
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
-| `correlationId` | string | Yes | Correlation identifier (1-200 chars) |
+| `correlationId` | string | Yes | Correlation ID (32 lowercase hex chars, W3C format) |
 | `accountId` | string | No | Account identifier (max 64 chars) |
-| `traceId` | string | Yes | W3C trace ID (32 lowercase hex chars) |
+| `traceId` | string | Yes | Trace identifier (any string, 1-200 chars) |
 | `spanId` | string | No | Span ID (16 lowercase hex chars) |
 | `parentSpanId` | string | No | Parent span ID (16 lowercase hex chars) |
 | `spanLinks` | string[] | No | Array of linked span IDs |
@@ -71,7 +71,7 @@ Create a single event log entry.
 {
   "success": true,
   "executionIds": ["exec-abc123"],
-  "correlationId": "corr-auth-20260301-abc123"
+  "correlationId": "a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6"
 }
 ```
 
@@ -127,7 +127,7 @@ Returns paginated events for a distributed trace with aggregate metadata.
 
 ```json
 {
-  "traceId": "4bf92f3577b34da6a3ce929d0e0e4736",
+  "traceId": "auth-20260301-abc123",
   "events": [],
   "systemsInvolved": ["system-a", "system-b"],
   "totalDurationMs": 5000,
@@ -172,7 +172,7 @@ Get all events associated with a correlation ID.
 
 ```json
 {
-  "correlationId": "corr-auth-20260301-abc123",
+  "correlationId": "a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6",
   "accountId": "AC-1234567890",
   "events": [],
   "isLinked": true,

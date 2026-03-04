@@ -300,7 +300,7 @@ describe('CorrelationLinkService - Test Fixtures', () => {
     it('should create a valid fixture with default values', () => {
       const fixture = createCorrelationLinkFixture();
 
-      expect(fixture.correlationId).toBe('test-correlation-id');
+      expect(fixture.correlationId).toBe('c1d2e3f4a5b6c7d8c1d2e3f4a5b6c7d8');
       expect(fixture.accountId).toBe('test-account-id');
       expect(fixture.applicationId).toBe('test-app');
       expect(fixture.customerId).toBe('test-customer-id');
@@ -330,7 +330,7 @@ describe('CorrelationLinkService - Test Fixtures', () => {
     it('should create a valid database record with default values', () => {
       const record = createCorrelationLinkDbRecord();
 
-      expect(record.correlationId).toBe('test-correlation-id');
+      expect(record.correlationId).toBe('c1d2e3f4a5b6c7d8c1d2e3f4a5b6c7d8');
       expect(record.accountId).toBe('test-account-id');
       expect(record.applicationId).toBe('test-app');
       expect(record.customerId).toBe('test-customer-id');

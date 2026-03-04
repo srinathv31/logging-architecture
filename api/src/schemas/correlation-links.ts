@@ -1,7 +1,7 @@
 import { z } from 'zod';
 
 export const createCorrelationLinkSchema = z.object({
-  correlationId: z.string().min(1).max(200),
+  correlationId: z.string().regex(/^[0-9a-f]{32}$/, 'Must be 32 lowercase hex characters (W3C Trace Context)'),
   accountId: z.string().min(1).max(64),
   applicationId: z.string().max(100).optional(),
   customerId: z.string().max(100).optional(),

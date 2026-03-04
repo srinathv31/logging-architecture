@@ -5,7 +5,7 @@ import type { EventLogEntry } from '../../src/types/api';
  */
 export function createEventFixture(overrides: Partial<EventLogEntry> = {}): EventLogEntry {
   return {
-    correlationId: 'test-correlation-id',
+    correlationId: 'b1c2d3e4f5a6b7c8b1c2d3e4f5a6b7c8',
     accountId: 'test-account-id',
     traceId: 'a1b2c3d4e5f6a7b8a1b2c3d4e5f6a7b8',
     spanId: 'a1b2c3d4e5f6a7b8',
@@ -34,7 +34,7 @@ export function createEventBatchFixture(count: number, baseOverrides: Partial<Ev
   return Array.from({ length: count }, (_, i) =>
     createEventFixture({
       ...baseOverrides,
-      correlationId: `${baseOverrides.correlationId ?? 'batch-correlation'}-${i}`,
+      correlationId: baseOverrides.correlationId ?? `b1c2d3e4f5a6b7c8b1c2d3e4f5a600${i.toString(16).padStart(2, '0')}`,
       spanId: `a1b2c3d4e5f600${i.toString(16).padStart(2, '0')}`,
       stepSequence: i + 1,
     })
@@ -50,7 +50,7 @@ export function createEventLogDbRecord(overrides: Partial<Record<string, unknown
   return {
     eventLogId: 1,
     executionId: 'test-execution-id',
-    correlationId: 'test-correlation-id',
+    correlationId: 'b1c2d3e4f5a6b7c8b1c2d3e4f5a6b7c8',
     accountId: 'test-account-id',
     traceId: 'a1b2c3d4e5f6a7b8a1b2c3d4e5f6a7b8',
     spanId: 'a1b2c3d4e5f6a7b8',

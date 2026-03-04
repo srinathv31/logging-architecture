@@ -24,25 +24,12 @@ public final class EventLogUtils {
     // ========================================================================
 
     /**
-     * Generate a correlation ID with the default prefix
-     * 
-     * @return A unique correlation ID in format "corr-{timestamp}-{random}"
+     * Generate a W3C-compliant correlation ID (32 lowercase hex characters)
+     *
+     * @return A unique correlation ID in 32 lowercase hex format
      */
     public static String createCorrelationId() {
-        return createCorrelationId("corr");
-    }
-
-    /**
-     * Generate a correlation ID with a custom prefix
-     * 
-     * @param prefix The prefix for the correlation ID (e.g., "orig", "auth", "emp")
-     * @return A unique correlation ID in format "{prefix}-{timestamp}-{random}"
-     */
-    public static String createCorrelationId(String prefix) {
-        String timestamp = Long.toString(System.currentTimeMillis(), 36);
-        String random = Long.toString(ThreadLocalRandom.current().nextLong(0, Long.MAX_VALUE), 36)
-                .substring(0, 8);
-        return prefix + "-" + timestamp + "-" + random;
+        return UUID.randomUUID().toString().replace("-", "");
     }
 
     /**
@@ -59,8 +46,11 @@ public final class EventLogUtils {
     }
 
     /**
-     * Generate a W3C-compliant trace ID (32 hex characters)
-     * 
+     * Generate a trace ID (32 hex characters)
+     *
+     * <p>The API accepts any string (1-200 chars) for traceId, but this method
+     * generates W3C-compliant 32 hex by default for interoperability.</p>
+     *
      * @return A random trace ID suitable for distributed tracing
      */
     public static String createTraceId() {

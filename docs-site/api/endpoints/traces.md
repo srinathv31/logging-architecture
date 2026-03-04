@@ -28,7 +28,7 @@ Returns a paginated list of traces grouped by `traceId`. Each trace summary incl
 {
   "traces": [
     {
-      "traceId": "4bf92f3577b34da6a3ce929d0e0e4736",
+      "traceId": "auth-20260301-abc123",
       "eventCount": 12,
       "hasErrors": false,
       "latestStatus": "SUCCESS",
@@ -50,7 +50,7 @@ Returns a paginated list of traces grouped by `traceId`. Each trace summary incl
 
 | Field | Description |
 |-------|-------------|
-| `traceId` | W3C Trace Context identifier |
+| `traceId` | Trace identifier (any string, 1-200 chars) |
 | `eventCount` | Total number of events in the trace |
 | `hasErrors` | `true` if any event has `eventStatus = 'FAILURE'` |
 | `latestStatus` | Status of the most recent event by timestamp |

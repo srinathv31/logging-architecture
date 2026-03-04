@@ -167,7 +167,7 @@ process.logError('User identity could not be verified',
 | Persistent mutators | `.addIdentifier("k", "v")` (chainable at construction) | `.addIdentifier("k", "v")` (method call anytime) |
 | Process overrides | `.withApplicationId("x")` (at construction) | `.setApplicationId("x")` (method call anytime) |
 | Context propagation | MDC (SLF4J) — automatic in Spring | AsyncLocalStorage — `eventLogContext.run()` |
-| ID generation | Auto from MDC or `EventLogUtils.createCorrelationId()` | Auto from context or `createCorrelationId()` |
+| ID generation | Auto from MDC or `EventLogUtils.createCorrelationId()` / `createTraceId()` | Auto from context or `createCorrelationId()` / `createTraceId()` |
 
 ## Context Propagation
 
@@ -201,7 +201,7 @@ See [Context Propagation](/node-sdk/core/context) for full details.
 ```typescript
 const process = template.forProcess('PROCESS_NAME', {
   accountId: 'acct-123',         // optional
-  correlationId: 'corr-123',     // optional — auto-reads from context, then auto-generates
+  correlationId: 'a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6',     // optional — auto-reads from context, then auto-generates
   traceId: 'trace-abc',          // optional — auto-reads from context, then auto-generates
   batchId: 'batch-456',          // optional
   identifiers: { key: 'value' }, // optional — initial identifiers

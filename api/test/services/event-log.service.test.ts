@@ -348,7 +348,7 @@ describe('EventLogService - Test Fixtures', () => {
     it('should create a valid event fixture with default values', () => {
       const fixture = createEventFixture();
 
-      expect(fixture.correlationId).toBe('test-correlation-id');
+      expect(fixture.correlationId).toBe('b1c2d3e4f5a6b7c8b1c2d3e4f5a6b7c8');
       expect(fixture.traceId).toBe('a1b2c3d4e5f6a7b8a1b2c3d4e5f6a7b8');
       expect(fixture.applicationId).toBe('test-app');
       expect(fixture.eventType).toBe('PROCESS_START');
@@ -397,7 +397,7 @@ describe('EventLogService - Test Fixtures', () => {
       const record = createEventLogDbRecord();
 
       expect(record.executionId).toBe('test-execution-id');
-      expect(record.correlationId).toBe('test-correlation-id');
+      expect(record.correlationId).toBe('b1c2d3e4f5a6b7c8b1c2d3e4f5a6b7c8');
       expect(record.isDeleted).toBe(false);
     });
 

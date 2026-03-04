@@ -195,8 +195,8 @@ describe('Batch Routes', () => {
       });
 
       const events = [
-        createEventFixture({ correlationId: 'corr-1' }),
-        createEventFixture({ correlationId: 'corr-2' }),
+        createEventFixture({ correlationId: 'a1b2c3d4e5f6a7b8a1b2c3d4e5f6a701' }),
+        createEventFixture({ correlationId: 'a1b2c3d4e5f6a7b8a1b2c3d4e5f6a702' }),
       ];
 
       const response = await app.inject({
@@ -223,8 +223,8 @@ describe('Batch Routes', () => {
       });
 
       const events = [
-        createEventFixture({ correlationId: 'corr-1' }),
-        createEventFixture({ correlationId: 'corr-2' }),
+        createEventFixture({ correlationId: 'a1b2c3d4e5f6a7b8a1b2c3d4e5f6a701' }),
+        createEventFixture({ correlationId: 'a1b2c3d4e5f6a7b8a1b2c3d4e5f6a702' }),
       ];
 
       const response = await app.inject({
@@ -253,8 +253,8 @@ describe('Batch Routes', () => {
       });
 
       const events = [
-        createEventFixture({ correlationId: 'corr-1' }),
-        createEventFixture({ correlationId: 'corr-2' }),
+        createEventFixture({ correlationId: 'a1b2c3d4e5f6a7b8a1b2c3d4e5f6a701' }),
+        createEventFixture({ correlationId: 'a1b2c3d4e5f6a7b8a1b2c3d4e5f6a702' }),
       ];
 
       const response = await app.inject({
